@@ -1,0 +1,18 @@
+# mobile
+mobile/build/
+mobile/.dart_tool/
+mobile/android/local.properties
+
+# functions
+functions/node_modules/
+functions/.env
+
+# ml
+ml/data/*.csv
+ml/models/*.joblib
+ml/service/*.joblib
+
+# secrets, never commit these, under any circumstance
+**/serviceAccountKey.json
+**/*.env
+firebase-debug.log
