@@ -1,0 +1,29 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}}
+\fs32\b Phase 1 Implementation Report\b0\par
+\fs24 Emergency Response and Personal Safety System for Kenya\par
+Date: 2026-09-23\par\par
+\b Scope Completed\b0\par
+This phase implements only environment setup, Firebase backend, and registration/login for the public Resident and Responder roles. Incidents, dispatch, trusted contacts, safety check-ins, hospital-specific workflows, separate HospitalAdmin roles, and facilities collections were not built. Hospitals register as responder organizations with organizationType set to Hospital.\par\par
+\b Environment Setup\b0\par
+Flutter doctor was run successfully with no issues found. The app uses Firebase Core, Firebase Auth, Cloud Firestore, Cloud Functions, GoRouter, Provider, and permission_handler for mobile permission requests. Android and iOS permission declarations were added for location and notifications. Git was already initialized with an existing initial structure commit, and this Phase 1 implementation is committed as a follow-up implementation commit.\par\par
+\b Firebase Backend\b0\par
+The root Firebase configuration now points to Firestore rules, indexes, and the Functions source folder. Firestore rules enforce owner and SystemAdmin access for users, authenticated reads for responders, strict responder field-level updates, no client deletes, and no client writes to auditLogs. The auditLogs collection is readable only by a SystemAdmin custom claim and written only by Admin SDK Cloud Functions.\par\par
+\b Cloud Functions\b0\par
+The Functions backend includes setUserRoleClaim on users document creation, logUserRegistration on users document creation, and logResponderVerificationChange on responders document updates. The verification logger only writes audit records when verificationStatus changes to Verified, Rejected, or Suspended, and captures previous state. A local-only createFirstAdmin script creates the first SystemAdmin Auth account, assigns the custom claim, creates its users document, and writes an audit log.\par\par
+\b Flutter Authentication\b0\par
+The Flutter app now includes registration and login screens. Registration validates Kenyan E.164 phone numbers, enforces password confirmation and an 8-character minimum, requires KDPA consent, captures date of birth and gender, and conditionally captures responder organization fields. Login maps Firebase Auth failures to human-readable messages instead of raw Firebase strings.\par\par
+\b Routing\b0\par
+GoRouter redirects unauthenticated users to /sign-in. Residents route to /home. Responders route based on verificationStatus: Verified to /responder-home, Pending to /pending-verification, Rejected to /registration-rejected, and Suspended to /account-suspended. SystemAdmin routes to a placeholder /admin-dashboard. Pending, rejected, and suspended states use distinct screens and messages.\par\par
+\b Problems Encountered\b0\par
+Flutter doctor reported no toolchain problems. Firebase rules validation initially failed because no active Firebase CLI project was selected; rerunning the dry run with --project emergencyresponsesystem-166601 compiled the rules successfully. npm install reported a local Node.js engine warning because the workstation uses Node.js 24 while Firebase Functions is configured for Node.js 20. npm audit also reported moderate transitive dependency findings in the Firebase Functions dependency tree. A first attempt to generate a .docx report via PowerShell Open XML packaging failed because Compress-Archive only accepts .zip output; this report was created as a Word-openable RTF .doc instead.\par\par
+\b Validation Performed\b0\par
+flutter doctor completed with no issues found. flutter analyze completed with no issues. Firestore rules compiled successfully using firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601. The Functions entrypoint loaded successfully with node -e require(\"./index.js\").\par\par
+\b Recommendations\b0\par
+Deploy the backend to Firebase before testing registration end to end. Run createFirstAdmin exactly once from a controlled developer machine and store serviceAccountKey.json outside version control. Add Firebase Emulator Suite tests for Firestore rules before Phase 2. Review npm audit findings periodically and upgrade Firebase Functions dependencies when compatible patched versions are available. Add real SystemAdmin verification UI in a later phase before operational onboarding. Add privacy policy and retention schedule text before production launch.\par\par
+\b Useful References\b0\par
+Firebase custom claims: https://firebase.google.com/docs/auth/admin/custom-claims\par
+Cloud Firestore security rules: https://firebase.google.com/docs/firestore/security/get-started\par
+Cloud Functions Firestore triggers: https://firebase.google.com/docs/functions/firestore-events\par
+Kenya Office of the Data Protection Commissioner: https://www.odpc.go.ke/\par
+}

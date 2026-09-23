@@ -1,0 +1,211 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSystemAdmin() {
+      return isSignedIn() && request.auth.token.role == "SystemAdmin";
+    }
+
+    function validPhoneNumber(phoneNumber) {
+      return phoneNumber is string && phoneNumber.matches('^\\+254[17]\\d{8}$');
+    }
+
+    function validPreferredLanguage(language) {
+      return language in ["en", "sw"];
+    }
+
+    function validPublicRole(role) {
+      return role in ["Resident", "Responder"];
+    }
+
+    function validAccountStatus(status) {
+      return status in ["Active", "PendingVerification", "Suspended"];
+    }
+
+    function validResponderType(orgType) {
+      return orgType in [
+        "Ambulance",
+        "Fire",
+        "Police",
+        "Hospital",
+        "Community",
+        "Maritime",
+        "Other"
+      ];
+    }
+
+    function validResponderVerificationStatus(status) {
+      return status in ["Pending", "Verified", "Rejected", "Suspended"];
+    }
+
+    function validAvailabilityStatus(status) {
+      return status in ["Available", "Busy", "Offline"];
+    }
+
+    function validUsersCreateKeys() {
+      return request.resource.data.keys().hasOnly([
+        "userId",
+        "firstName",
+        "lastName",
+        "dateOfBirth",
+        "gender",
+        "phoneNumber",
+        "email",
+        "role",
+        "preferredLanguage",
+        "accountStatus",
+        "consentCrossBorderTransfer",
+        "createdAt",
+        "updatedAt",
+        "lastLoginAt"
+      ]);
+    }
+
+    function validUsersUpdateKeys() {
+      return request.resource.data.keys().hasOnly([
+        "userId",
+        "firstName",
+        "lastName",
+        "dateOfBirth",
+        "gender",
+        "phoneNumber",
+        "email",
+        "role",
+        "preferredLanguage",
+        "accountStatus",
+        "consentCrossBorderTransfer",
+        "createdAt",
+        "updatedAt",
+        "lastLoginAt"
+      ]);
+    }
+
+    function validUsersData(userId) {
+      return request.resource.data.userId == userId
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.dateOfBirth is timestamp
+        && request.resource.data.gender is string
+        && validPhoneNumber(request.resource.data.phoneNumber)
+        && request.resource.data.email is string
+        && validPublicRole(request.resource.data.role)
+        && validPreferredLanguage(request.resource.data.preferredLanguage)
+        && validAccountStatus(request.resource.data.accountStatus)
+        && request.resource.data.consentCrossBorderTransfer is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.lastLoginAt is timestamp;
+    }
+
+    function validRespondersCreateKeys() {
+      return request.resource.data.keys().hasOnly([
+        "responderId",
+        "organizationName",
+        "organizationType",
+        "registrationNumber",
+        "verificationStatus",
+        "verificationNotes",
+        "verifiedBy",
+        "verifiedAt",
+        "availabilityStatus",
+        "currentLatitude",
+        "currentLongitude",
+        "serviceArea",
+        "createdAt",
+        "updatedAt"
+      ]);
+    }
+
+    function validRespondersData(responderId) {
+      return request.resource.data.responderId == responderId
+        && request.resource.data.organizationName is string
+        && validResponderType(request.resource.data.organizationType)
+        && request.resource.data.registrationNumber is string
+        && validResponderVerificationStatus(request.resource.data.verificationStatus)
+        && (request.resource.data.verificationNotes == null || request.resource.data.verificationNotes is string)
+        && (request.resource.data.verifiedBy == null || request.resource.data.verifiedBy is string)
+        && (request.resource.data.verifiedAt == null || request.resource.data.verifiedAt is timestamp)
+        && validAvailabilityStatus(request.resource.data.availabilityStatus)
+        && (request.resource.data.currentLatitude == null || request.resource.data.currentLatitude is number)
+        && (request.resource.data.currentLongitude == null || request.resource.data.currentLongitude is number)
+        && request.resource.data.serviceArea is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isSystemAdmin();
+
+      allow create: if isOwner(userId)
+        && !exists(/databases/$(database)/documents/users/$(userId))
+        && validUsersCreateKeys()
+        && validUsersData(userId)
+        && (
+          (request.resource.data.role == "Resident" && request.resource.data.accountStatus == "Active")
+          ||
+          (request.resource.data.role == "Responder" && request.resource.data.accountStatus == "PendingVerification")
+        );
+
+      allow update: if (isOwner(userId) || isSystemAdmin())
+        && validUsersUpdateKeys()
+        && validUsersData(userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
+    match /responders/{responderId} {
+      allow read: if isSignedIn();
+
+      allow create: if isOwner(responderId)
+        && !exists(/databases/$(database)/documents/responders/$(responderId))
+        && validRespondersCreateKeys()
+        && validRespondersData(responderId)
+        && request.resource.data.verificationStatus == "Pending"
+        && request.resource.data.verificationNotes == null
+        && request.resource.data.verifiedBy == null
+        && request.resource.data.verifiedAt == null
+        && request.resource.data.availabilityStatus == "Offline";
+
+      allow update: if (
+          isOwner(responderId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "availabilityStatus",
+            "currentLatitude",
+            "currentLongitude"
+          ])
+          && request.resource.data.availabilityStatus in ["Available", "Busy", "Offline"]
+          && (request.resource.data.currentLatitude == null || request.resource.data.currentLatitude is number)
+          && (request.resource.data.currentLongitude == null || request.resource.data.currentLongitude is number)
+        ) || (
+          isSystemAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "verificationStatus",
+            "verificationNotes",
+            "verifiedBy",
+            "verifiedAt"
+          ])
+          && request.resource.data.verificationStatus in ["Pending", "Verified", "Rejected", "Suspended"]
+          && (request.resource.data.verificationNotes == null || request.resource.data.verificationNotes is string)
+          && (request.resource.data.verifiedBy == null || request.resource.data.verifiedBy is string)
+          && (request.resource.data.verifiedAt == null || request.resource.data.verifiedAt is timestamp)
+        );
+
+      allow delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isSystemAdmin();
+      allow write: if false;
+    }
+  }
+}
