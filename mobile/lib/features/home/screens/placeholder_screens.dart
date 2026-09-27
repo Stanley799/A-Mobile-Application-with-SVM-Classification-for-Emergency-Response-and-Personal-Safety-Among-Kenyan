@@ -17,18 +17,6 @@ class LoadingScreen extends StatelessWidget {
   }
 }
 
-class ResidentHomeScreen extends StatelessWidget {
-  const ResidentHomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return _BasePlaceholderScreen(
-      title: 'Resident Home',
-      body: 'Resident account is active. Phase 1 authentication is complete.',
-    );
-  }
-}
-
 class ResponderHomeScreen extends StatelessWidget {
   const ResponderHomeScreen({super.key});
 

@@ -1,4 +1,3 @@
-import 'package:dlibphonenumber/dlibphonenumber.dart' as libphone;
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,8 @@ import 'package:provider/provider.dart';
 
 import '../../../app/auth_state_controller.dart';
 import '../../../core/constants/kenya_counties.dart';
+import '../../../core/services/phone_number_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../models/auth_models.dart';
 import '../services/auth_repository.dart';
 
@@ -20,7 +21,7 @@ class CreateAccountScreen extends StatefulWidget {
 }
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
-  final _phoneNumberUtil = libphone.PhoneNumberUtil.instance;
+  final _phoneNumberService = PhoneNumberService();
 
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
@@ -91,22 +92,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   String? _validatePhoneNumber(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Phone number is required';
-    }
-
-    try {
-      final phoneNumber = _phoneNumberUtil.parse(
-        value.trim(),
-        _selectedCountryCode,
-      );
-      if (!_phoneNumberUtil.isValidNumber(phoneNumber)) {
-        return 'Please enter a valid phone number for the selected country';
-      }
-      return null;
-    } catch (_) {
-      return 'Invalid phone number format';
-    }
+    return _phoneNumberService.validate(value, _selectedCountryCode);
   }
 
   Future<void> _submit() async {
@@ -114,13 +100,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    final parsedPhoneNumber = _phoneNumberUtil.parse(
+    final formattedPhoneNumber = _phoneNumberService.formatToE164(
       _phoneController.text.trim(),
       _selectedCountryCode,
-    );
-    final formattedPhoneNumber = _phoneNumberUtil.format(
-      parsedPhoneNumber,
-      libphone.PhoneNumberFormat.e164,
     );
 
     if (!_consent) {
@@ -377,7 +359,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       ),
                     ),
                     bottomSheetProps: const BottomSheetProps(
-                      backgroundColor: Colors.white,
+                      backgroundColor: AppColors.surface,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.vertical(
                           top: Radius.circular(16),
@@ -388,7 +370,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         ListTile(
                           title: Text(item),
                           trailing: isSelected
-                              ? const Icon(Icons.check, color: Colors.green)
+                              ? const Icon(
+                                  Icons.check,
+                                  color: AppColors.success,
+                                )
                               : null,
                         ),
                   ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'app/app_router.dart';
 import 'app/auth_state_controller.dart';
 import 'app/permission_service.dart';
+import 'core/theme/app_theme.dart';
 import 'features/auth/services/auth_repository.dart';
 import 'firebase_options.dart';
 
@@ -42,10 +43,7 @@ class MyApp extends StatelessWidget {
           final router = buildRouter(authState);
           return MaterialApp.router(
             title: 'Emergency Response System',
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
-              useMaterial3: true,
-            ),
+            theme: AppTheme.data,
             routerConfig: router,
           );
         },

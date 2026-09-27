@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/models/auth_models.dart';
 import '../features/auth/screens/create_account_screen.dart';
 import '../features/auth/screens/sign_in_screen.dart';
+import '../features/resident/screens/home_screen.dart';
 import '../features/home/screens/placeholder_screens.dart';
 import 'auth_state_controller.dart';
 
