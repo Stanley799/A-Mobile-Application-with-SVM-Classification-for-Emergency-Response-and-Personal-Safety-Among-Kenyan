@@ -1,6 +1,9 @@
+import 'package:dlibphonenumber/dlibphonenumber.dart' as libphone;
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dropdown_search/dropdown_search.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart'
+    as intl_phone;
 import 'package:mobile/features/auth/screens/create_account_screen.dart';
 import 'package:mobile/core/constants/kenya_counties.dart';
 
@@ -121,5 +124,47 @@ void main() {
     await tester.tap(createAccountButton);
     await tester.pumpAndSettle();
     expect(find.text('Please select your service area'), findsOneWidget);
+  });
+
+  testWidgets("phone validation uses the selected country's numbering plan", (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: CreateAccountScreen()));
+
+    final phoneFieldFinder = find.byType(
+      intl_phone.InternationalPhoneNumberInput,
+    );
+    final kenyaField = tester.widget<intl_phone.InternationalPhoneNumberInput>(
+      phoneFieldFinder,
+    );
+    expect(kenyaField.initialValue?.isoCode, 'KE');
+    expect(kenyaField.validator!(null), 'Phone number is required');
+    expect(kenyaField.validator!('0712345678'), isNull);
+    expect(kenyaField.validator!('0112345678'), isNull);
+    expect(kenyaField.validator!('0712345'), isNotNull);
+    expect(kenyaField.validator!('0999999999'), isNotNull);
+
+    kenyaField.onInputChanged!(intl_phone.PhoneNumber(isoCode: 'US'));
+    await tester.pump();
+    final usField = tester.widget<intl_phone.InternationalPhoneNumberInput>(
+      phoneFieldFinder,
+    );
+    expect(usField.validator!('4155551234'), isNull);
+    expect(usField.validator!('1234567890'), isNotNull);
+
+    usField.onInputChanged!(intl_phone.PhoneNumber(isoCode: 'GB'));
+    await tester.pump();
+    final ukField = tester.widget<intl_phone.InternationalPhoneNumberInput>(
+      phoneFieldFinder,
+    );
+    expect(ukField.validator!('7911123456'), isNull);
+    expect(ukField.validator!('0000000000'), isNotNull);
+
+    final phoneUtil = libphone.PhoneNumberUtil.instance;
+    final parsedKenyanNumber = phoneUtil.parse('0712345678', 'KE');
+    expect(
+      phoneUtil.format(parsedKenyanNumber, libphone.PhoneNumberFormat.e164),
+      '+254712345678',
+    );
   });
 }

@@ -14,7 +14,7 @@ service cloud.firestore {
     }
 
     function validPhoneNumber(phoneNumber) {
-      return phoneNumber is string && phoneNumber.matches('^\\+254[17]\\d{8}$');
+      return phoneNumber is string && phoneNumber.matches('^\\+[1-9]\\d{1,14}$');
     }
 
     function validPreferredLanguage(language) {

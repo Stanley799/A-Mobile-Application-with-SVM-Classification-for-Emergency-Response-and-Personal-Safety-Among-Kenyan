@@ -1,8 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dlibphonenumber/dlibphonenumber.dart' as libphone;
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart'
+    as intl_phone;
 import 'package:provider/provider.dart';
 
 import '../../../app/auth_state_controller.dart';
@@ -18,7 +20,7 @@ class CreateAccountScreen extends StatefulWidget {
 }
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
-  static final RegExp _kenyanPhoneRegex = RegExp(r'^[17]\d{8}$');
+  final _phoneNumberUtil = libphone.PhoneNumberUtil.instance;
 
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
@@ -34,11 +36,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   UserRole _role = UserRole.resident;
   OrganizationType _organizationType = OrganizationType.ambulance;
   PreferredLanguage _preferredLanguage = PreferredLanguage.en;
+  String _selectedCountryCode = 'KE';
   String? _selectedCounty;
   String? _gender;
   bool _consent = false;
   bool _isSubmitting = false;
-  String? _phoneInlineError;
   String? _submitError;
 
   @override
@@ -88,10 +90,38 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     return null;
   }
 
+  String? _validatePhoneNumber(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Phone number is required';
+    }
+
+    try {
+      final phoneNumber = _phoneNumberUtil.parse(
+        value.trim(),
+        _selectedCountryCode,
+      );
+      if (!_phoneNumberUtil.isValidNumber(phoneNumber)) {
+        return 'Please enter a valid phone number for the selected country';
+      }
+      return null;
+    } catch (_) {
+      return 'Invalid phone number format';
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+
+    final parsedPhoneNumber = _phoneNumberUtil.parse(
+      _phoneController.text.trim(),
+      _selectedCountryCode,
+    );
+    final formattedPhoneNumber = _phoneNumberUtil.format(
+      parsedPhoneNumber,
+      libphone.PhoneNumberFormat.e164,
+    );
 
     if (!_consent) {
       setState(() {
@@ -108,15 +138,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    if (!_kenyanPhoneRegex.hasMatch(_phoneController.text.trim())) {
-      setState(() {
-        _phoneInlineError = 'Enter 9 digits starting with 7 or 1.';
-      });
-      return;
-    }
-
     setState(() {
-      _phoneInlineError = null;
       _submitError = null;
       _isSubmitting = true;
     });
@@ -131,7 +153,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         lastName: _lastNameController.text,
         dateOfBirth: dateOfBirth,
         gender: _gender!,
-        phoneNumber: '+254${_phoneController.text.trim()}',
+        phoneNumber: formattedPhoneNumber,
         email: _emailController.text,
         password: _passwordController.text,
         role: _role,
@@ -207,36 +229,27 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 label: '2. Last Name',
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(9),
-                ],
-                decoration: InputDecoration(
-                  labelText: '3. Phone Number',
-                  prefixText: '+254 ',
-                  hintText: 'XXXXXXXXX',
-                  border: const OutlineInputBorder(),
-                  errorText: _phoneInlineError,
+              intl_phone.InternationalPhoneNumberInput(
+                textFieldController: _phoneController,
+                initialValue: intl_phone.PhoneNumber(isoCode: 'KE'),
+                maxLength: 25,
+                selectorConfig: const intl_phone.SelectorConfig(
+                  selectorType: intl_phone.PhoneInputSelectorType.BOTTOM_SHEET,
+                  useEmoji: true,
                 ),
-                onChanged: (_) {
-                  if (_phoneInlineError != null) {
-                    setState(() {
-                      _phoneInlineError = null;
-                    });
+                autoValidateMode: AutovalidateMode.onUserInteraction,
+                ignoreBlank: false,
+                inputDecoration: const InputDecoration(
+                  labelText: '3. Phone Number',
+                  border: OutlineInputBorder(),
+                ),
+                onInputChanged: (number) {
+                  final countryCode = number.isoCode ?? 'KE';
+                  if (_selectedCountryCode != countryCode) {
+                    setState(() => _selectedCountryCode = countryCode);
                   }
                 },
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Phone number is required.';
-                  }
-                  if (!_kenyanPhoneRegex.hasMatch(value.trim())) {
-                    return 'Enter 9 digits starting with 7 or 1.';
-                  }
-                  return null;
-                },
+                validator: _validatePhoneNumber,
               ),
               const SizedBox(height: 12),
               _textField(

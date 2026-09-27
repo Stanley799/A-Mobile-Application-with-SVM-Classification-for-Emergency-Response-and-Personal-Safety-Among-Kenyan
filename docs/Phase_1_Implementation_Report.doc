@@ -34,6 +34,7 @@ No additional application collection was introduced for Phase 1. The auditLogs c
 \b 2.4 Firestore Security Rules\b0\par
 The rules enforce the following:\par
 - users can be read and updated only by the document owner or a SystemAdmin custom claim.\par
+- users.phoneNumber must use E.164 syntax; the client validates numbering-plan patterns using libphonenumber metadata.\par
 - users can be created only by the authenticated owner for their own UID.\par
 - public registration can create only Resident or Responder roles.\par
 - role is immutable after user creation, preventing client-side role escalation.\par
@@ -57,8 +58,8 @@ The file functions/scripts/createFirstAdmin.js was added. It is not deployed as 
 The script creates exactly one SystemAdmin account by checking both Firestore users documents and Firebase Auth custom claims before creating a new admin. It creates the Auth account, sets role = SystemAdmin as a custom claim, writes the users document, and writes a ROLE_CLAIM_SET audit log.\par\par
 
 \b 2.7 Flutter Authentication and Registration\b0\par
-The Flutter app includes a registration screen and a sign-in screen. Responder registration manually captures an Organization Registration Number between the organization name and organization type fields. Validation trims surrounding whitespace and permits 5 to 30 letters, numbers, slashes, dots, or hyphens. The field is required only for Responders and is not shown for Residents. The Service Area (County) field is a searchable bottom sheet containing Kenya's 47 counties, implemented with dropdown_search 6.0.2. County selection is required for Responders, can be searched by typing, and can be cleared. The phone number is validated using the local Kenya number input and +254 prefix. Passwords require at least 8 characters and must match the confirmation field. KDPA cross-border consent is required before account creation.\par\par
-On successful registration, the app creates a Firebase Auth user and writes the users document. It writes a responders document, including the trimmed registrationNumber and selected county as serviceArea, only when the selected role is Responder; Resident registration does not write these responder fields or create a responder document. currentLatitude and currentLongitude remain null at registration. The app then forces an ID token refresh and lets routing move the user to the correct screen.\par\par
+The Flutter app includes a registration screen and a sign-in screen. Responder registration manually captures an Organization Registration Number between the organization name and organization type fields. Validation trims surrounding whitespace and permits 5 to 30 letters, numbers, slashes, dots, or hyphens. The field is required only for Responders and is not shown for Residents. The Service Area (County) field is a searchable bottom sheet containing Kenya's 47 counties, implemented with dropdown_search 6.0.2. County selection is required for Responders, can be searched by typing, and can be cleared. The phone field uses intl_phone_number_input 0.7.5, with Kenya selected by default and other countries selectable. dlibphonenumber 1.1.73 parses the number using the selected ISO region and validates it with isValidNumber. Valid phone numbers are normalized to E.164 before storage. Passwords require at least 8 characters and must match the confirmation field. KDPA cross-border consent is required before account creation.\par\par
+On successful registration, the app creates a Firebase Auth user and writes the users document. It writes a responders document, including the normalized E.164 phone number, trimmed registrationNumber, and selected county as serviceArea; Resident registration does not create a responder document. currentLatitude and currentLongitude remain null at registration. The app then forces an ID token refresh and lets routing move the user to the correct screen.\par\par
 Login supports email and password. Firebase Auth error codes are mapped to human-readable messages such as incorrect email or password, no account found, malformed email, disabled account, and too many requests. Raw Firebase error strings are not shown directly to the user.\par\par
 
 \b 2.8 Role-Based Routing\b0\par
@@ -86,13 +87,14 @@ The following checks were run:\par
 - firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601: Firestore rules compiled successfully.\par
 - node -e require(\"./index.js\"): Cloud Functions entrypoint loaded successfully.\par
 - git status --short: clean after commit.\par\par
-The following checks were run for the responder registration-number and county-selector updates on 2026-09-27:\par
+The following checks were run for the responder registration-number, county-selector, and international phone updates on 2026-09-27:\par
 - flutter pub get: resolved dropdown_search 6.0.2 successfully.\par
-- flutter test test/create_account_screen_test.dart: passed; covers responder-only visibility, registration-number validation, the 47-county list, county search, selection, clearing, and required-county validation.\par
-- flutter analyze: completed with no issues.\par
+- flutter pub get: resolved intl_phone_number_input 0.7.5 and dlibphonenumber 1.1.73 successfully.\par
+- flutter test test/create_account_screen_test.dart: passed; covers responder-only visibility, registration-number validation, the 47-county list and search flow, and Kenya/US/UK phone validity plus E.164 formatting.\par
+- flutter analyze: completed with no issues across the mobile app.\par
 - firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601: Firestore rules compiled successfully; no deployment was performed.\par
 - git diff --check: completed with no whitespace errors.\par
-Live Firebase registration and emulator-based allow/deny tests were not run.\par\par
+Live Firebase registration and emulator-based allow/deny tests were not run. libphonenumber validity indicates a valid numbering-plan pattern; it cannot confirm that a number is active or assigned to a specific person.\par\par
 
 \b 4. Challenges Encountered\b0\par
 \b 4.1 Firebase CLI Active Project\b0\par
@@ -193,7 +195,7 @@ Computer Misuse and Cybercrimes Act reference via Kenya Law:\par
 http://kenyalaw.org/kl/fileadmin/pdfdownloads/Acts/ComputerMisuseandCybercrimesActNo5of2018.pdf\par\par
 
 \b 9. Current Status\b0\par
-The Phase 1 base implementation was committed previously. The responder registration-number and searchable county-selector updates are implemented in the working tree but have not been deployed. The system still requires backend deployment, one-time SystemAdmin creation, emulator security-rule tests, and live end-to-end registration testing.\par\par
+The Phase 1 base implementation was committed previously. The responder registration-number, searchable county-selector, and international phone-validation updates are implemented in the working tree but have not been deployed. The system still requires backend deployment, one-time SystemAdmin creation, emulator security-rule tests, and live end-to-end registration testing.\par\par
 
 \b 10. Responder Registration Number Update (2026-09-27)\b0\par
 - Added a manually typed, Responder-only Organization Registration Number field with required, length, and allowed-character validation.\par
@@ -209,4 +211,11 @@ The Phase 1 base implementation was committed previously. The responder registra
 - The required selection flows through RegistrationInput.serviceArea and is trimmed into the responder document. Resident registration does not create a responder document, and location coordinates remain null at registration.\par
 - Widget tests verify county list size, Resident visibility, searching for Nairobi using "Nai", selection, clearing, and the required-field error when submitting without a county.\par
 - flutter pub get, focused widget tests, flutter analyze, and git diff --check completed successfully. No live Firestore or emulator registration test was run.\par
+
+\b 12. International Phone Number Validation (2026-09-27)\b0\par
+- Replaced the fixed Kenya-only phone field with intl_phone_number_input 0.7.5, defaulting the selected country to Kenya and permitting other countries.\par
+- Added dlibphonenumber 1.1.73 validation: numbers are parsed with the selected ISO region and checked with isValidNumber(). Valid input is formatted as E.164 before being supplied to registration storage.\par
+- Changed the Firestore phone rule to require generic E.164 syntax instead of Kenya-only +254 numbers. The rule checks storage format; numbering-plan validity is checked on the client.\par
+- Widget tests cover valid and invalid sample numbers for Kenya, the US, and the UK, and verify E.164 output for a Kenyan number. The package classifies UK national input 1234567890 as a valid 01234 pattern, so the invalid UK test uses 0000000000 instead.\par
+- The field allows 25 formatted characters so spacing does not truncate valid international input. Focused widget tests and full Flutter analysis passed; Firestore rules compiled in a dry-run. No live-number assignment lookup is available through this validation.\par
 }
