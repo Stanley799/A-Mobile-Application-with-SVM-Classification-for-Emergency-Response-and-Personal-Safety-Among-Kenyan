@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -15,13 +16,12 @@ class CreateAccountScreen extends StatefulWidget {
 }
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
-  static final RegExp _kenyanPhoneRegex = RegExp(r'^\+254[17]\d{8}$');
+  static final RegExp _kenyanPhoneRegex = RegExp(r'^[17]\d{8}$');
 
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _dobController = TextEditingController();
-  final _genderController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -33,6 +33,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   UserRole _role = UserRole.resident;
   OrganizationType _organizationType = OrganizationType.ambulance;
   PreferredLanguage _preferredLanguage = PreferredLanguage.en;
+  String? _gender;
   bool _consent = false;
   bool _isSubmitting = false;
   String? _phoneInlineError;
@@ -43,7 +44,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _dobController.dispose();
-    _genderController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -69,6 +69,24 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
   }
 
+  String? _validateRegistrationNumber(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Organization registration number is required';
+    }
+    final trimmed = value.trim();
+    if (trimmed.length < 5) {
+      return 'Registration number must be at least 5 characters';
+    }
+    if (trimmed.length > 30) {
+      return 'Registration number is too long';
+    }
+    final validPattern = RegExp(r'^[A-Za-z0-9/.\-]+$');
+    if (!validPattern.hasMatch(trimmed)) {
+      return 'Only letters, numbers, slashes, dots, and hyphens are allowed';
+    }
+    return null;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -81,9 +99,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
+    if (_gender == null) {
+      setState(() {
+        _submitError = 'Please select Male or Female for gender.';
+      });
+      return;
+    }
+
     if (!_kenyanPhoneRegex.hasMatch(_phoneController.text.trim())) {
       setState(() {
-        _phoneInlineError = 'Phone number must match +2547XXXXXXXX or +2541XXXXXXXX.';
+        _phoneInlineError = 'Enter 9 digits starting with 7 or 1.';
       });
       return;
     }
@@ -103,8 +128,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
         dateOfBirth: dateOfBirth,
-        gender: _genderController.text,
-        phoneNumber: _phoneController.text,
+        gender: _gender!,
+        phoneNumber: '+254${_phoneController.text.trim()}',
         email: _emailController.text,
         password: _passwordController.text,
         role: _role,
@@ -126,13 +151,17 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
       context.go('/loading');
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _submitError = e.message ?? 'Unable to create account. Please try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _submitError = e.message ?? 'Unable to create account. Please try again.';
+        });
+      }
     } catch (_) {
-      setState(() {
-        _submitError = 'Unable to create account. Please verify your details and try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _submitError = 'Unable to create account. Please verify your details and try again.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -173,9 +202,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(9),
+                ],
                 decoration: InputDecoration(
                   labelText: '3. Phone Number',
-                  hintText: '+2547XXXXXXXX',
+                  prefixText: '+254 ',
+                  hintText: 'XXXXXXXXX',
                   border: const OutlineInputBorder(),
                   errorText: _phoneInlineError,
                 ),
@@ -191,7 +225,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     return 'Phone number is required.';
                   }
                   if (!_kenyanPhoneRegex.hasMatch(value.trim())) {
-                    return 'Use +2547XXXXXXXX or +2541XXXXXXXX format.';
+                    return 'Enter 9 digits starting with 7 or 1.';
                   }
                   return null;
                 },
@@ -269,6 +303,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   label: '8. Organization Name',
                 ),
                 const SizedBox(height: 12),
+                TextFormField(
+                  controller: _registrationNumberController,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.characters,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  decoration: const InputDecoration(
+                    labelText: 'Organization Registration Number',
+                    helperText:
+                        'Enter the official registration number from your Certificate of Incorporation or NGO registration certificate.',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _validateRegistrationNumber,
+                ),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<OrganizationType>(
                   initialValue: _organizationType,
                   decoration: const InputDecoration(
@@ -288,11 +336,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       setState(() => _organizationType = value);
                     }
                   },
-                ),
-                const SizedBox(height: 12),
-                _textField(
-                  controller: _registrationNumberController,
-                  label: '8. Registration Number',
                 ),
                 const SizedBox(height: 12),
                 _textField(
@@ -344,9 +387,46 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 },
               ),
               const SizedBox(height: 12),
-              _textField(
-                controller: _genderController,
-                label: 'Gender',
+              Text(
+                'Gender',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              FormField<String>(
+                validator: (_) => _gender == null ? 'Gender is required.' : null,
+                builder: (field) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RadioGroup<String>(
+                      groupValue: _gender,
+                      onChanged: (value) {
+                        setState(() => _gender = value);
+                        field.didChange(value);
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Male'),
+                            value: 'Male',
+                          ),
+                          RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Female'),
+                            value: 'Female',
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (field.hasError)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Text(
+                          field.errorText!,
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               CheckboxListTile(

@@ -3,6 +3,7 @@
 \fs36\b Phase 1 Implementation Report\b0\par
 \fs24 Emergency Response and Personal Safety System for Kenya\par
 Date: 2026-09-23\par
+Last updated: 2026-09-27\par
 Prepared by: GitHub Copilot in VS Code\par\par
 
 \b 1. Executive Summary\b0\par
@@ -26,7 +27,7 @@ The following backend files were added or updated:\par
 \b 2.3 Firestore Schema Implemented\b0\par
 The rules and Flutter code are aligned around the requested collections:\par
 - users: Public registration creates Resident or Responder user documents with Firebase Auth UID as the document ID. The app records firstName, lastName, phoneNumber, email, role, preferredLanguage, dateOfBirth, gender, accountStatus, consentCrossBorderTransfer, createdAt, updatedAt, and lastLoginAt.\par
-- responders: Responder registration creates an organization record using the same UID as the linked user document. It stores organizationName, organizationType, registrationNumber, verificationStatus, verificationNotes, verifiedBy, verifiedAt, availabilityStatus, currentLatitude, currentLongitude, serviceArea, createdAt, and updatedAt.\par
+- responders: Responder registration creates an organization record using the same UID as the linked user document. It stores organizationName, organizationType, registrationNumber, verificationStatus, verificationNotes, verifiedBy, verifiedAt, availabilityStatus, currentLatitude, currentLongitude, serviceArea, createdAt, and updatedAt. registrationNumber is manually entered, trimmed before storage, required only for Responder registration, and is not written to Resident documents.\par
 - auditLogs: Client writes are denied. Cloud Functions write audit entries through the Firebase Admin SDK.\par\par
 No additional application collection was introduced for Phase 1. The auditLogs collection was implemented because it was explicitly required for digital forensics and Cloud Function write-only logging.\par\par
 
@@ -39,8 +40,9 @@ The rules enforce the following:\par
 - responder documents can be read by authenticated users.\par
 - responder documents can be created only once by the owner for their own UID.\par
 - responder owners may update only availabilityStatus, currentLatitude, and currentLongitude.\par
-- responder organization identity fields are owner-writable only at creation and immutable afterward.\par
-- SystemAdmin users may update only responder verification fields: verificationStatus, verificationNotes, verifiedBy, and verifiedAt.\par
+- responder organization identity fields, including registrationNumber, are writable only at creation and immutable afterward for both the owner and SystemAdmin.\par
+- registrationNumber must be a string of 5 to 30 characters on create.\par
+- SystemAdmin users may update only responder verification fields: verificationStatus, verificationNotes, verifiedBy, and verifiedAt; registrationNumber cannot be changed.\par
 - delete operations are denied for users, responders, and auditLogs.\par
 - auditLogs are readable only by SystemAdmin custom claim and cannot be written by clients.\par\par
 
@@ -55,8 +57,8 @@ The file functions/scripts/createFirstAdmin.js was added. It is not deployed as 
 The script creates exactly one SystemAdmin account by checking both Firestore users documents and Firebase Auth custom claims before creating a new admin. It creates the Auth account, sets role = SystemAdmin as a custom claim, writes the users document, and writes a ROLE_CLAIM_SET audit log.\par\par
 
 \b 2.7 Flutter Authentication and Registration\b0\par
-The Flutter app now includes a registration screen and a sign-in screen. Registration captures fields in the requested order, with the requested role-specific responder fields shown only when the selected role is Responder. The phone number is validated against the Kenya E.164 format pattern for +2547XXXXXXXX or +2541XXXXXXXX. Passwords require at least 8 characters and must match the confirmation field. KDPA cross-border consent is required before account creation.\par\par
-On successful registration, the app creates a Firebase Auth user, writes the users document, writes the responders document when the selected role is Responder, forces an ID token refresh, and then lets routing move the user to the correct screen.\par\par
+The Flutter app includes a registration screen and a sign-in screen. Responder registration manually captures an Organization Registration Number between the organization name and organization type fields. Validation trims surrounding whitespace and permits 5 to 30 letters, numbers, slashes, dots, or hyphens. The field is required only for Responders and is not shown for Residents. The phone number is validated using the local Kenya number input and +254 prefix. Passwords require at least 8 characters and must match the confirmation field. KDPA cross-border consent is required before account creation.\par\par
+On successful registration, the app creates a Firebase Auth user and writes the users document. It writes a responders document, including the trimmed registrationNumber, only when the selected role is Responder; Resident registration does not write this field or create a responder document. The app then forces an ID token refresh and lets routing move the user to the correct screen.\par\par
 Login supports email and password. Firebase Auth error codes are mapped to human-readable messages such as incorrect email or password, no account found, malformed email, disabled account, and too many requests. Raw Firebase error strings are not shown directly to the user.\par\par
 
 \b 2.8 Role-Based Routing\b0\par
@@ -68,13 +70,13 @@ GoRouter was configured with role-aware redirect logic:\par
 - Rejected responders go to /registration-rejected.\par
 - Suspended responders go to /account-suspended.\par
 - SystemAdmin users go to /admin-dashboard.\par\par
-Pending, rejected, and suspended responder screens are separate screens with distinct messages. The rejected screen can show verificationNotes when present and does not say the account is awaiting verification. The suspended screen also does not say the account is awaiting verification. The SystemAdmin dashboard is a placeholder for Phase 1 only.\par\par
+Pending, rejected, and suspended responder screens are separate screens with distinct messages. The rejected screen can show verificationNotes when present and does not say the account is awaiting verification. The suspended screen also does not say the account is awaiting verification. The SystemAdmin dashboard now streams pending responder organizations and displays organization type, registration number, and service area, with the registration number emphasized for manual cross-checking. Verify and reject action controls are not implemented.\par\par
 
 \b 2.9 Mobile Permissions\b0\par
 Android and iOS permission declarations were added for location and notifications. The Flutter app includes a PermissionService that requests notification permissions for Residents and notification plus location permissions for Responders on supported mobile platforms. This keeps the app ready for later emergency response workflows while keeping Phase 1 limited to authentication and setup.\par\par
 
 \b 2.10 Documentation and Ignore Rules\b0\par
-The root README was expanded with setup steps, backend deployment commands, createFirstAdmin usage, the KDPA cross-border consent rationale, and security notes. The .gitignore was updated to exclude serviceAccountKey.json, .env, build folders, and node_modules folders.\par\par
+The root README includes setup steps, backend deployment commands, createFirstAdmin usage, the KDPA cross-border consent rationale, security notes, and responder registration-number verification guidance. The .gitignore was updated to exclude serviceAccountKey.json, .env, build folders, and node_modules folders.\par\par
 
 \b 3. Validation Performed\b0\par
 The following checks were run:\par
@@ -84,6 +86,12 @@ The following checks were run:\par
 - firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601: Firestore rules compiled successfully.\par
 - node -e require(\"./index.js\"): Cloud Functions entrypoint loaded successfully.\par
 - git status --short: clean after commit.\par\par
+The following checks were run for the responder registration-number update on 2026-09-27:\par
+- flutter test test/create_account_screen_test.dart: passed; covers role visibility, required values, format examples, invalid characters, length limits, and text input configuration.\par
+- flutter analyze: completed with no issues.\par
+- firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601: Firestore rules compiled successfully; no deployment was performed.\par
+- git diff --check: completed with no whitespace errors.\par
+Live Firebase registration and emulator-based allow/deny tests were not run.\par\par
 
 \b 4. Challenges Encountered\b0\par
 \b 4.1 Firebase CLI Active Project\b0\par
@@ -104,7 +112,7 @@ The following items remain pending before production use:\par
 - Test Resident registration end to end against live Firebase.\par
 - Test Responder registration end to end against live Firebase.\par
 - Confirm that Firebase custom claims are set and refreshed correctly after registration.\par
-- Build the real SystemAdmin verification dashboard in a later phase. The current /admin-dashboard route is only a placeholder.\par
+- Add Verify and Reject controls to the pending-responder list; the current dashboard displays pending responder details but does not perform verification actions.\par
 - Add Firebase Emulator Suite security rule tests for users, responders, and auditLogs.\par
 - Review and address npm audit findings where compatible package updates are available.\par
 - Add a production privacy policy, retention schedule, and operational data handling procedure for KDPA compliance.\par
@@ -149,6 +157,7 @@ The following items were intentionally not built because they are outside Phase 
 - mobile/lib/features/auth/services/auth_repository.dart\par
 - mobile/lib/features/auth/models/auth_models.dart\par
 - mobile/lib/features/home/screens/placeholder_screens.dart\par
+- mobile/test/create_account_screen_test.dart\par
 - mobile/android/app/src/main/AndroidManifest.xml\par
 - mobile/ios/Runner/Info.plist\par\par
 
@@ -181,5 +190,13 @@ Computer Misuse and Cybercrimes Act reference via Kenya Law:\par
 http://kenyalaw.org/kl/fileadmin/pdfdownloads/Acts/ComputerMisuseandCybercrimesActNo5of2018.pdf\par\par
 
 \b 9. Current Status\b0\par
-Phase 1 implementation is complete at code level and has been committed. The system is ready for backend deployment, one-time SystemAdmin creation, emulator tests, and live end-to-end registration testing.\par
+The Phase 1 base implementation was committed previously. The responder registration-number update is implemented in the working tree but has not been deployed. The system still requires backend deployment, one-time SystemAdmin creation, emulator security-rule tests, and live end-to-end registration testing.\par\par
+
+\b 10. Responder Registration Number Update (2026-09-27)\b0\par
+- Added a manually typed, Responder-only Organization Registration Number field with required, length, and allowed-character validation.\par
+- Confirmed registration writes the trimmed value only to responder documents; Resident registration omits the field.\par
+- Updated Firestore rules to require a 5-to-30-character string at creation and prohibit changes by both responders and SystemAdmins. Existing SystemAdmin verification-field updates remain allowed.\par
+- Updated the SystemAdmin dashboard to display pending organizations and their registration numbers for manual KMPDC register checks. The dashboard does not yet provide Verify or Reject actions.\par
+- Added README guidance covering the number's source, manual verification, and immutability.\par
+- Focused widget tests, Flutter analysis, and Firestore rules dry-run passed. These checks do not replace emulator or live Firebase testing.\par
 }

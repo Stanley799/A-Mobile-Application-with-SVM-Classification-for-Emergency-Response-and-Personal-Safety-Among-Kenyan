@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -87,9 +88,66 @@ class AdminDashboardPlaceholderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _BasePlaceholderScreen(
-      title: 'System Admin Dashboard',
-      body: 'Phase 1 placeholder for SystemAdmin operations.',
+    final pendingResponders = FirebaseFirestore.instance
+        .collection('responders')
+        .where('verificationStatus', isEqualTo: 'Pending')
+        .snapshots();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('System Admin Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: () => context.read<AuthRepository>().signOut(),
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: pendingResponders,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('Unable to load pending responders.'));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final responders = snapshot.data!.docs;
+          if (responders.isEmpty) {
+            return const Center(child: Text('No responders are awaiting verification.'));
+          }
+
+          return ListView.separated(
+            itemCount: responders.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final responder = responders[index].data();
+              final registrationNumber = responder['registrationNumber'] as String? ?? '';
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                title: Text(responder['organizationName'] as String? ?? 'Unnamed organization'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Type: ${responder['organizationType'] ?? 'Unknown'}'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Organization Registration Number',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    SelectableText(
+                      registrationNumber.isEmpty ? 'Not provided' : registrationNumber,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text('Service Area: ${responder['serviceArea'] ?? 'Unspecified'}'),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

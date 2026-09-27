@@ -124,6 +124,14 @@ Firebase services may process and store data on infrastructure outside Kenya. Th
 - Responder owner updates are limited to `availabilityStatus`, `currentLatitude`, and `currentLongitude`.
 - Responder organization identity fields are allowed only at creation and are immutable to the owner afterward.
 
+## Responder Verification
+
+**Responder Registration Number**
+
+The registration number is the organization's official Business Registration Number from the Registrar of Companies (for private companies) or the NGO Coordination Board (for non-profits). It is typed manually by the responder during registration and verified by a SystemAdmin against the KMPDC public register at https://registers.kmpdc.go.ke.
+
+This field is immutable after creation. Neither the responder nor the SystemAdmin can change it once the document exists. If a correction is needed, the document must be deleted and recreated, which is intentional to preserve the audit trail.
+
 ## Useful References
 
 - Firebase Authentication custom claims: https://firebase.google.com/docs/auth/admin/custom-claims

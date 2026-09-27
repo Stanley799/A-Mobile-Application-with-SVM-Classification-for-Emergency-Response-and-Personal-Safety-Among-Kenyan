@@ -40,12 +40,17 @@ class AuthStateController extends ChangeNotifier {
     notifyListeners();
 
     if (user != null) {
-      _profile = await authRepository.getUserProfile(user.uid);
-      if (_profile?.role.firestoreValue == 'Responder') {
-        _responderProfile = await authRepository.getResponderProfile(user.uid);
-      }
-      if (_profile != null) {
-        await permissionService.requestForRole(_profile!.role);
+      try {
+        _profile = await authRepository.getUserProfile(user.uid);
+        if (_profile?.role.firestoreValue == 'Responder') {
+          _responderProfile = await authRepository.getResponderProfile(user.uid);
+        }
+        if (_profile != null) {
+          await permissionService.requestForRole(_profile!.role);
+        }
+      } on FirebaseException {
+        _profile = null;
+        _responderProfile = null;
       }
     }
 

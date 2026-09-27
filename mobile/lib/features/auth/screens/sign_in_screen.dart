@@ -52,13 +52,17 @@ class _SignInScreenState extends State<SignInScreen> {
       }
       context.go('/loading');
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = authRepository.mapSignInError(e);
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = authRepository.mapSignInError(e);
+        });
+      }
     } catch (_) {
-      setState(() {
-        _errorMessage = 'Unable to sign in at the moment. Please try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Unable to sign in at the moment. Please try again.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {

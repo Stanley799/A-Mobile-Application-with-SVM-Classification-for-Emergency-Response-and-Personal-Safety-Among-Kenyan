@@ -170,6 +170,8 @@ service cloud.firestore {
         && !exists(/databases/$(database)/documents/responders/$(responderId))
         && validRespondersCreateKeys()
         && validRespondersData(responderId)
+        && request.resource.data.registrationNumber.size() >= 5
+        && request.resource.data.registrationNumber.size() <= 30
         && request.resource.data.verificationStatus == "Pending"
         && request.resource.data.verificationNotes == null
         && request.resource.data.verifiedBy == null
@@ -178,6 +180,7 @@ service cloud.firestore {
 
       allow update: if (
           isOwner(responderId)
+          && request.resource.data.registrationNumber == resource.data.registrationNumber
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "availabilityStatus",
             "currentLatitude",
@@ -188,6 +191,7 @@ service cloud.firestore {
           && (request.resource.data.currentLongitude == null || request.resource.data.currentLongitude is number)
         ) || (
           isSystemAdmin()
+          && request.resource.data.registrationNumber == resource.data.registrationNumber
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "verificationStatus",
             "verificationNotes",
