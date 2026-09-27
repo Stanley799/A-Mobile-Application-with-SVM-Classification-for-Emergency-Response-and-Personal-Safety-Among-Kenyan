@@ -1,10 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/auth_state_controller.dart';
+import '../../../core/constants/kenya_counties.dart';
 import '../models/auth_models.dart';
 import '../services/auth_repository.dart';
 
@@ -28,11 +30,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _confirmPasswordController = TextEditingController();
   final _organizationNameController = TextEditingController();
   final _registrationNumberController = TextEditingController();
-  final _serviceAreaController = TextEditingController();
 
   UserRole _role = UserRole.resident;
   OrganizationType _organizationType = OrganizationType.ambulance;
   PreferredLanguage _preferredLanguage = PreferredLanguage.en;
+  String? _selectedCounty;
   String? _gender;
   bool _consent = false;
   bool _isSubmitting = false;
@@ -50,7 +52,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _confirmPasswordController.dispose();
     _organizationNameController.dispose();
     _registrationNumberController.dispose();
-    _serviceAreaController.dispose();
     super.dispose();
   }
 
@@ -94,7 +95,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
     if (!_consent) {
       setState(() {
-        _submitError = 'You must provide KDPA cross-border consent to continue.';
+        _submitError =
+            'You must provide KDPA cross-border consent to continue.';
       });
       return;
     }
@@ -135,11 +137,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         role: _role,
         preferredLanguage: _preferredLanguage,
         consentCrossBorderTransfer: _consent,
-        organizationName: _role == UserRole.responder ? _organizationNameController.text : null,
-        organizationType: _role == UserRole.responder ? _organizationType : null,
-        registrationNumber:
-            _role == UserRole.responder ? _registrationNumberController.text : null,
-        serviceArea: _role == UserRole.responder ? _serviceAreaController.text : null,
+        organizationName: _role == UserRole.responder
+            ? _organizationNameController.text
+            : null,
+        organizationType: _role == UserRole.responder
+            ? _organizationType
+            : null,
+        registrationNumber: _role == UserRole.responder
+            ? _registrationNumberController.text
+            : null,
+        serviceArea: _role == UserRole.responder ? _selectedCounty : null,
       );
 
       await authRepository.register(input);
@@ -153,7 +160,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() {
-          _submitError = e.message ?? 'Unable to create account. Please try again.';
+          _submitError =
+              e.message ?? 'Unable to create account. Please try again.';
         });
       }
     } catch (_) {
@@ -273,10 +281,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 },
               ),
               const SizedBox(height: 12),
-              Text(
-                '7. Role',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('7. Role', style: Theme.of(context).textTheme.titleMedium),
               SizedBox(
                 width: double.infinity,
                 child: SegmentedButton<UserRole>(
@@ -310,8 +315,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   decoration: const InputDecoration(
                     labelText: 'Organization Registration Number',
-                    helperText:
-                        'Enter the official registration number from your Certificate of Incorporation or NGO registration certificate.',
+                    helperText: 'Enter the official registration number from your Certificate of Incorporation or NGO registration certificate.',
                     border: OutlineInputBorder(),
                   ),
                   validator: _validateRegistrationNumber,
@@ -338,9 +342,55 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                _textField(
-                  controller: _serviceAreaController,
-                  label: '8. Service Area (County/Region)',
+                DropdownSearch<String>(
+                  items: (filter, loadProps) => kenyaCounties,
+                  selectedItem: _selectedCounty,
+                  autoValidateMode: AutovalidateMode.onUserInteraction,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: 'Service Area (County)',
+                      hintText: 'Search for your county',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                  popupProps: PopupProps.bottomSheet(
+                    showSearchBox: true,
+                    searchDelay: Duration.zero,
+                    searchFieldProps: const TextFieldProps(
+                      decoration: InputDecoration(
+                        hintText: 'Type to search...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    bottomSheetProps: const BottomSheetProps(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                      ),
+                    ),
+                    itemBuilder: (context, item, isDisabled, isSelected) =>
+                        ListTile(
+                          title: Text(item),
+                          trailing: isSelected
+                              ? const Icon(Icons.check, color: Colors.green)
+                              : null,
+                        ),
+                  ),
+                  suffixProps: const DropdownSuffixProps(
+                    clearButtonProps: ClearButtonProps(isVisible: true),
+                  ),
+                  onChanged: (value) {
+                    setState(() => _selectedCounty = value);
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select your service area';
+                    }
+                    return null;
+                  },
                 ),
               ],
               const SizedBox(height: 12),
@@ -387,12 +437,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 },
               ),
               const SizedBox(height: 12),
-              Text(
-                'Gender',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Gender', style: Theme.of(context).textTheme.titleMedium),
               FormField<String>(
-                validator: (_) => _gender == null ? 'Gender is required.' : null,
+                validator: (_) =>
+                    _gender == null ? 'Gender is required.' : null,
                 builder: (field) => Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -422,7 +470,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         padding: const EdgeInsets.only(left: 16),
                         child: Text(
                           field.errorText!,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
                   ],
