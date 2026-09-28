@@ -9,6 +9,7 @@ initializeApp();
 const db = getFirestore();
 
 async function writeAuditLog({ userId, action, targetId, details, previousState = null }) {
+  // Admin SDK writes bypass client rules; clients cannot create or alter audit entries.
   const auditRef = db.collection("auditLogs").doc();
   await auditRef.set({
     logId: auditRef.id,
@@ -21,6 +22,7 @@ async function writeAuditLog({ userId, action, targetId, details, previousState 
   });
 }
 
+/** Copies a newly registered user's role into Firebase Auth custom claims. */
 exports.setUserRoleClaim = onDocumentCreated("users/{userId}", async (event) => {
   const userId = event.params.userId;
   const userData = event.data?.data();
@@ -47,6 +49,7 @@ exports.setUserRoleClaim = onDocumentCreated("users/{userId}", async (event) => 
   logger.info("Custom role claim set", { userId, role });
 });
 
+/** Records the initial role, account state, and language for each new user. */
 exports.logUserRegistration = onDocumentCreated("users/{userId}", async (event) => {
   const userId = event.params.userId;
   const userData = event.data?.data();
@@ -70,6 +73,7 @@ exports.logUserRegistration = onDocumentCreated("users/{userId}", async (event) 
   logger.info("User registration logged", { userId });
 });
 
+/** Audits verification outcomes while ignoring unrelated responder updates. */
 exports.logResponderVerificationChange = onDocumentUpdated(
   "responders/{responderId}",
   async (event) => {

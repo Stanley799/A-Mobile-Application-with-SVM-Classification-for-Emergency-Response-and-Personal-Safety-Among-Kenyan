@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+/// Starts the SOS flow while pulsing only its decorative outer glow.
 class SosButton extends StatefulWidget {
   const SosButton({super.key, required this.onPressed});
 

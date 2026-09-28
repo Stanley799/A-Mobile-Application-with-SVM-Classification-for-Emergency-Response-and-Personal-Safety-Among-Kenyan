@@ -5,6 +5,7 @@ import '../models/app_user_profile.dart';
 import '../models/auth_models.dart';
 import '../models/responder_profile.dart';
 
+/// Holds validated fields required to create a resident or responder account.
 class RegistrationInput {
   const RegistrationInput({
     required this.firstName,
@@ -39,12 +40,14 @@ class RegistrationInput {
   final String? serviceArea;
 }
 
+/// Contains the Firebase user returned after successful sign-in.
 class SignInResult {
   const SignInResult({required this.user});
 
   final User user;
 }
 
+/// Coordinates Firebase Authentication with the application's user documents.
 class AuthRepository {
   AuthRepository({
     FirebaseAuth? firebaseAuth,
@@ -55,14 +58,17 @@ class AuthRepository {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
 
+  /// Emits the current Firebase user whenever authentication changes.
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
 
   User? get currentUser => _firebaseAuth.currentUser;
 
+  /// Signs out the current Firebase user.
   Future<void> signOut() async {
     await _firebaseAuth.signOut();
   }
 
+  /// Creates authentication and profile records for [input].
   Future<void> register(RegistrationInput input) async {
     final credential = await _firebaseAuth.createUserWithEmailAndPassword(
       email: input.email.trim(),
@@ -101,6 +107,7 @@ class AuthRepository {
       'lastLoginAt': now,
     };
 
+    // Commit the user and responder records together so registration is consistent.
     final batch = _firestore.batch();
     final userRef = _firestore.collection('users').doc(user.uid);
     batch.set(userRef, userDoc);
@@ -127,9 +134,11 @@ class AuthRepository {
 
     await batch.commit();
 
+    // Refresh the token so server-assigned custom claims are available immediately.
     await user.getIdToken(true);
   }
 
+  /// Authenticates a user and updates their last-login timestamp.
   Future<SignInResult> signIn({
     required String email,
     required String password,
@@ -152,11 +161,13 @@ class AuthRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
+    // Refresh the token before role-based routing reads server-assigned claims.
     await user.getIdToken(true);
 
     return SignInResult(user: user);
   }
 
+  /// Loads the user's role and account state, or null when no profile exists.
   Future<AppUserProfile?> getUserProfile(String userId) async {
     final snapshot = await _firestore.collection('users').doc(userId).get();
     if (!snapshot.exists || snapshot.data() == null) {
@@ -165,6 +176,7 @@ class AuthRepository {
     return AppUserProfile.fromMap(snapshot.data()!);
   }
 
+  /// Loads responder verification details, or null when no record exists.
   Future<ResponderProfile?> getResponderProfile(String userId) async {
     final snapshot = await _firestore.collection('responders').doc(userId).get();
     if (!snapshot.exists || snapshot.data() == null) {
@@ -173,6 +185,7 @@ class AuthRepository {
     return ResponderProfile.fromMap(snapshot.data()!);
   }
 
+  /// Maps Firebase sign-in failures to messages suitable for the sign-in form.
   String mapSignInError(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

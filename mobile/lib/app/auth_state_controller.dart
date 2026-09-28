@@ -9,6 +9,7 @@ import '../features/auth/models/responder_profile.dart';
 import '../features/auth/services/auth_repository.dart';
 import 'permission_service.dart';
 
+/// Keeps Firebase identity, Firestore profiles, and loading state in sync.
 class AuthStateController extends ChangeNotifier {
   AuthStateController({
     required this.authRepository,
@@ -35,6 +36,7 @@ class AuthStateController extends ChangeNotifier {
   Future<void> _onAuthChanged(User? user) async {
     _loading = true;
     _firebaseUser = user;
+    // Clear the previous account's role data before asynchronous profile reads.
     _profile = null;
     _responderProfile = null;
     notifyListeners();
@@ -58,6 +60,7 @@ class AuthStateController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reloads the current user's profile after registration or sign-in.
   Future<void> refresh() async {
     await _onAuthChanged(authRepository.currentUser);
   }

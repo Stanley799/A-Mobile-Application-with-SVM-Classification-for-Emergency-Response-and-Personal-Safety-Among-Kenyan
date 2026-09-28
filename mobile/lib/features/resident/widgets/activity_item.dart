@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+/// Displays an activity summary with a labeled status indicator.
 class ActivityItem extends StatelessWidget {
   const ActivityItem({
     super.key,
@@ -20,6 +21,7 @@ class ActivityItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final background = isIncident ? AppColors.fireBg : AppColors.successLight;
     final foreground = isIncident ? AppColors.fireFg : AppColors.success;
+    // Firestore stores this state without a space; the UI uses natural wording.
     final normalizedStatus = status.toLowerCase() == 'checkedin'
         ? 'Checked In'
         : status;

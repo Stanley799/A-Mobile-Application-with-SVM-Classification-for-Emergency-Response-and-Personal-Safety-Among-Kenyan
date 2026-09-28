@@ -6,6 +6,7 @@ import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/phone_number_service.dart';
 
+/// Loads and updates the signed-in user's editable profile fields.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -49,6 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         final data = snapshot.data!.data()!;
+        // Initialize once so later stream events do not overwrite unsaved edits.
         if (!_initialized) {
           _firstNameController.text = data['firstName'] as String? ?? '';
           _lastNameController.text = data['lastName'] as String? ?? '';

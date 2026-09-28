@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+/// Confirms an SOS after five seconds and returns whether it should be sent.
 class SosConfirmationSheet extends StatefulWidget {
   const SosConfirmationSheet({super.key, required this.category});
 

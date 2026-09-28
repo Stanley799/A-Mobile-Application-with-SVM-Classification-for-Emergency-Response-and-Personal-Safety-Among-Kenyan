@@ -3,6 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+/// Shows a time-ordered history merged from incidents and safety check-ins.
+///
+/// When [limit] is set, the widget omits its page heading and renders only that
+/// many recent records for embedding in another screen.
 class ActivityHistoryScreen extends StatelessWidget {
   const ActivityHistoryScreen({super.key, this.limit});
 
@@ -52,6 +56,7 @@ class ActivityHistoryScreen extends StatelessWidget {
                     return const Center(child: CircularProgressIndicator());
                   }
 
+                  // Keep both collections in one chronological list for the resident.
                   final items = <_ActivityItem>[
                     ...incidentSnapshot.data!.docs.map(
                       (document) => _ActivityItem.fromDocument(

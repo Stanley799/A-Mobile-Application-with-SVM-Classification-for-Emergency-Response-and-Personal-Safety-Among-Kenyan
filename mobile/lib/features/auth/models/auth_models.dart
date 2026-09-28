@@ -1,7 +1,10 @@
+/// Application roles and their corresponding Firestore values.
 enum UserRole { resident, responder, systemAdmin }
 
+/// Supported profile language codes.
 enum PreferredLanguage { en, sw }
 
+/// Organization types accepted for responder registration.
 enum OrganizationType {
   ambulance,
   fire,
@@ -12,12 +15,16 @@ enum OrganizationType {
   other,
 }
 
+/// Account-level access states stored in user documents.
 enum AccountStatus { active, pendingVerification, suspended }
 
+/// Verification outcomes that gate responder access.
 enum ResponderVerificationStatus { pending, verified, rejected, suspended }
 
+/// Availability values published by verified responders.
 enum AvailabilityStatus { available, busy, offline }
 
+/// Maps user roles to and from the case-sensitive Firestore representation.
 extension UserRoleX on UserRole {
   String get firestoreValue {
     switch (this) {
@@ -44,6 +51,7 @@ extension UserRoleX on UserRole {
   }
 }
 
+/// Maps application language values to persisted language codes.
 extension PreferredLanguageX on PreferredLanguage {
   String get firestoreValue {
     switch (this) {
@@ -55,6 +63,7 @@ extension PreferredLanguageX on PreferredLanguage {
   }
 }
 
+/// Maps organization types to the names expected by Firestore.
 extension OrganizationTypeX on OrganizationType {
   String get firestoreValue {
     switch (this) {
@@ -76,6 +85,7 @@ extension OrganizationTypeX on OrganizationType {
   }
 }
 
+/// Maps account status values to their persisted names.
 extension AccountStatusX on AccountStatus {
   String get firestoreValue {
     switch (this) {
@@ -89,6 +99,7 @@ extension AccountStatusX on AccountStatus {
   }
 }
 
+/// Maps responder verification values to and from persisted names.
 extension ResponderVerificationStatusX on ResponderVerificationStatus {
   String get firestoreValue {
     switch (this) {
@@ -119,6 +130,7 @@ extension ResponderVerificationStatusX on ResponderVerificationStatus {
   }
 }
 
+/// Maps responder availability values to persisted names.
 extension AvailabilityStatusX on AvailabilityStatus {
   String get firestoreValue {
     switch (this) {

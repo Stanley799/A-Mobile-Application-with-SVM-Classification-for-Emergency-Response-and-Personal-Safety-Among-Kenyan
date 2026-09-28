@@ -5,13 +5,23 @@ import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 
 import '../../../core/models/trusted_contact.dart';
 import '../../../core/services/phone_number_service.dart';
+import '../../../core/theme/app_theme.dart';
 
-class TrustedContactsScreen extends StatelessWidget {
+/// Lists and manages the signed-in resident's trusted contacts.
+class TrustedContactsScreen extends StatefulWidget {
   const TrustedContactsScreen({super.key});
+
+  @override
+  State<TrustedContactsScreen> createState() => _TrustedContactsScreenState();
+}
+
+class _TrustedContactsScreenState extends State<TrustedContactsScreen> {
+  int _queryRevision = 0;
 
   @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser!.uid;
+    // Soft-deleted contacts stay in Firestore but are hidden from this list.
     final contacts = FirebaseFirestore.instance
         .collection('trustedContacts')
         .where('userId', isEqualTo: userId)
@@ -19,10 +29,44 @@ class TrustedContactsScreen extends StatelessWidget {
         .snapshots();
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      key: ValueKey(_queryRevision),
       stream: contacts,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(child: Text('Unable to load trusted contacts.'));
+          debugPrint('Trusted contacts query failed: ${snapshot.error}');
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.cloud_off_outlined,
+                    size: 48,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Unable to load trusted contacts.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Check your connection and try again.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _queryRevision++),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -95,6 +139,7 @@ class TrustedContactsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      // Retain contact history while removing the entry from active lists.
                       onDismissed: (_) => FirebaseFirestore.instance
                           .collection('trustedContacts')
                           .doc(contact.id)
@@ -146,6 +191,7 @@ class TrustedContactsScreen extends StatelessWidget {
               ? FirebaseFirestore.instance.collection('trustedContacts').doc()
               : FirebaseFirestore.instance.collection('trustedContacts').doc(contact.id);
           final now = FieldValue.serverTimestamp();
+          // New records start active; edits leave ownership and creation time unchanged.
           if (contact == null) {
             await reference.set({
               'userId': userId,
@@ -228,6 +274,7 @@ class _TrustedContactFormState extends State<_TrustedContactForm> {
     }
     setState(() => _saving = true);
     try {
+      // Persist one canonical format regardless of how the user entered the number.
       final phoneNumber = _phoneNumberService.formatToE164(
         _phoneController.text,
         _countryCode,
@@ -252,6 +299,7 @@ class _TrustedContactFormState extends State<_TrustedContactForm> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the focused field visible when the keyboard opens the bottom sheet.
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),

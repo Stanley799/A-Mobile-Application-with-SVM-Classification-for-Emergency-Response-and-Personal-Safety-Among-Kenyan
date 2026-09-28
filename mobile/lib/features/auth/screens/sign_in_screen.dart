@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../app/auth_state_controller.dart';
 import '../services/auth_repository.dart';
 
+/// Authenticates an existing user and hands routing back to auth state.
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 
@@ -46,6 +47,7 @@ class _SignInScreenState extends State<SignInScreen> {
         password: _passwordController.text,
       );
 
+      // Wait for the Firestore role profile before the router resolves the destination.
       await authStateController.refresh();
       if (!mounted) {
         return;

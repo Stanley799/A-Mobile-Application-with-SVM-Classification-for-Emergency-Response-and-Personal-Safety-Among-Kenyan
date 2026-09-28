@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// Shared semantic colors for the app's surfaces, states, and controls.
 class AppColors {
   static const Color background = Color(0xFFFAF8F5);
   static const Color surface = Color(0xFFFFFFFF);
@@ -44,6 +45,7 @@ class AppColors {
   static const Color transparent = Color(0x00000000);
 }
 
+/// Standard spacing values used to keep layouts visually consistent.
 class AppSpacing {
   static const double xs = 4;
   static const double sm = 8;
@@ -53,6 +55,7 @@ class AppSpacing {
   static const double xxl = 32;
 }
 
+/// Standard corner radii for cards, controls, and pills.
 class AppRadius {
   static const double sm = 8;
   static const double md = 12;
@@ -61,6 +64,7 @@ class AppRadius {
   static const double full = 999;
 }
 
+/// Reusable shadows for surfaces and the emergency action.
 class AppShadows {
   static const List<BoxShadow> card = [
     BoxShadow(color: Color(0x0A000000), blurRadius: 16, offset: Offset(0, 4)),
@@ -75,6 +79,7 @@ class AppShadows {
   ];
 }
 
+/// Builds the global Material theme from the shared design tokens.
 class AppTheme {
   static ThemeData get data {
     final colorScheme = ColorScheme.fromSeed(

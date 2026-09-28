@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Represents an owner-managed trusted contact stored in Firestore.
 class TrustedContact {
   const TrustedContact({
     required this.id,
@@ -15,6 +16,7 @@ class TrustedContact {
   final String relationship;
   final bool isActive;
 
+  /// Reads contact fields from a Firestore document, applying legacy defaults.
   factory TrustedContact.fromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {

@@ -19,6 +19,7 @@ import 'sos_confirmation_sheet.dart';
 import 'trusted_contacts_screen.dart';
 import '../../shared/screens/profile_screen.dart';
 
+/// Hosts the resident dashboard and its contacts, history, and profile tabs.
 class ResidentHomeScreen extends StatefulWidget {
   const ResidentHomeScreen({super.key});
 
@@ -119,43 +120,56 @@ class _NavigationDestination extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    selected: selected,
-    label: destination.label,
-    child: InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 56,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? AppColors.brandLight : AppColors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.full),
-            ),
-            child: Icon(
-              selected ? destination.selectedIcon : destination.icon,
-              size: 22,
-              color: selected ? AppColors.brand : AppColors.textTertiary,
-            ),
+  Widget build(BuildContext context) {
+    final showLabel = MediaQuery.sizeOf(context).width >= 320;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: destination.label,
+      child: Tooltip(
+        message: destination.label,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 56,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.brandLight
+                      : AppColors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: 22,
+                  color: selected ? AppColors.brand : AppColors.textTertiary,
+                ),
+              ),
+              if (showLabel) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? AppColors.brand : AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            destination.label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              color: selected ? AppColors.brand : AppColors.textTertiary,
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _ResidentDashboard extends StatelessWidget {
@@ -354,6 +368,11 @@ class _ResidentDashboard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               sliver: SliverLayoutBuilder(
                 builder: (context, constraints) {
+                  final columns = constraints.crossAxisExtent < 220
+                      ? 1
+                      : constraints.crossAxisExtent < 360
+                      ? 2
+                      : 3;
                   return SliverGrid(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final category = _categories[index];
@@ -367,14 +386,10 @@ class _ResidentDashboard extends StatelessWidget {
                       );
                     }, childCount: _categories.length),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
+                      crossAxisCount: columns,
                       crossAxisSpacing: AppSpacing.md,
                       mainAxisSpacing: AppSpacing.md,
-                      childAspectRatio: constraints.crossAxisExtent < 300
-                          ? 0.65
-                          : constraints.crossAxisExtent < 340
-                          ? 0.78
-                          : 0.95,
+                      mainAxisExtent: 120,
                     ),
                   );
                 },
@@ -416,6 +431,7 @@ class _ResidentDashboard extends StatelessWidget {
   }
 
   Future<void> _confirmEmergency(BuildContext context, String category) async {
+    // Only create an incident after the user lets the countdown finish.
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       useSafeArea: true,
@@ -456,6 +472,7 @@ class _ResidentDashboard extends StatelessWidget {
     }
   }
 
+  /// Attempts a location lookup, returning null when unavailable.
   Future<GeoPoint?> _optionalCurrentLocation() async {
     if (kIsWeb || !await Geolocator.isLocationServiceEnabled()) return null;
     try {
@@ -551,6 +568,7 @@ class _SafetyCheckinPreviewState extends State<_SafetyCheckinPreview> {
         .where('status', isEqualTo: 'Active')
         .limit(1)
         .snapshots();
+    // Repaint the countdown without recreating the Firestore subscription.
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -618,15 +636,10 @@ class _SafetyCheckinPreviewState extends State<_SafetyCheckinPreview> {
     );
   }
 
-  Future<void> _openSafetyCheckin(BuildContext context) =>
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: AppColors.background,
-        builder: (context) => const Padding(
-          padding: EdgeInsets.only(top: AppSpacing.lg),
-          child: SafetyCheckinScreen(),
+  Future<void> _openSafetyCheckin(BuildContext context) => Navigator.of(context)
+      .push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => const SafetyCheckinScreen(),
         ),
       );
 }
@@ -690,6 +703,7 @@ class _RecentActivityPreview extends StatelessWidget {
                       subtitle: 'Your safety check-ins and emergency alerts will appear here',
                     );
                   }
+                  // Firestore cannot join collections, so merge their small result sets here.
                   final items = <_DashboardActivity>[
                     for (final doc in incidentSnapshot.data!.docs)
                       _DashboardActivity(

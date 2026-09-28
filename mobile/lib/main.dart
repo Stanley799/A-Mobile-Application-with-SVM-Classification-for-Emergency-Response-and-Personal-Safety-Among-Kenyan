@@ -9,6 +9,7 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/services/auth_repository.dart';
 import 'firebase_options.dart';
 
+/// Initializes Flutter and Firebase before starting the provider-backed app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(

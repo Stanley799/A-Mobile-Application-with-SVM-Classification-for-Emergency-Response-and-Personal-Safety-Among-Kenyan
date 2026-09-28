@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Represents a timed safety check-in and its Firestore status.
 class SafetyCheckIn {
   const SafetyCheckIn({
     required this.id,
@@ -13,6 +14,7 @@ class SafetyCheckIn {
   final int durationMinutes;
   final DateTime expiryTime;
 
+  /// Reads the expiration timestamp and duration from a Firestore document.
   factory SafetyCheckIn.fromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {

@@ -90,10 +90,12 @@ The following checks were run:\par
 The following checks were run for the responder registration-number, county-selector, and international phone updates on 2026-09-27:\par
 - flutter pub get: resolved dropdown_search 6.0.2 successfully.\par
 - flutter pub get: resolved intl_phone_number_input 0.7.5 and dlibphonenumber 1.1.73 successfully.\par
+- flutter pub get: resolved geolocator 13.0.4 and intl 0.20.3 successfully.\par
 - flutter test test/create_account_screen_test.dart: passed; covers responder-only visibility, registration-number validation, the 47-county list and search flow, and Kenya/US/UK phone validity plus E.164 formatting.\par
 - flutter analyze: completed with no issues across the mobile app.\par
 - firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601: Firestore rules compiled successfully; no deployment was performed.\par
 - git diff --check: completed with no whitespace errors.\par
+The initial full flutter test run exposed a stale starter counter test that built MyApp without Firebase initialization. That test was replaced with Firebase-free SOS button, category-grid layout, and countdown-cancellation tests. The current full suite passes all 7 tests.\par
 Live Firebase registration and emulator-based allow/deny tests were not run. libphonenumber validity indicates a valid numbering-plan pattern; it cannot confirm that a number is active or assigned to a specific person.\par\par
 
 \b 4. Challenges Encountered\b0\par
@@ -161,6 +163,14 @@ The following items were intentionally not built because they are outside Phase 
 - mobile/lib/features/auth/models/auth_models.dart\par
 - mobile/lib/features/home/screens/placeholder_screens.dart\par
 - mobile/lib/core/constants/kenya_counties.dart\par
+- mobile/lib/core/models/trusted_contact.dart\par
+- mobile/lib/core/models/safety_checkin.dart\par
+- mobile/lib/core/services/phone_number_service.dart\par
+- mobile/lib/features/resident/screens/home_screen.dart\par
+- mobile/lib/features/resident/screens/trusted_contacts_screen.dart\par
+- mobile/lib/features/resident/screens/safety_checkin_screen.dart\par
+- mobile/lib/features/resident/screens/activity_history_screen.dart\par
+- mobile/lib/features/shared/screens/profile_screen.dart\par
 - mobile/pubspec.yaml and mobile/pubspec.lock\par
 - mobile/test/create_account_screen_test.dart\par
 - mobile/android/app/src/main/AndroidManifest.xml\par
@@ -195,7 +205,7 @@ Computer Misuse and Cybercrimes Act reference via Kenya Law:\par
 http://kenyalaw.org/kl/fileadmin/pdfdownloads/Acts/ComputerMisuseandCybercrimesActNo5of2018.pdf\par\par
 
 \b 9. Current Status\b0\par
-The Phase 1 base implementation was committed previously. The responder registration-number, searchable county-selector, and international phone-validation updates are implemented in the working tree but have not been deployed. The system still requires backend deployment, one-time SystemAdmin creation, emulator security-rule tests, and live end-to-end registration testing.\par\par
+The Phase 1 base implementation was committed previously. Responder registration-number, searchable county-selector, international phone-validation, and resident dashboard updates are implemented in the working tree. Firestore rules were deployed to emergencyresponsesystem-166601 on 2026-09-27; Cloud Functions deployment, one-time SystemAdmin creation, emulator security-rule tests, and live end-to-end registration testing remain outstanding.\par\par
 
 \b 10. Responder Registration Number Update (2026-09-27)\b0\par
 - Added a manually typed, Responder-only Organization Registration Number field with required, length, and allowed-character validation.\par
@@ -218,4 +228,31 @@ The Phase 1 base implementation was committed previously. The responder registra
 - Changed the Firestore phone rule to require generic E.164 syntax instead of Kenya-only +254 numbers. The rule checks storage format; numbering-plan validity is checked on the client.\par
 - Widget tests cover valid and invalid sample numbers for Kenya, the US, and the UK, and verify E.164 output for a Kenyan number. The package classifies UK national input 1234567890 as a valid 01234 pattern, so the invalid UK test uses 0000000000 instead.\par
 - The field allows 25 formatted characters so spacing does not truncate valid international input. Focused widget tests and full Flutter analysis passed; Firestore rules compiled in a dry-run. No live-number assignment lookup is available through this validation.\par
+
+\b 13. Resident Dashboard and Safety Workflows (2026-09-27)\b0\par
+- Replaced the Resident Home placeholder with a four-tab dashboard for Home, Contacts, History, and Profile. The home view includes a time-aware greeting, pulsing SOS control, emergency categories, check-in status, trusted-contact count, and recent activity.\par
+- SOS displays a cancellable five-second countdown, then creates an immutable owner-scoped incident. Location is requested only during SOS submission and is optional; the alert can still be sent if location is unavailable.\par
+- Added safety check-ins with 15, 30, 45, and 60 minute durations, a live countdown, overdue state, check-in update, and cancellation.\par
+- Added trusted-contact create/read/update/soft-delete operations and profile updates limited to name, phone, and preferred language. Email, role, and account status are read-only. Phone inputs use the shared strict validator and E.164 formatting.\par
+- Added owner-scoped Firestore rules for incidents, trustedContacts, and safetyCheckins, along with indexes for owner-filtered live queries. Clients cannot hard-delete contacts or check-ins or update incident records.\par
+- Full Flutter analysis and focused registration tests passed; Firestore rules and indexes compiled in a dry-run. No emulator or live Firebase CRUD/SOS tests were run. Dispatch and responder-side incident handling remain out of scope.\par
+
+\b 14. Resident UI Refinements and Documentation (2026-09-27)\b0\par
+- Updated the shared theme to a warm off-white background, teal brand/navigation colors, softened SOS red, and desaturated medical category colors. Red is reserved for SOS and genuine alert states; category and status labels remain text-readable.\par
+- The dashboard now offers six SOS categories: Medical Emergency, Road Accident, Fire & Rescue, Security Threat, Abduction, and Other / General. Each chip displays a soft category tint and stores the matching canonical category string.\par
+- Replaced the selected navigation color with teal and added shimmer placeholders for dashboard Firestore reads. Recent Activity now handles loading, query errors, empty results, and populated results explicitly.\par
+- Added concise API and inline comments around authentication/routing, Firestore mapping and ownership, trusted-contact soft deletion, E.164 phone normalization, safety-check-in timing, activity stream merging, and audit/security boundaries. The comments describe existing behavior and do not change runtime behavior.\par
+- The current trusted-contact feature does not enforce a four-contact maximum in the UI or Firestore rules. Check-in expiry currently displays an overdue state; automatic contact notification is not implemented. Expiry notification, dispatch, and responder-side incident handling remain future work.\par
+- Replaced the obsolete counter smoke test with SOS interaction tests. Current verification at this update: flutter analyze reports no issues; flutter test passes all 7 tests; git diff --check is clean. These checks do not replace emulator or live Firebase tests.\par
+
+\b 15. Safety Check-In Screen Rebuild (2026-09-28)\b0\par
+- Replaced the compact check-in panel with a full-screen flow that has an AppBar back action. The dashboard now pushes this screen on the navigation stack so the back action returns to the dashboard.\par
+
+- Added explicit loading, query-error, no-active-check-in, active, and expired states. The empty state offers a duration picker for 15, 30, 45, or 60 minutes; the active state shows a teal circular countdown, Check In Now action, labeled cancellation with confirmation, and an information banner.\par
+
+- Cached the active-check-in Firestore stream and update the countdown locally each second. Check In Now writes status `CheckedIn`; confirmed cancellation writes `Cancelled`; expired records display Expired and disable Check In Now.\par
+
+- Automatic notifications to trusted contacts are not implemented. The screen now says so explicitly instead of promising notification behavior that does not exist; notification delivery remains future work.\par
+
+- Validation after the rebuild: flutter analyze reported no issues and all 7 Flutter tests passed. No authenticated browser session, live check-in CRUD, or device-level navigation test was run.\par
 }

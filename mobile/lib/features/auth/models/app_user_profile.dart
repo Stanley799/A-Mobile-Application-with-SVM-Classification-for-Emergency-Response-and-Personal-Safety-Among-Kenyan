@@ -1,5 +1,6 @@
 import 'auth_models.dart';
 
+/// Contains the role and account status read from a Firestore user profile.
 class AppUserProfile {
   const AppUserProfile({
     required this.userId,
@@ -11,6 +12,7 @@ class AppUserProfile {
   final UserRole role;
   final AccountStatus accountStatus;
 
+  /// Converts a `users` document map into typed role and status values.
   factory AppUserProfile.fromMap(Map<String, dynamic> data) {
     final role = UserRoleX.fromFirestore((data['role'] as String?) ?? 'Resident');
     final accountStatusRaw = (data['accountStatus'] as String?) ?? 'Active';

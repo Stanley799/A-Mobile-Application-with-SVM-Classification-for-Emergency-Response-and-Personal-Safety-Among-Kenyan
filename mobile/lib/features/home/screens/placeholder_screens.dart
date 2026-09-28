@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../auth/services/auth_repository.dart';
 
+/// Displays while authentication and role profiles are being resolved.
 class LoadingScreen extends StatelessWidget {
   const LoadingScreen({super.key});
 
@@ -17,6 +18,7 @@ class LoadingScreen extends StatelessWidget {
   }
 }
 
+/// Temporary landing screen for verified responders.
 class ResponderHomeScreen extends StatelessWidget {
   const ResponderHomeScreen({super.key});
 
@@ -29,6 +31,7 @@ class ResponderHomeScreen extends StatelessWidget {
   }
 }
 
+/// Explains that a responder account is waiting for administrator review.
 class PendingVerificationScreen extends StatelessWidget {
   const PendingVerificationScreen({super.key});
 
@@ -41,6 +44,7 @@ class PendingVerificationScreen extends StatelessWidget {
   }
 }
 
+/// Shows the verification decision and any administrator-provided reason.
 class RegistrationRejectedScreen extends StatelessWidget {
   const RegistrationRejectedScreen({super.key, this.verificationNotes});
 
@@ -59,6 +63,7 @@ class RegistrationRejectedScreen extends StatelessWidget {
   }
 }
 
+/// Explains that responder access is suspended and directs the user to support.
 class AccountSuspendedScreen extends StatelessWidget {
   const AccountSuspendedScreen({super.key});
 
@@ -71,6 +76,7 @@ class AccountSuspendedScreen extends StatelessWidget {
   }
 }
 
+/// Lists pending responders for administrators to review and verify.
 class AdminDashboardPlaceholderScreen extends StatelessWidget {
   const AdminDashboardPlaceholderScreen({super.key});
 

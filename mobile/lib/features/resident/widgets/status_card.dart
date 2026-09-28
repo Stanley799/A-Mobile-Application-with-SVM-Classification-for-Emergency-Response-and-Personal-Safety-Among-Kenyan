@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+/// Shows a tappable status summary with a leading icon and trailing action.
 class StatusCard extends StatelessWidget {
   const StatusCard({
     super.key,

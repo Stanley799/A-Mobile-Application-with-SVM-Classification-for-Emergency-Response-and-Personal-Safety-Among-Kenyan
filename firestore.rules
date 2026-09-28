@@ -9,6 +9,7 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Admin access comes from a server-assigned claim, never a client-editable profile field.
     function isSystemAdmin() {
       return isSignedIn() && request.auth.token.role == "SystemAdmin";
     }
@@ -47,6 +48,95 @@ service cloud.firestore {
 
     function validAvailabilityStatus(status) {
       return status in ["Available", "Busy", "Offline"];
+    }
+
+    function validTrustedContactData() {
+      return request.resource.data.keys().hasOnly([
+          "userId",
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "userId",
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && validPhoneNumber(request.resource.data.phoneNumber)
+        && request.resource.data.relationship in ["Sister", "Brother", "Friend", "Parent", "Spouse", "Other"]
+        && request.resource.data.isActive is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validSafetyCheckinCreate() {
+      return request.resource.data.keys().hasOnly([
+          "userId",
+          "startTime",
+          "expiryTime",
+          "status",
+          "durationMinutes",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "userId",
+          "startTime",
+          "expiryTime",
+          "status",
+          "durationMinutes",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.startTime is timestamp
+        && request.resource.data.expiryTime is timestamp
+        && request.resource.data.status == "Active"
+        && request.resource.data.durationMinutes is int
+        && request.resource.data.durationMinutes in [15, 30, 45, 60]
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validIncidentCreate() {
+      return request.resource.data.keys().hasOnly([
+          "userId",
+          "category",
+          "status",
+          "location",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "userId",
+          "category",
+          "status",
+          "location",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.category in [
+          "Emergency",
+          "Fire",
+          "Road Accident",
+          "Medical Emergency",
+          "Security Threat",
+          "Abduction",
+          "Other"
+        ]
+        && request.resource.data.status == "Active"
+        && (request.resource.data.location == null || request.resource.data.location is latlng)
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
     }
 
     function validUsersCreateKeys() {
@@ -153,6 +243,7 @@ service cloud.firestore {
           (request.resource.data.role == "Responder" && request.resource.data.accountStatus == "PendingVerification")
         );
 
+      // Owners may edit profile fields, but cannot change their identity, role, or creation time.
       allow update: if (isOwner(userId) || isSystemAdmin())
         && validUsersUpdateKeys()
         && validUsersData(userId)
@@ -178,6 +269,7 @@ service cloud.firestore {
         && request.resource.data.verifiedAt == null
         && request.resource.data.availabilityStatus == "Offline";
 
+      // Owners can change availability/location; only admins can change verification fields.
       allow update: if (
           isOwner(responderId)
           && request.resource.data.registrationNumber == resource.data.registrationNumber
@@ -207,8 +299,63 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /trustedContacts/{contactId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      // No per-user contact-count limit is enforced by these rules.
+      allow create: if isOwner(request.resource.data.userId)
+        && validTrustedContactData()
+        && request.resource.data.isActive == true;
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "updatedAt"
+        ])
+        && validTrustedContactData();
+
+      // Deactivate contacts instead of deleting their records.
+      allow delete: if false;
+    }
+
+    match /safetyCheckins/{checkinId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validSafetyCheckinCreate();
+
+      // Clients can close a check-in but cannot change its owner or timing fields.
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "updatedAt"
+        ])
+        && request.resource.data.status in ["CheckedIn", "Cancelled", "Expired"]
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /incidents/{incidentId} {
+      allow read: if isOwner(resource.data.userId);
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validIncidentCreate();
+
+      allow update, delete: if false;
+    }
+
     match /auditLogs/{logId} {
       allow read: if isSystemAdmin();
+      // Cloud Functions use the Admin SDK; clients must not forge audit history.
       allow write: if false;
     }
   }

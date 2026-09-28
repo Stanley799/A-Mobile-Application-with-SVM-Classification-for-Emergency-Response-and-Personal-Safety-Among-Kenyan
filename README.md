@@ -2,6 +2,8 @@ Emergency Response and Personal Safety System
 
 Phase 1 implements environment setup, Firebase backend configuration, and public authentication for Kenya-based Residents and responder organizations.
 
+The current mobile app also includes a resident dashboard with SOS alert creation, safety check-ins, trusted contacts, activity history, and profile editing. These resident workflows are a later implementation slice; the original Phase 1 exclusions below describe the historical Phase 1 scope.
+
 ## Phase 1 Scope
 
 Implemented:
@@ -26,12 +28,18 @@ Not implemented in Phase 1:
 
 ## Firebase Collections
 
-The public app writes only these registration collections:
+Registration uses these collections:
 
 - `users`, with document ID equal to Firebase Auth UID.
 - `responders`, with document ID equal to the linked user UID.
 
-Cloud Functions also write `auditLogs` for forensic readiness. Client writes to `auditLogs` are denied by Firestore rules.
+Resident features also use:
+
+- `trustedContacts` for owner-managed contacts. Removal is a soft delete using `isActive: false`.
+- `safetyCheckins` for timed check-ins and their status history. Documents cannot be deleted by clients.
+- `incidents` for immutable SOS alert submissions, with optional location captured only during an SOS flow.
+
+Client queries and writes for these resident collections are scoped to the authenticated owner by Firestore rules. Cloud Functions also write `auditLogs` for forensic readiness. Client writes to `auditLogs` are denied by Firestore rules.
 
 Responder organizations include these organization types only: `Ambulance`, `Fire`, `Police`, `Hospital`, `Community`, `Maritime`, and `Other`.
 
@@ -57,11 +65,11 @@ Responder organizations include these organization types only: `Ambulance`, `Fir
 	npm install
 	```
 
-4. Validate Firestore rules without deploying:
+4. Validate Firestore rules and indexes without deploying:
 
 	```powershell
 	Set-Location ..
-	firebase deploy --only firestore:rules --dry-run --project emergencyresponsesystem-166601
+	firebase deploy --only firestore:rules,firestore:indexes --dry-run --project emergencyresponsesystem-166601
 	```
 
 5. Run static analysis:
@@ -123,6 +131,10 @@ Firebase services may process and store data on infrastructure outside Kenya. Th
 - Responder verification fields are writable only by a `SystemAdmin` custom claim.
 - Responder owner updates are limited to `availabilityStatus`, `currentLatitude`, and `currentLongitude`.
 - Responder organization identity fields are allowed only at creation and are immutable to the owner afterward.
+- Resident contact, check-in, and incident records are owner-scoped; contacts are soft-deleted and incident documents are immutable to clients.
+- Profile editing is limited to first name, last name, phone number, and preferred language. Email, role, and account status are display-only.
+- Phone numbers are checked against libphonenumber metadata in the client and stored in E.164 form. Firestore rules validate E.164 syntax only; they cannot establish that a number is active or assigned.
+- Location is not captured during registration. The SOS flow requests current location after its cancellable countdown and still sends the alert if location is unavailable or permission is denied.
 
 ## Responder Verification
 

@@ -7,6 +7,7 @@ import '../features/resident/screens/home_screen.dart';
 import '../features/home/screens/placeholder_screens.dart';
 import 'auth_state_controller.dart';
 
+/// Builds role-aware routes and gates responders by verification status.
 GoRouter buildRouter(AuthStateController authState) {
   return GoRouter(
     initialLocation: '/sign-in',

@@ -7,6 +7,7 @@ const path = require("node:path");
 function resolveCredentials() {
   const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (keyPath) {
+    // Resolve relative key paths from the command's working directory.
     const absolutePath = path.resolve(process.cwd(), keyPath);
     if (!fs.existsSync(absolutePath)) {
       throw new Error(`Service account key not found at ${absolutePath}`);
@@ -14,6 +15,7 @@ function resolveCredentials() {
     const serviceAccount = JSON.parse(fs.readFileSync(absolutePath, "utf8"));
     return cert(serviceAccount);
   }
+  // Reuse the local gcloud or runtime identity when no key file is configured.
   return applicationDefault();
 }
 
@@ -27,6 +29,7 @@ async function findExistingSystemAdmin() {
     return adminsByRole.docs[0].id;
   }
 
+  // Check Auth claims too, in case an admin record is missing from Firestore.
   let nextPageToken;
   do {
     const result = await getAuth().listUsers(1000, nextPageToken);
@@ -42,6 +45,7 @@ async function findExistingSystemAdmin() {
 }
 
 async function createFirstAdmin() {
+  // This bootstrap must never create a second system administrator.
   const existingAdminId = await findExistingSystemAdmin();
   if (existingAdminId) {
     throw new Error(`A SystemAdmin already exists (${existingAdminId}). This script must run only once.`);

@@ -13,6 +13,7 @@ import '../../../core/theme/app_theme.dart';
 import '../models/auth_models.dart';
 import '../services/auth_repository.dart';
 
+/// Collects resident or responder details and submits a validated registration.
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
 
@@ -105,6 +106,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       _selectedCountryCode,
     );
 
+    // Consent and gender are stored outside the Form fields, so validate them here.
     if (!_consent) {
       setState(() {
         _submitError =
@@ -154,6 +156,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       );
 
       await authRepository.register(input);
+      // Load the new Firestore profile before role-based routing continues.
       await authStateController.refresh();
 
       if (!mounted) {
