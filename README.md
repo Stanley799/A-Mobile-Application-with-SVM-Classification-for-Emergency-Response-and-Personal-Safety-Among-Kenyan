@@ -37,7 +37,7 @@ Resident features also use:
 
 - `trustedContacts` for owner-managed contacts. Removal is a soft delete using `isActive: false`.
 - `safetyCheckins` for timed check-ins and their status history. Documents cannot be deleted by clients.
-- `incidents` for immutable SOS alert submissions, with optional location captured only during an SOS flow.
+- `incidents` for SOS alert submissions, with optional location captured only during an SOS flow. Owners may cancel an alert, but cannot change the submitted incident details.
 
 Client queries and writes for these resident collections are scoped to the authenticated owner by Firestore rules. Cloud Functions also write `auditLogs` for forensic readiness. Client writes to `auditLogs` are denied by Firestore rules.
 
@@ -131,7 +131,7 @@ Firebase services may process and store data on infrastructure outside Kenya. Th
 - Responder verification fields are writable only by a `SystemAdmin` custom claim.
 - Responder owner updates are limited to `availabilityStatus`, `currentLatitude`, and `currentLongitude`.
 - Responder organization identity fields are allowed only at creation and are immutable to the owner afterward.
-- Resident contact, check-in, and incident records are owner-scoped; contacts are soft-deleted and incident documents are immutable to clients.
+- Resident contact, check-in, and incident records are owner-scoped; contacts are soft-deleted and incident details are immutable to clients. Owners may update only an incident's status to `Cancelled` and its update timestamp.
 - Profile editing is limited to first name, last name, phone number, and preferred language. Email, role, and account status are display-only.
 - Phone numbers are checked against libphonenumber metadata in the client and stored in E.164 form. Firestore rules validate E.164 syntax only; they cannot establish that a number is active or assigned.
 - Location is not captured during registration. The SOS flow requests current location after its cancellable countdown and still sends the alert if location is unavailable or permission is denied.

@@ -109,34 +109,59 @@ service cloud.firestore {
 
     function validIncidentCreate() {
       return request.resource.data.keys().hasOnly([
+          "incidentId",
+          "reporterId",
           "userId",
+          "activationPath",
           "category",
+          "priority",
+          "classifierConfidence",
+          "classifierReason",
+          "latitude",
+          "longitude",
+          "triageAnswers",
+          "freeTextDescription",
+          "nlpExtractedKeywords",
           "status",
-          "location",
+          "channel",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dispatchedAt",
+          "responderId"
         ])
         && request.resource.data.keys().hasAll([
-          "userId",
+          "reporterId",
+          "activationPath",
           "category",
+          "priority",
           "status",
-          "location",
+          "channel",
           "createdAt",
           "updatedAt"
         ])
+        && (request.resource.data.reporterId == request.auth.uid || request.resource.data.userId == request.auth.uid)
+        && request.resource.data.activationPath in ["sos_button", "category_selection", "other_free_text"]
         && request.resource.data.category in [
-          "Emergency",
-          "Fire",
-          "Road Accident",
           "Medical Emergency",
+          "Road Accident",
+          "Fire & Rescue",
           "Security Threat",
           "Abduction",
-          "Other"
+          "Other / General",
+          "Unknown"
         ]
-        && request.resource.data.status == "Active"
-        && (request.resource.data.location == null || request.resource.data.location is latlng)
+        && request.resource.data.priority in ["High", "Medium", "Low", "PendingHumanTriage"]
+        && request.resource.data.classifierConfidence is number
+        && request.resource.data.status in ["New", "Dispatched", "EnRoute", "Arrived", "Resolved", "Cancelled", "Active"]
+        && request.resource.data.channel in ["internet", "sms"]
         && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && (request.resource.data.get('latitude', null) == null || request.resource.data.latitude is number)
+        && (request.resource.data.get('longitude', null) == null || request.resource.data.longitude is number)
+        && (request.resource.data.get('freeTextDescription', null) == null || request.resource.data.freeTextDescription is string)
+        && (request.resource.data.get('nlpExtractedKeywords', null) == null || request.resource.data.nlpExtractedKeywords is list)
+        && (request.resource.data.get('dispatchedAt', null) == null || request.resource.data.dispatchedAt is timestamp)
+        && (request.resource.data.get('responderId', null) == null || request.resource.data.responderId is string);
     }
 
     function validUsersCreateKeys() {
@@ -345,12 +370,22 @@ service cloud.firestore {
     }
 
     match /incidents/{incidentId} {
-      allow read: if isOwner(resource.data.userId);
+      allow read: if isSignedIn()
+        && (resource.data.reporterId == request.auth.uid || resource.data.userId == request.auth.uid);
 
-      allow create: if isOwner(request.resource.data.userId)
+      allow create: if isSignedIn()
+        && (request.resource.data.reporterId == request.auth.uid || request.resource.data.userId == request.auth.uid)
         && validIncidentCreate();
 
-      allow update, delete: if false;
+      allow update: if (
+          isSignedIn()
+          && (resource.data.reporterId == request.auth.uid || resource.data.userId == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
+          && request.resource.data.status == "Cancelled"
+          && request.resource.data.updatedAt is timestamp
+        ) || isSystemAdmin();
+
+      allow delete: if false;
     }
 
     match /auditLogs/{logId} {

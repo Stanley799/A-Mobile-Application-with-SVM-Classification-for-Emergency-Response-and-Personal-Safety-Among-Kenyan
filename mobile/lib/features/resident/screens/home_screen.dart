@@ -7,15 +7,22 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../../core/models/emergency_enums.dart';
+import '../../../core/models/incident.dart';
+import '../../../core/services/priority_classifier.dart';
 import '../../../core/theme/app_theme.dart';
 import '../widgets/activity_item.dart';
 import '../widgets/category_chip.dart';
+import '../widgets/other_free_text_sheet.dart';
 import '../widgets/sos_button.dart';
+import '../widgets/sos_countdown_sheet.dart';
 import '../widgets/status_card.dart';
+import '../widgets/triage_question_sheet.dart';
 import 'activity_history_screen.dart';
+import 'emergency_active_screen.dart';
 import 'safety_checkin_screen.dart';
-import 'sos_confirmation_sheet.dart';
 import 'trusted_contacts_screen.dart';
 import '../../shared/screens/profile_screen.dart';
 
@@ -172,7 +179,7 @@ class _NavigationDestination extends StatelessWidget {
   }
 }
 
-class _ResidentDashboard extends StatelessWidget {
+class _ResidentDashboard extends StatefulWidget {
   static const _categories =
       <
         ({
@@ -238,6 +245,11 @@ class _ResidentDashboard extends StatelessWidget {
   final VoidCallback onOpenHistory;
 
   @override
+  State<_ResidentDashboard> createState() => _ResidentDashboardState();
+}
+
+class _ResidentDashboardState extends State<_ResidentDashboard> {
+  @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser!.uid;
     final userDocument = FirebaseFirestore.instance
@@ -276,7 +288,7 @@ class _ResidentDashboard extends StatelessWidget {
                     ),
                     IconButton(
                       tooltip: 'Open profile',
-                      onPressed: onOpenProfile,
+                      onPressed: widget.onOpenProfile,
                       icon: CircleAvatar(
                         radius: 22,
                         backgroundColor: AppColors.brandLight,
@@ -349,8 +361,7 @@ class _ResidentDashboard extends StatelessWidget {
               sliver: SliverToBoxAdapter(
                 child: Center(
                   child: SosButton(
-                    onPressed: () =>
-                        _confirmEmergency(context, 'Other / General'),
+                    onPressed: () => _handleSosActivation(context),
                   ),
                 ),
               ),
@@ -375,16 +386,21 @@ class _ResidentDashboard extends StatelessWidget {
                       : 3;
                   return SliverGrid(
                     delegate: SliverChildBuilderDelegate((context, index) {
-                      final category = _categories[index];
+                      final category = _ResidentDashboard._categories[index];
                       return CategoryChip(
                         label: category.label,
                         icon: category.icon,
                         background: category.background,
                         foreground: category.foreground,
-                        onTap: () =>
-                            _confirmEmergency(context, category.category),
+                        onTap: () {
+                          if (category.category == 'Other / General') {
+                            _handleOtherTextEmergency(context);
+                            return;
+                          }
+                          _handleCategorySelection(context, category.category);
+                        },
                       );
-                    }, childCount: _categories.length),
+                    }, childCount: _ResidentDashboard._categories.length),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,
                       crossAxisSpacing: AppSpacing.md,
@@ -402,13 +418,13 @@ class _ResidentDashboard extends StatelessWidget {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               sliver: SliverToBoxAdapter(
-                child: _TrustedContactsPreview(onManage: onOpenContacts),
+                child: _TrustedContactsPreview(onManage: widget.onOpenContacts),
               ),
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
               sliver: SliverToBoxAdapter(
-                child: _RecentActivityPreview(onViewAll: onOpenHistory),
+                child: _RecentActivityPreview(onViewAll: widget.onOpenHistory),
               ),
             ),
           ],
@@ -430,52 +446,233 @@ class _ResidentDashboard extends StatelessWidget {
     return trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
   }
 
-  Future<void> _confirmEmergency(BuildContext context, String category) async {
-    // Only create an incident after the user lets the countdown finish.
-    final confirmed = await showModalBottomSheet<bool>(
+  Future<void> _handleSosActivation(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (dialogContext) => const SosCountdownSheet(),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final location = await _optionalCurrentLocation();
+    final createdAt = DateTime.now();
+    final incidentId = const Uuid().v4();
+
+    final incident = Incident(
+      incidentId: incidentId,
+      reporterId: userId,
+      activationPath: ActivationPath.sosButton.label,
+      category: EmergencyCategory.unknown,
+      priority: PriorityLevel.pendingHumanTriage,
+      classifierConfidence: 0.0,
+      classifierReason: 'Pending human triage after SOS activation.',
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+      triageAnswers: const <String, dynamic>{},
+      status: IncidentStatus.newStatus,
+      channel: 'internet',
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
+
+    final saved = await _persistIncident(messenger, incident);
+
+    if (!saved || !mounted) {
+      return;
+    }
+
+    navigator.push(
+      MaterialPageRoute(
+        builder: (routeContext) => EmergencyActiveScreen(
+          incidentId: incident.incidentId,
+          category: incident.category,
+          priority: incident.priority,
+          createdAt: incident.createdAt,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleCategorySelection(
+    BuildContext context,
+    String categoryLabel,
+  ) async {
+    final category = EmergencyCategory.fromLabel(categoryLabel);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
       useSafeArea: true,
-      isDismissible: false,
-      enableDrag: false,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (context) => SosConfirmationSheet(category: category),
+      builder: (sheetContext) => TriageQuestionSheet(
+        category: category,
+        classifier: RuleBasedPriorityClassifier(),
+      ),
     );
-    if (confirmed != true || !context.mounted) return;
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final suggestion = result['suggestion'] as PrioritySuggestion?;
+    final triageAnswers = Map<String, dynamic>.from(
+      result['triageAnswers'] as Map<dynamic, dynamic>? ??
+          const <dynamic, dynamic>{},
+    );
+    if (suggestion == null) {
+      return;
+    }
 
     final userId = FirebaseAuth.instance.currentUser!.uid;
     final location = await _optionalCurrentLocation();
+    final createdAt = DateTime.now();
+    final incidentId = const Uuid().v4();
+
+    final incident = Incident(
+      incidentId: incidentId,
+      reporterId: userId,
+      activationPath: ActivationPath.categorySelection.label,
+      category: category,
+      priority: suggestion.priority,
+      classifierConfidence: suggestion.confidence,
+      classifierReason: suggestion.reason,
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+      triageAnswers: triageAnswers,
+      status: IncidentStatus.newStatus,
+      channel: 'internet',
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
+
+    final saved = await _persistIncident(messenger, incident);
+    if (!saved || !mounted) {
+      return;
+    }
+
+    navigator.push(
+      MaterialPageRoute(
+        builder: (routeContext) => EmergencyActiveScreen(
+          incidentId: incident.incidentId,
+          category: incident.category,
+          priority: incident.priority,
+          createdAt: incident.createdAt,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleOtherTextEmergency(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (sheetContext) =>
+          OtherFreeTextSheet(classifier: RuleBasedPriorityClassifier()),
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final category =
+        (result['category'] as EmergencyCategory?) ?? EmergencyCategory.other;
+    final suggestion = result['suggestion'] as PrioritySuggestion?;
+    if (suggestion == null) {
+      return;
+    }
+
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final location = await _optionalCurrentLocation();
+    final createdAt = DateTime.now();
+    final incidentId = const Uuid().v4();
+
+    final incident = Incident(
+      incidentId: incidentId,
+      reporterId: userId,
+      activationPath: ActivationPath.otherFreeText.label,
+      category: category,
+      priority: suggestion.priority,
+      classifierConfidence: suggestion.confidence,
+      classifierReason: suggestion.reason,
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+      freeTextDescription: (result['text'] as String?) ?? '',
+      nlpExtractedKeywords: List<String>.from(
+        (result['keywords'] as List<dynamic>? ?? const <dynamic>[]),
+      ),
+      status: IncidentStatus.newStatus,
+      channel: 'internet',
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
+
+    final saved = await _persistIncident(messenger, incident);
+    if (!saved || !mounted) {
+      return;
+    }
+
+    navigator.push(
+      MaterialPageRoute(
+        builder: (routeContext) => EmergencyActiveScreen(
+          incidentId: incident.incidentId,
+          category: incident.category,
+          priority: incident.priority,
+          createdAt: incident.createdAt,
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _persistIncident(
+    ScaffoldMessengerState? messenger,
+    Incident incident,
+  ) async {
     try {
-      await FirebaseFirestore.instance.collection('incidents').add({
-        'userId': userId,
-        'category': category,
-        'status': 'Active',
-        'location': location,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Emergency alert sent.')));
+      await FirebaseFirestore.instance
+          .collection('incidents')
+          .doc(incident.incidentId)
+          .set(incident.toFirestore());
+
+      if (messenger != null && mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Emergency alert sent.')),
+        );
       }
+      return true;
     } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (messenger != null && mounted) {
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Unable to send alert. Please try again.'),
           ),
         );
       }
+      return false;
     }
   }
 
   /// Attempts a location lookup, returning null when unavailable.
   Future<GeoPoint?> _optionalCurrentLocation() async {
-    if (kIsWeb || !await Geolocator.isLocationServiceEnabled()) return null;
     try {
+      if (kIsWeb || !await Geolocator.isLocationServiceEnabled()) return null;
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
