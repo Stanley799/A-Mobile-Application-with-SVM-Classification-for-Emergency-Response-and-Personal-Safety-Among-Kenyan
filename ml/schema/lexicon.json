@@ -1,0 +1,324 @@
+{
+ "note": "ENGLISH ONLY, written by the assistant. Swahili and Sheng are NOT here on purpose: add them yourself in schema/lexicon_user.json (see the guide). Use KEYWORDS (nouns and key verbs), not full sentences.",
+ "flags": {
+  "self_harm": [
+   "kill myself",
+   "killing myself",
+   "suicide",
+   "suicidal",
+   "end my life",
+   "want to die",
+   "wanna die",
+   "take my own life",
+   "kill himself",
+   "kill herself",
+   "killing himself",
+   "killing herself",
+   "end his life",
+   "end her life",
+   "take his own life",
+   "take her own life",
+   "wants to die",
+   "wants to kill"
+  ],
+  "sexual_violence": [
+   "rape",
+   "raped",
+   "raping",
+   "sexually assaulted",
+   "sexual assault",
+   "molested",
+   "defiled",
+   "defilement",
+   "forced himself"
+  ],
+  "domestic_violence": [
+   "domestic violence",
+   "my husband beats",
+   "my wife beats",
+   "beating me",
+   "he beats me",
+   "she beats me",
+   "wife beating"
+  ]
+ },
+ "categories": {
+  "Medical Emergency": {
+   "terms": [
+    "unconscious",
+    "not breathing",
+    "cannot breathe",
+    "can't breathe",
+    "difficulty breathing",
+    "heart attack",
+    "chest pain",
+    "seizure",
+    "convulsing",
+    "convulsions",
+    "fits",
+    "collapsed",
+    "fainted",
+    "bleeding",
+    "blood",
+    "pregnant",
+    "labour",
+    "labor",
+    "contractions",
+    "miscarriage",
+    "snake",
+    "snakebite",
+    "poison",
+    "poisoned",
+    "allergic",
+    "choking",
+    "stroke",
+    "diabetic",
+    "asthma",
+    "sick",
+    "fever"
+   ],
+   "subtypes": {
+    "maternal": [
+     "pregnant",
+     "labour",
+     "labor",
+     "contractions",
+     "miscarriage"
+    ],
+    "snakebite_or_poison": [
+     "snake",
+     "snakebite",
+     "poison",
+     "poisoned"
+    ],
+    "cardiac": [
+     "heart attack",
+     "chest pain"
+    ],
+    "seizure_or_collapse": [
+     "seizure",
+     "convulsing",
+     "convulsions",
+     "fits",
+     "collapsed",
+     "fainted"
+    ],
+    "breathing_problem": [
+     "cannot breathe",
+     "can't breathe",
+     "difficulty breathing",
+     "choking",
+     "asthma"
+    ]
+   }
+  },
+  "Road Accident": {
+   "terms": [
+    "accident",
+    "crash",
+    "crashed",
+    "collided",
+    "collision",
+    "knocked down",
+    "hit by a car",
+    "overturned",
+    "rolled",
+    "matatu",
+    "boda boda",
+    "bodaboda",
+    "motorbike"
+   ],
+   "subtypes": {
+    "boda_boda": [
+     "boda boda",
+     "bodaboda",
+     "motorbike"
+    ],
+    "matatu_or_bus": [
+     "matatu",
+     "bus"
+    ],
+    "pedestrian_hit": [
+     "knocked down",
+     "hit by a car",
+     "pedestrian"
+    ],
+    "truck_or_heavy": [
+     "truck",
+     "lorry",
+     "trailer"
+    ]
+   }
+  },
+  "Fire & Rescue": {
+   "terms": [
+    "fire",
+    "burning",
+    "on fire",
+    "smoke",
+    "flames",
+    "building collapsed",
+    "collapsed building",
+    "trapped",
+    "flood",
+    "flooded",
+    "drowning",
+    "drowned",
+    "buried",
+    "caved in",
+    "fell on workers"
+   ],
+   "subtypes": {
+    "building_fire": [
+     "fire",
+     "burning",
+     "on fire",
+     "flames"
+    ],
+    "building_collapse": [
+     "building collapsed",
+     "collapsed building"
+    ],
+    "flood_or_water_rescue": [
+     "flood",
+     "flooded",
+     "drowning",
+     "drowned"
+    ]
+   }
+  },
+  "Security Threat": {
+   "terms": [
+    "robbery",
+    "robbers",
+    "robbed",
+    "thieves",
+    "thief",
+    "gun",
+    "gunshot",
+    "shot",
+    "knife",
+    "stabbed",
+    "panga",
+    "attacked",
+    "attackers",
+    "mob",
+    "looting",
+    "looters",
+    "riot",
+    "gang",
+    "goons",
+    "burglars",
+    "carjacking",
+    "gunfire",
+    "shooting",
+    "shots fired",
+    "burglar"
+   ],
+   "subtypes": {
+    "armed_robbery": [
+     "robbery",
+     "robbers",
+     "robbed",
+     "gun",
+     "panga"
+    ],
+    "mob_violence": [
+     "mob",
+     "mob justice",
+     "goons",
+     "gang"
+    ],
+    "looting_or_riot": [
+     "looting",
+     "looters",
+     "riot"
+    ],
+    "assault": [
+     "attacked",
+     "attackers",
+     "stabbed",
+     "beaten"
+    ]
+   }
+  },
+  "Abduction": {
+   "terms": [
+    "kidnapped",
+    "kidnap",
+    "abducted",
+    "abduct",
+    "abduction",
+    "taken by force",
+    "forced into a car",
+    "dragged into",
+    "grabbed and drove off",
+    "taken against her will",
+    "taken against his will"
+   ],
+   "subtypes": {
+    "kidnapping": [
+     "kidnapped",
+     "kidnap",
+     "abducted",
+     "abduct",
+     "abduction"
+    ],
+    "missing_child": [
+     "missing child",
+     "child is missing",
+     "lost child"
+    ]
+   }
+  },
+  "Other / General": {
+   "terms": [
+    "hyena",
+    "lion",
+    "elephant",
+    "buffalo",
+    "crocodile",
+    "hippo",
+    "fell",
+    "fall",
+    "fallen",
+    "burn",
+    "burns",
+    "burnt",
+    "scalded",
+    "stranded",
+    "mental",
+    "anxiety",
+    "panic",
+    "depressed"
+   ],
+   "subtypes": {
+    "wildlife_attack": [
+     "hyena",
+     "lion",
+     "elephant",
+     "buffalo",
+     "crocodile",
+     "hippo"
+    ],
+    "fall_or_injury": [
+     "fell",
+     "fall",
+     "fallen"
+    ],
+    "burns": [
+     "burn",
+     "burns",
+     "burnt",
+     "scalded"
+    ],
+    "mental_health_crisis": [
+     "mental",
+     "panic",
+     "depressed",
+     "anxiety"
+    ]
+   }
+  }
+ }
+}

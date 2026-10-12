@@ -1,0 +1,62 @@
+{
+ "_instructions": "YOU fill this file. Same structure as lexicon.json. Add KEYWORDS people really use in Swahili, Sheng or mixed text. One word is better than a sentence: add 'nyoka' (the noun), not a full phrase. Keep every list in lowercase. Ask native speakers to check every term. Fill 'flags' FIRST: those are the safety-critical lists.",
+ "flags": {
+  "self_harm": [],
+  "sexual_violence": [],
+  "domestic_violence": []
+ },
+ "categories": {
+  "Medical Emergency": {
+   "terms": [],
+   "subtypes": {
+    "maternal": [],
+    "snakebite_or_poison": [],
+    "cardiac": [],
+    "seizure_or_collapse": [],
+    "breathing_problem": []
+   }
+  },
+  "Road Accident": {
+   "terms": [],
+   "subtypes": {
+    "boda_boda": [],
+    "matatu_or_bus": [],
+    "pedestrian_hit": [],
+    "truck_or_heavy": []
+   }
+  },
+  "Fire & Rescue": {
+   "terms": [],
+   "subtypes": {
+    "building_fire": [],
+    "building_collapse": [],
+    "flood_or_water_rescue": []
+   }
+  },
+  "Security Threat": {
+   "terms": [],
+   "subtypes": {
+    "armed_robbery": [],
+    "mob_violence": [],
+    "looting_or_riot": [],
+    "assault": []
+   }
+  },
+  "Abduction": {
+   "terms": [],
+   "subtypes": {
+    "kidnapping": [],
+    "missing_child": []
+   }
+  },
+  "Other / General": {
+   "terms": [],
+   "subtypes": {
+    "wildlife_attack": [],
+    "fall_or_injury": [],
+    "burns": [],
+    "mental_health_crisis": []
+   }
+  }
+ }
+}

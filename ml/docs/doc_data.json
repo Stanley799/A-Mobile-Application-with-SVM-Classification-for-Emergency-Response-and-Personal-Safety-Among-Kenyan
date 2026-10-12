@@ -1,0 +1,756 @@
+{
+ "version": "3.0.0",
+ "meta": {
+  "model": "SVM-RBF",
+  "trained_rows": 5217,
+  "python": "3.13.16",
+  "sklearn": "1.9.1",
+  "pandas": "3.0.5"
+ },
+ "cv": {
+  "LogReg": {
+   "model_only": {
+    "acc": 0.8200000000000001,
+    "high_recall": 0.8690531194295901,
+    "high_to_low": 2.9,
+    "high_to_med": 46.1
+   },
+   "hybrid": {
+    "acc": 0.8256249999999999,
+    "high_recall": 0.9126146167557933,
+    "high_to_low": 2.5,
+    "high_to_med": 30.2
+   }
+  },
+  "SVM-linear": {
+   "model_only": {
+    "acc": 0.8290000000000001,
+    "high_recall": 0.9051372549019607,
+    "high_to_low": 1.6,
+    "high_to_med": 33.9
+   },
+   "hybrid": {
+    "acc": 0.834,
+    "high_recall": 0.9372049910873439,
+    "high_to_low": 1.6,
+    "high_to_med": 21.9
+   }
+  },
+  "SVM-RBF": {
+   "model_only": {
+    "acc": 0.8473750000000001,
+    "high_recall": 0.9053953654188949,
+    "high_to_low": 2.0,
+    "high_to_med": 33.4
+   },
+   "hybrid": {
+    "acc": 0.8481250000000001,
+    "high_recall": 0.925169340463458,
+    "high_to_low": 2.0,
+    "high_to_med": 26.0
+   }
+  },
+  "RandomForest": {
+   "model_only": {
+    "acc": 0.8293750000000001,
+    "high_recall": 0.8642409982174687,
+    "high_to_low": 1.7,
+    "high_to_med": 49.1
+   },
+   "hybrid": {
+    "acc": 0.8383750000000001,
+    "high_recall": 0.917149376114082,
+    "high_to_low": 1.7,
+    "high_to_med": 29.3
+   }
+  },
+  "NaiveBayes (Bayesian baseline)": {
+   "model_only": {
+    "acc": 0.750625,
+    "high_recall": 0.8057219251336898,
+    "high_to_low": 1.8,
+    "high_to_med": 70.9
+   },
+   "hybrid": {
+    "acc": 0.76775,
+    "high_recall": 0.8920363636363637,
+    "high_to_low": 1.8,
+    "high_to_med": 38.6
+   }
+  }
+ },
+ "weights": [
+  [
+   "Starting score",
+   "Medical Emergency",
+   2.0,
+   "ASSUMPTION",
+   "Medical calls start at Medium because the cause is unknown."
+  ],
+  [
+   "Starting score",
+   "Road Accident",
+   0.3,
+   "ASSUMPTION",
+   "A crash with no danger signs is Low."
+  ],
+  [
+   "Starting score",
+   "Fire & Rescue",
+   2.0,
+   "ASSUMPTION",
+   "Fire is Medium by default because it spreads."
+  ],
+  [
+   "Starting score",
+   "Security Threat",
+   2.0,
+   "ASSUMPTION",
+   "A threat is Medium by default."
+  ],
+  [
+   "Starting score",
+   "Abduction",
+   4.0,
+   "ASSUMPTION",
+   "Always High by policy."
+  ],
+  [
+   "Starting score",
+   "Other / General",
+   0.5,
+   "ASSUMPTION",
+   "Unclassified calls start Low."
+  ],
+  [
+   "conscious",
+   "No",
+   4.0,
+   "PRINCIPLE",
+   "ABCD danger sign (ETAT+, SATS). Structure from literature, size is an assumption."
+  ],
+  [
+   "conscious",
+   "Unknown",
+   1.9,
+   "ASSUMPTION",
+   "Cannot confirm, so treated as partly dangerous."
+  ],
+  [
+   "breathing",
+   "No",
+   4.0,
+   "PRINCIPLE",
+   "ABCD danger sign. Size is an assumption."
+  ],
+  [
+   "breathing",
+   "Unknown",
+   1.9,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "severe_bleeding",
+   "Yes",
+   3.8,
+   "PRINCIPLE",
+   "Circulation danger sign. Size is an assumption."
+  ],
+  [
+   "severe_bleeding",
+   "Unknown",
+   0.8,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "chest_pain",
+   "Yes",
+   3.8,
+   "ASSUMPTION",
+   "Possible heart emergency."
+  ],
+  [
+   "chest_pain",
+   "Unknown",
+   0.8,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "pregnant",
+   "Yes",
+   1.5,
+   "ASSUMPTION",
+   "Pregnancy raises risk. Reviewer to confirm."
+  ],
+  [
+   "pregnant",
+   "Unknown",
+   0.3,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "age_group",
+   "Child",
+   0.8,
+   "ASSUMPTION",
+   "Children are more vulnerable. SATS analyses age 12 and under separately."
+  ],
+  [
+   "trapped",
+   "Yes",
+   2.0,
+   "ASSUMPTION",
+   "Needs rescue equipment."
+  ],
+  [
+   "trapped",
+   "Unknown",
+   0.5,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "hazard",
+   "Yes",
+   1.8,
+   "ASSUMPTION",
+   "Danger is ongoing."
+  ],
+  [
+   "hazard",
+   "Unknown",
+   0.4,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "weapon_involved",
+   "Yes",
+   3.8,
+   "ASSUMPTION",
+   "Armed threat."
+  ],
+  [
+   "weapon_involved",
+   "Unknown",
+   1.2,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "immediate_danger",
+   "Yes",
+   2.5,
+   "ASSUMPTION",
+   "Threat still present."
+  ],
+  [
+   "immediate_danger",
+   "Unknown",
+   0.8,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "people_count",
+   "3",
+   1.7,
+   "ASSUMPTION",
+   "More people need help."
+  ],
+  [
+   "people_count",
+   "4",
+   2.2,
+   "ASSUMPTION",
+   ""
+  ],
+  [
+   "people_count",
+   "5 or more",
+   2.2,
+   "ASSUMPTION",
+   ""
+  ]
+ ],
+ "floors": [
+  [
+   "F01",
+   "any",
+   "Not conscious",
+   "High"
+  ],
+  [
+   "F02",
+   "any",
+   "Not breathing normally",
+   "High"
+  ],
+  [
+   "F03",
+   "any",
+   "Heavy bleeding",
+   "High"
+  ],
+  [
+   "F04",
+   "any",
+   "Chest pain",
+   "High"
+  ],
+  [
+   "F05",
+   "any",
+   "Weapon involved",
+   "High"
+  ],
+  [
+   "F06",
+   "any",
+   "Threat still close by",
+   "High"
+  ],
+  [
+   "F07",
+   "Abduction",
+   "Abduction is always High by policy",
+   "High"
+  ],
+  [
+   "F08",
+   "any",
+   "Trapped with fire, smoke or collapse danger",
+   "High"
+  ],
+  [
+   "F09",
+   "sexual_violence",
+   "Sexual violence needs time-sensitive medical care",
+   "Medium"
+  ],
+  [
+   "F10",
+   "mental_health_crisis",
+   "Self-harm risk, human triage",
+   "High"
+  ]
+ ],
+ "questions": [
+  [
+   "age_group",
+   "enum",
+   "Who needs help?",
+   "Adult, Child, Unknown",
+   "\"\""
+  ],
+  [
+   "conscious",
+   "enum",
+   "Is the person awake and responding?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "breathing",
+   "enum",
+   "Is the person breathing normally?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "severe_bleeding",
+   "enum",
+   "Is there heavy bleeding that will not stop?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "chest_pain",
+   "enum",
+   "Is the person having chest pain or crushing pressure in the chest?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "pregnant",
+   "enum",
+   "Is the person pregnant?",
+   "Yes, No, Unknown",
+   "{\"age_group\": [\"Adult\", \"Unknown\"]}"
+  ],
+  [
+   "trapped",
+   "enum",
+   "Is anyone trapped and unable to get out?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "hazard",
+   "enum",
+   "Is there fire, smoke, fuel leaking or danger of collapse?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "weapon_involved",
+   "enum",
+   "Is there a weapon (gun, knife, panga or similar)?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "immediate_danger",
+   "enum",
+   "Is the attacker or threat still close by?",
+   "Yes, No, Unknown",
+   "\"\""
+  ],
+  [
+   "people_count",
+   "int",
+   "How many people need help? (5 means 5 or more)",
+   "1 to 5",
+   "\"\""
+  ]
+ ],
+ "categories": [
+  [
+   "Medical Emergency",
+   "age_group, conscious, breathing, severe_bleeding, chest_pain, pregnant, people_count",
+   "cardiac, breathing_problem, seizure_or_collapse, maternal, sick_child, snakebite_or_poison, other_medical"
+  ],
+  [
+   "Road Accident",
+   "age_group, conscious, breathing, severe_bleeding, trapped, hazard, pregnant, people_count",
+   "boda_boda, matatu_or_bus, private_vehicle, pedestrian_hit, truck_or_heavy"
+  ],
+  [
+   "Fire & Rescue",
+   "age_group, conscious, breathing, trapped, hazard, people_count",
+   "building_fire, bush_or_vegetation_fire, building_collapse, flood_or_water_rescue"
+  ],
+  [
+   "Security Threat",
+   "age_group, conscious, breathing, severe_bleeding, weapon_involved, immediate_danger, people_count",
+   "armed_robbery, assault, mob_violence, looting_or_riot, domestic_violence, sexual_violence, other_security"
+  ],
+  [
+   "Abduction",
+   "age_group, weapon_involved, immediate_danger, people_count",
+   "kidnapping, missing_child"
+  ],
+  [
+   "Other / General",
+   "age_group, conscious, breathing, severe_bleeding, people_count",
+   "mental_health_crisis, wildlife_attack, fall_or_injury, burns, unclear"
+  ]
+ ],
+ "combo_rows": [
+  [
+   "Abduction",
+   135,
+   "100.0%",
+   0,
+   0,
+   0,
+   "0.0%"
+  ],
+  [
+   "Fire & Rescue",
+   1215,
+   "98.7%",
+   0,
+   16,
+   0,
+   "3.4%"
+  ],
+  [
+   "Medical Emergency",
+   2835,
+   "99.3%",
+   0,
+   9,
+   8,
+   "1.9%"
+  ],
+  [
+   "Other / General",
+   405,
+   "97.0%",
+   0,
+   10,
+   0,
+   "9.4%"
+  ],
+  [
+   "Road Accident",
+   8505,
+   "98.3%",
+   0,
+   143,
+   0,
+   "4.9%"
+  ],
+  [
+   "Security Threat",
+   3645,
+   "99.7%",
+   0,
+   8,
+   4,
+   "1.5%"
+  ]
+ ],
+ "total_combos": 16740,
+ "routing": {
+  "base": {
+   "Medical Emergency": {
+    "required": [
+     "medical_transport"
+    ],
+    "preferred": []
+   },
+   "Road Accident": {
+    "required": [
+     "medical_transport"
+    ],
+    "preferred": []
+   },
+   "Fire & Rescue": {
+    "required": [
+     "fire_suppression"
+    ],
+    "preferred": [
+     "medical_transport"
+    ]
+   },
+   "Security Threat": {
+    "required": [
+     "law_enforcement"
+    ],
+    "preferred": []
+   },
+   "Abduction": {
+    "required": [
+     "law_enforcement"
+    ],
+    "preferred": []
+   },
+   "Other / General": {
+    "required": [],
+    "preferred": [
+     "medical_transport"
+    ]
+   }
+  },
+  "conditional": [
+   {
+    "when": [
+     {
+      "q": "trapped",
+      "in": [
+       "Yes"
+      ]
+     }
+    ],
+    "match": "any",
+    "add_required": [
+     "extrication"
+    ]
+   },
+   {
+    "when": [
+     {
+      "q": "trapped",
+      "in": [
+       "Unknown"
+      ]
+     }
+    ],
+    "match": "any",
+    "add_preferred": [
+     "extrication"
+    ]
+   },
+   {
+    "when": [
+     {
+      "q": "hazard",
+      "in": [
+       "Yes"
+      ]
+     }
+    ],
+    "match": "any",
+    "add_required": [
+     "fire_suppression"
+    ]
+   },
+   {
+    "when": [
+     {
+      "q": "pregnant",
+      "in": [
+       "Yes"
+      ]
+     }
+    ],
+    "match": "any",
+    "add_preferred": [
+     "maternal_care"
+    ]
+   },
+   {
+    "category": "Security Threat",
+    "when": [
+     {
+      "q": "severe_bleeding",
+      "in": [
+       "Yes"
+      ]
+     },
+     {
+      "q": "conscious",
+      "in": [
+       "No"
+      ]
+     },
+     {
+      "q": "breathing",
+      "in": [
+       "No"
+      ]
+     }
+    ],
+    "match": "any",
+    "add_required": [
+     "medical_transport"
+    ]
+   },
+   {
+    "category": "Fire & Rescue",
+    "when": [
+     {
+      "q": "severe_bleeding",
+      "in": [
+       "Yes"
+      ]
+     },
+     {
+      "q": "conscious",
+      "in": [
+       "No"
+      ]
+     },
+     {
+      "q": "breathing",
+      "in": [
+       "No"
+      ]
+     }
+    ],
+    "match": "any",
+    "add_required": [
+     "medical_transport"
+    ]
+   },
+   {
+    "subtype": "snakebite_or_poison",
+    "when": [],
+    "match": "all",
+    "add_preferred": [
+     "antivenom"
+    ]
+   },
+   {
+    "subtype": "sexual_violence",
+    "when": [],
+    "match": "all",
+    "set_required": [
+     "medical_transport"
+    ],
+    "add_preferred": [
+     "gbv_care"
+    ]
+   },
+   {
+    "subtype": "domestic_violence",
+    "when": [],
+    "match": "all",
+    "add_preferred": [
+     "gbv_care"
+    ]
+   },
+   {
+    "subtype": "mental_health_crisis",
+    "when": [],
+    "match": "all",
+    "set_required": [
+     "medical_transport"
+    ]
+   }
+  ],
+  "max_radius_km": {
+   "High": 20,
+   "Medium": 15,
+   "Low": 10
+  },
+  "preferred_bonus_km": 2.0,
+  "heartbeat_max_age_seconds": 120,
+  "far_warning_km": 15,
+  "offer_timeout_seconds": 45,
+  "max_cards_shown": 3
+ },
+ "hotlines": [
+  {
+   "id": "922",
+   "number": "922",
+   "name": "National Ambulance Dispatch Centre (SHA 922 Lifeline)",
+   "show_when": "always",
+   "verified": true,
+   "source": "Launch coverage Aug 2026: The Star, Eastleigh Voice, Dawan Africa"
+  },
+  {
+   "id": "1195",
+   "number": "1195",
+   "name": "National GBV helpline (run by HAK with the government)",
+   "show_when": "sexual_violence,domestic_violence",
+   "verified": true,
+   "source": "UN Women Africa, 5 Oct 2024"
+  },
+  {
+   "id": "999",
+   "number": "999",
+   "name": "General emergency number",
+   "show_when": "none_until_verified",
+   "verified": false,
+   "source": "NOT VERIFIED in this study. Confirm before enabling."
+  },
+  {
+   "id": "112",
+   "number": "112",
+   "name": "General emergency number",
+   "show_when": "none_until_verified",
+   "verified": false,
+   "source": "NOT VERIFIED in this study. Confirm before enabling."
+  },
+  {
+   "id": "116",
+   "number": "116",
+   "name": "Child helpline",
+   "show_when": "none_until_verified",
+   "verified": false,
+   "source": "NOT VERIFIED in this study. Confirm before enabling."
+  }
+ ],
+ "thresholds": [
+  0.35,
+  0.1,
+  0.6
+ ]
+}

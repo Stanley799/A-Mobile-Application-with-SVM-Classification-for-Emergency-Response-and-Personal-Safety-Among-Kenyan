@@ -1,90 +1,113 @@
-"""Synthetic triage data v2 (NOT real data). Features == exactly what the app asks.
-Labels come from an expert-judgement risk score + noise. Weights are placeholders for clinician review."""
-import numpy as np, pandas as pd, sys
-SEED = 42
-CATS = ["Medical Emergency","Road Accident","Fire & Rescue","Security Threat","Abduction","Other / General"]
-BASELINE = {"Medical Emergency":2.0,"Road Accident":0.3,"Fire & Rescue":2.0,"Security Threat":2.0,"Abduction":4.0,"Other / General":0.5}
-HIGH_AT, MEDIUM_AT = 4.0, 2.0
-ASKED = {  # which category-specific questions the app asks
- "severe_bleeding":{"Medical Emergency","Road Accident"},
- "chest_pain":{"Medical Emergency"},
- "mobile":{"Road Accident","Fire & Rescue"},
- "weapon_involved":{"Security Threat","Abduction"}}
-def risk_score(r):
-    s = BASELINE[r["category"]]
-    for f in ("conscious","breathing"):
-        s += {"No":4.0,"Unknown":1.9}.get(r[f],0)
-    for f in ("severe_bleeding","chest_pain"):
-        s += {"Yes":3.8,"Unknown":0.8}.get(r[f],0)
-    s += 3.8*int(r["weapon_involved"])
-    s += {"Trapped":2.0,"Unknown":0.5}.get(r["mobile"],0)
-    n = int(r["people_count"]); s += 2.2 if n>=4 else 1.7 if n==3 else 0
-    return s
-def protected(r):
-    return (r["conscious"]=="No" or r["breathing"]=="No" or r["severe_bleeding"]=="Yes"
-            or r["chest_pain"]=="Yes" or int(r["weapon_involved"])==1 or r["category"]=="Abduction")
-def to_label(s): return "High" if s>=HIGH_AT else "Medium" if s>=MEDIUM_AT else "Low"
-def row(r_):
-    pass
-def make_row(rng, cat):
-    p = {"Medical Emergency":dict(c=[.80,.12,.08],b=[.86,.08,.06],bl=[.12,.80,.08],cp=[.15,.78,.07],pc=[.70,.18,.08,.03,.01]),
-         "Road Accident":    dict(c=[.82,.08,.10],b=[.90,.04,.06],bl=[.15,.78,.07],mo=[.25,.62,.13],pc=[.35,.30,.18,.10,.07]),
-         "Fire & Rescue":    dict(c=[.88,.04,.08],b=[.90,.04,.06],mo=[.15,.70,.15],pc=[.35,.30,.18,.10,.07]),
-         "Security Threat":  dict(c=[.92,.03,.05],b=[.95,.02,.03],w=.35,pc=[.40,.30,.15,.10,.05]),
-         "Abduction":        dict(c=[.88,.04,.08],b=[.92,.03,.05],w=.40,pc=[.55,.25,.10,.06,.04]),
-         "Other / General":  dict(c=[.93,.02,.05],b=[.95,.02,.03],pc=[.70,.18,.08,.03,.01])}[cat]
-    YNU=["Yes","No","Unknown"]
-    r={"category":cat,"conscious":rng.choice(YNU,p=p["c"]),"breathing":rng.choice(YNU,p=p["b"]),
-       "severe_bleeding":"NotAsked","chest_pain":"NotAsked","mobile":"NotAsked","weapon_involved":0}
-    # note: probabilities for "No" mean problem; reorder so index1 = No
-    r["conscious"]={"Yes":"Yes","No":"No","Unknown":"Unknown"}[r["conscious"]]
-    if "bl" in p: r["severe_bleeding"]=rng.choice(["Yes","No","Unknown"],p=p["bl"])
-    if "cp" in p: r["chest_pain"]=rng.choice(["Yes","No","Unknown"],p=p["cp"])
-    if "mo" in p: r["mobile"]=rng.choice(["Free","Trapped","Unknown"],p=p["mo"])
-    if "w" in p: r["weapon_involved"]=int(rng.random()<p["w"])
-    r["people_count"]=int(rng.choice([1,2,3,4,5],p=p["pc"]))
-    return r
+"""Synthetic triage data v3 (NOT real data).
+Two parts:
+  coverage  = every valid answer combination once (so the model never meets an unseen input)
+  realistic = answers sampled the way real calls probably look, with noise
+Run from anywhere:  py scripts\\generate_synthetic_data.py
+"""
+import os, numpy as np, pandas as pd
+import triage_core as t
+
+SEED, N_REALISTIC, LABEL_NOISE = 42, 4000, 0.04
+CAT_MIX = [.28, .24, .14, .14, .04, .16]          # same order as SCHEMA categories
+YNU = ["Yes", "No", "Unknown"]
+
+def P(yes, no, unk):  # probability of Yes / No / Unknown
+    return dict(zip(YNU, [yes, no, unk]))
+
+OK = lambda good, bad, unk: P(good, bad, unk)     # for conscious / breathing: Yes means fine
+PROFILE = {
+ "Medical Emergency": dict(age_group=dict(Adult=.65, Child=.25, Unknown=.10), conscious=OK(.80,.12,.08), breathing=OK(.86,.08,.06),
+        severe_bleeding=P(.10,.82,.08), chest_pain=P(.15,.78,.07), pregnant=P(.12,.82,.06), people=[.70,.18,.08,.03,.01]),
+ "Road Accident": dict(age_group=dict(Adult=.78, Child=.12, Unknown=.10), conscious=OK(.82,.08,.10), breathing=OK(.90,.04,.06),
+        severe_bleeding=P(.15,.78,.07), trapped=P(.25,.62,.13), hazard=P(.10,.80,.10), pregnant=P(.04,.92,.04), people=[.35,.30,.18,.10,.07]),
+ "Fire & Rescue": dict(age_group=dict(Adult=.70, Child=.20, Unknown=.10), conscious=OK(.88,.04,.08), breathing=OK(.90,.04,.06),
+        trapped=P(.15,.70,.15), hazard=P(.55,.35,.10), people=[.35,.30,.18,.10,.07]),
+ "Security Threat": dict(age_group=dict(Adult=.82, Child=.08, Unknown=.10), conscious=OK(.92,.03,.05), breathing=OK(.95,.02,.03),
+        severe_bleeding=P(.12,.80,.08), weapon_involved=P(.30,.55,.15), immediate_danger=P(.35,.50,.15), people=[.40,.30,.15,.10,.05]),
+ "Abduction": dict(age_group=dict(Adult=.50, Child=.40, Unknown=.10), weapon_involved=P(.40,.45,.15), immediate_danger=P(.30,.50,.20), people=[.55,.25,.10,.06,.04]),
+ "Other / General": dict(age_group=dict(Adult=.75, Child=.15, Unknown=.10), conscious=OK(.93,.02,.05), breathing=OK(.95,.02,.03),
+        severe_bleeding=P(.05,.90,.05), people=[.70,.18,.08,.03,.01]),
+}
+
+def draw(rng, d):
+    return rng.choice(list(d), p=list(d.values()))
+
+def make_realistic(rng, cat):
+    prof, ans = PROFILE[cat], {"category": cat}
+    for q in t.SCHEMA["categories"][cat]["questions"]:
+        if q == "people_count":
+            ans[q] = int(rng.choice([1, 2, 3, 4, 5], p=prof["people"]))
+        elif q == "age_group":
+            ans[q] = draw(rng, prof[q])
+        elif t._is_asked(q, ans):
+            ans[q] = draw(rng, prof[q])
+    return t.normalize(ans)
+
 def run_anchors():
-    base=dict(category="",conscious="Yes",breathing="Yes",severe_bleeding="NotAsked",chest_pain="NotAsked",mobile="NotAsked",weapon_involved=0,people_count=1)
-    def t(exp,**kw):
-        r={**base,**kw}; got=to_label(risk_score(r))
-        if protected(r): got="High"
-        assert got==exp,(exp,got,kw)
-    t("High",category="Security Threat",weapon_involved=1)
-    t("Medium",category="Security Threat")
-    for c in ("Yes","No","Unknown"): t("High",category="Abduction",conscious=c)
-    t("High",category="Road Accident",mobile="Trapped",conscious="Unknown",severe_bleeding="No")
-    t("Medium",category="Medical Emergency",severe_bleeding="No",chest_pain="No")
-    t("Low",category="Road Accident",severe_bleeding="No",mobile="Free")
-    t("High",category="Medical Emergency",conscious="No",severe_bleeding="No",chest_pain="No")
-    t("High",category="Medical Emergency",breathing="No",severe_bleeding="No",chest_pain="No")
-    t("High",category="Medical Emergency",chest_pain="Yes",severe_bleeding="No")
-    t("High",category="Medical Emergency",severe_bleeding="Yes",chest_pain="No")
-    t("Medium",category="Fire & Rescue",mobile="Free")
-    t("High",category="Fire & Rescue",mobile="Trapped")
-    t("High",category="Fire & Rescue",mobile="Unknown",conscious="Unknown")
-    t("Low",category="Other / General")
-    t("High",category="Other / General",conscious="No")
-    t("Medium",category="Road Accident",severe_bleeding="No",mobile="Free",people_count=4)
-    t("High",category="Road Accident",severe_bleeding="Yes",mobile="Free")
-    t("High",category="Road Accident",breathing="Unknown",conscious="Unknown",severe_bleeding="No",mobile="Free")
-    print("anchors: 19 checks passed")
-def generate(n=3000):
-    rng=np.random.default_rng(SEED); rows=[]
-    for i in range(n):
-        r=make_row(rng, CATS[rng.choice(6,p=[.28,.24,.14,.14,.05,.15])])
-        sc=risk_score(r)+rng.normal(0,0.5)
-        lab=to_label(sc)
-        if protected(r): lab="High"
-        r["risk_score"]=round(sc,2); r["label_was_noised"]=0
-        if not protected(r) and rng.random()<0.08:
-            up={"Low":"Medium","Medium":"High","High":"High"}; dn={"Low":"Low","Medium":"Low","High":"Medium"}
-            new = up[lab] if rng.random()<0.7 else dn[lab]
-            if new!=lab: lab=new; r["label_was_noised"]=1
-        r["priority"]=lab; rows.append(r)
+    """Clinical sense checks. Generation aborts if any fails."""
+    base = dict(category="", age_group="Adult", conscious="Yes", breathing="Yes", severe_bleeding="No", chest_pain="No",
+                pregnant="No", trapped="No", hazard="No", weapon_involved="No", immediate_danger="No", people_count=1)
+    def chk(exp, **kw):
+        n = t.normalize({**base, **kw}); got = t.reference_priority(n)
+        assert got == exp, (exp, got, kw)
+    chk("High", category="Security Threat", weapon_involved="Yes")
+    chk("Medium", category="Security Threat")
+    chk("High", category="Security Threat", immediate_danger="Yes")
+    for a in ("Adult", "Child", "Unknown"):
+        chk("High", category="Abduction", age_group=a)
+    chk("High", category="Road Accident", trapped="Yes", conscious="Unknown")
+    chk("High", category="Road Accident", trapped="Yes", hazard="Yes")
+    chk("Low", category="Road Accident")
+    chk("Medium", category="Road Accident", people_count=4)
+    chk("High", category="Road Accident", conscious="Unknown", breathing="Unknown")
+    chk("High", category="Road Accident", severe_bleeding="Yes")
+    chk("Medium", category="Medical Emergency")
+    chk("High", category="Medical Emergency", conscious="No")
+    chk("High", category="Medical Emergency", breathing="No")
+    chk("High", category="Medical Emergency", chest_pain="Yes")
+    chk("Medium", category="Medical Emergency", pregnant="Yes")
+    chk("High", category="Medical Emergency", pregnant="Yes", conscious="Unknown")
+    chk("Medium", category="Fire & Rescue")
+    chk("High", category="Fire & Rescue", trapped="Yes")
+    chk("Low", category="Other / General")
+    chk("High", category="Other / General", conscious="No")
+    n = t.normalize({**base, "category": "Security Threat"})
+    assert t.reference_priority(n, "sexual_violence") == "Medium"          # floor, never Low
+    n = t.normalize({**base, "category": "Other / General"})
+    assert t.reference_priority(n, "mental_health_crisis") == "High"
+    print("anchors: 23 clinical checks passed")
+
+def build():
+    rng = np.random.default_rng(SEED)
+    rows = []
+    for cat in t.CATEGORIES:                                   # part A: coverage
+        for n in t.all_combinations(cat):
+            s = t.risk_score(n)
+            rows.append({**n, "priority": t.reference_priority(n), "sample_source": "coverage", "risk_score": round(s, 2), "label_was_noised": 0})
+    for _ in range(N_REALISTIC):                                # part B: realistic
+        cat = t.CATEGORIES[rng.choice(len(t.CATEGORIES), p=CAT_MIX)]
+        n = make_realistic(rng, cat)
+        s = t.risk_score(n) + rng.normal(0, 0.5)
+        lab = t.score_to_label(s)
+        floor, _ = t.rule_floor(n)
+        if t.RANK[lab] < t.RANK[floor]:
+            lab = floor
+        noised = 0
+        if floor == "Low" and rng.random() < LABEL_NOISE:      # never noise a floored (life-threat) case
+            new = {"Low": "Medium", "Medium": "High", "High": "Medium"}[lab] if rng.random() < .7 else {"Low": "Low", "Medium": "Low", "High": "Medium"}[lab]
+            if new != lab:
+                lab, noised = new, 1
+        rows.append({**n, "priority": lab, "sample_source": "realistic", "risk_score": round(s, 2), "label_was_noised": noised})
     return pd.DataFrame(rows)
-if __name__=="__main__":
+
+if __name__ == "__main__":
     run_anchors()
-    df=generate(); df.to_csv("data/synthetic_triage_data.csv",index=False)
-    print(df.priority.value_counts(normalize=True).round(3).to_dict()); print(pd.crosstab(df.category,df.priority))
-    print("noised:",df.label_was_noised.mean().round(3))
+    df = build()
+    os.makedirs(os.path.join(t.ROOT, "data"), exist_ok=True)
+    df.to_csv(os.path.join(t.ROOT, "data", "synthetic_triage_data.csv"), index=False)
+    for src in ("coverage", "realistic"):
+        d = df[df.sample_source == src]
+        print(f"\n{src}: {len(d)} rows  ", d.priority.value_counts(normalize=True).round(3).to_dict())
+    print("\nrealistic rows by category and priority:")
+    print(pd.crosstab(df[df.sample_source == "realistic"].category, df[df.sample_source == "realistic"].priority))
+    print("noised labels:", int(df.label_was_noised.sum()))

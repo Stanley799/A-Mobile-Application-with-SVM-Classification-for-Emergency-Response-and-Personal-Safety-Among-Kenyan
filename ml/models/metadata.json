@@ -1,21 +1,25 @@
 {
-  "model": "SVM-RBF C=1",
+  "schema_version": "3.0.0",
+  "model": "SVM-RBF",
   "feature_order": [
     "category",
+    "age_group",
     "conscious",
     "breathing",
     "severe_bleeding",
     "chest_pain",
-    "mobile",
+    "pregnant",
+    "trapped",
+    "hazard",
     "weapon_involved",
+    "immediate_danger",
     "people_count"
   ],
-  "labels": [
+  "classes": [
+    "High",
     "Low",
-    "Medium",
-    "High"
+    "Medium"
   ],
-  "confidence_floor": 0.6,
   "allowed_values": {
     "category": [
       "Medical Emergency",
@@ -25,15 +29,23 @@
       "Abduction",
       "Other / General"
     ],
+    "age_group": [
+      "Adult",
+      "Child",
+      "Unknown",
+      "NotAsked"
+    ],
     "conscious": [
       "Yes",
       "No",
-      "Unknown"
+      "Unknown",
+      "NotAsked"
     ],
     "breathing": [
       "Yes",
       "No",
-      "Unknown"
+      "Unknown",
+      "NotAsked"
     ],
     "severe_bleeding": [
       "Yes",
@@ -47,36 +59,119 @@
       "Unknown",
       "NotAsked"
     ],
-    "mobile": [
-      "Free",
-      "Trapped",
+    "pregnant": [
+      "Yes",
+      "No",
+      "Unknown",
+      "NotAsked"
+    ],
+    "trapped": [
+      "Yes",
+      "No",
+      "Unknown",
+      "NotAsked"
+    ],
+    "hazard": [
+      "Yes",
+      "No",
+      "Unknown",
+      "NotAsked"
+    ],
+    "weapon_involved": [
+      "Yes",
+      "No",
+      "Unknown",
+      "NotAsked"
+    ],
+    "immediate_danger": [
+      "Yes",
+      "No",
       "Unknown",
       "NotAsked"
     ]
   },
+  "people_count_range": [
+    1,
+    5
+  ],
+  "confidence_floor": 0.6,
+  "high_threshold": 0.35,
+  "trained_rows": 5217,
+  "python": "3.14.4",
   "sklearn": "1.9.1",
-  "imblearn": "0.14.2",
-  "data": "synthetic v2 - demo grade, not clinically validated",
-  "cv_report": {
+  "pandas": "3.0.6",
+  "joblib": "1.6.0",
+  "cv_summary": {
     "LogReg": {
-      "high_to_low": 106.2,
-      "high_recall": 0.8081277213352684,
-      "acc": 0.7107333333333334
+      "model_only": {
+        "acc": 0.819875,
+        "high_recall": 0.8690531194295901,
+        "high_to_low": 2.9,
+        "high_to_med": 46.1
+      },
+      "hybrid": {
+        "acc": 0.8256249999999999,
+        "high_recall": 0.9126146167557933,
+        "high_to_low": 2.5,
+        "high_to_med": 30.2
+      }
     },
-    "SVM-linear C=1": {
-      "high_to_low": 59.4,
-      "high_recall": 0.8181422351233671,
-      "acc": 0.7498666666666667
+    "SVM-linear": {
+      "model_only": {
+        "acc": 0.8290000000000001,
+        "high_recall": 0.9051372549019607,
+        "high_to_low": 1.6,
+        "high_to_med": 33.9
+      },
+      "hybrid": {
+        "acc": 0.834,
+        "high_recall": 0.9372049910873439,
+        "high_to_low": 1.6,
+        "high_to_med": 21.9
+      }
     },
-    "SVM-RBF C=1": {
-      "high_to_low": 16.0,
-      "high_recall": 0.8730043541364296,
-      "acc": 0.7703333333333333
+    "SVM-RBF": {
+      "model_only": {
+        "acc": 0.8473750000000001,
+        "high_recall": 0.9053953654188949,
+        "high_to_low": 2.0,
+        "high_to_med": 33.4
+      },
+      "hybrid": {
+        "acc": 0.8481250000000001,
+        "high_recall": 0.925169340463458,
+        "high_to_low": 2.0,
+        "high_to_med": 26.0
+      }
     },
     "RandomForest": {
-      "high_to_low": 33.2,
-      "high_recall": 0.9120464441219159,
-      "acc": 0.7641333333333333
+      "model_only": {
+        "acc": 0.8293750000000001,
+        "high_recall": 0.8642409982174687,
+        "high_to_low": 1.7,
+        "high_to_med": 49.1
+      },
+      "hybrid": {
+        "acc": 0.8383750000000001,
+        "high_recall": 0.917149376114082,
+        "high_to_low": 1.7,
+        "high_to_med": 29.3
+      }
+    },
+    "NaiveBayes (Bayesian baseline)": {
+      "model_only": {
+        "acc": 0.750625,
+        "high_recall": 0.8057219251336898,
+        "high_to_low": 1.8,
+        "high_to_med": 70.9
+      },
+      "hybrid": {
+        "acc": 0.76775,
+        "high_recall": 0.8920363636363637,
+        "high_to_low": 1.8,
+        "high_to_med": 38.6
+      }
     }
-  }
+  },
+  "data_note": "Synthetic. Labels follow a documented scoring protocol with assumed weights. Not clinically validated."
 }
