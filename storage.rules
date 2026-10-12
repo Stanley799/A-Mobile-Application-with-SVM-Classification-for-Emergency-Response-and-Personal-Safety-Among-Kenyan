@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /profilePhotos/{userId}/{photoId} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      allow get: if isOwner();
+      allow create, update: if isOwner()
+        && photoId.matches('^[A-Za-z0-9-]+[.]jpg$')
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size > 0
+        && request.resource.size <= 2 * 1024 * 1024;
+      allow delete: if isOwner();
+    }
+  }
+}

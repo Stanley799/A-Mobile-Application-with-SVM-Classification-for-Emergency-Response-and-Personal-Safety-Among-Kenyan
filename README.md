@@ -95,6 +95,49 @@ firebase deploy --only firestore:rules,functions --project emergencyresponsesyst
 
 The Functions backend uses Node.js 20 in Firebase. Local Node.js 24 may show an engine warning during `npm install`; deployment runtime remains Node.js 20.
 
+## Profile And Password Recovery
+
+The resident profile supports an explicit edit mode, validation, a before/after change review, confirmed saves, and confirmed discard. Failed saves keep the user's edits. Conflicting edits to the same fields on another device are rejected rather than overwritten. Email, role, and account status remain protected; account deletion is not part of this workflow.
+
+Profile photos can be selected from the device, taken with the camera on Android/iOS, cropped with zoom/pan, previewed, and confirmed before upload. Users can replace, recrop, or remove their photo later. The upload is a 512 x 512 JPEG with original metadata removed. Photos are stored privately under `profilePhotos/{uid}/{photoId}.jpg`; the profile document stores the relative `profilePhotoPath`, not a public download URL. Storage rules allow owner-only access and enforce a 2 MB upload limit. Old photos and rolled-back uploads are deleted on a best-effort basis; temporary network failures may leave an unreferenced private object for later administrative cleanup.
+
+Password recovery is available from `Forgot password?` on sign-in and `Reset password` in the profile. Firebase sends the reset email and handles the reset link using its hosted action page. The app uses a neutral response that does not reveal whether an account exists, a resend cooldown, and retryable network errors. No reset tokens or passwords are stored in Firestore. Client cooldowns are a usability safeguard, not a replacement for Firebase's service-side abuse controls.
+
+### Firebase Setup Required
+
+1. In the project's Firebase console, open **Storage** and complete **Get started**. The bucket was not configured during implementation. Review billing requirements and choose a region consistent with the application's data-protection commitments.
+2. From the repository root, validate and deploy the profile rules after bucket setup:
+
+	```powershell
+	firebase deploy --only firestore:rules,storage --dry-run --project emergencyresponsesystem-166601
+	firebase deploy --only firestore:rules,storage --project emergencyresponsesystem-166601
+	```
+
+3. In **Authentication**, verify that email/password sign-in is enabled, enable email-enumeration protection, and review the password-reset email template, sender branding, authorized domains, and password policy. Keep the policy consistent with registration requirements.
+4. On a real device, verify camera/photo-library permissions, crop and replacement, removal, and private loading. Send a reset email to a controlled test account and verify link completion, expiration/reuse rejection, and subsequent sign-in. No real reset emails were sent during automated tests.
+
+The Android picker and lifecycle implementations are pinned to avoid introducing a plugin-specific requirement above the configured API 23 minimum. Recheck native minimum SDK requirements before upgrading those packages. Rebuild the app after installing the new plugins; hot reload alone does not register them. Native compatibility on API 23 remains unverified: the installed Flutter SDK attempted to migrate the minimum SDK setting during the build, and the project's original setting was restored.
+
+The debug APK build was blocked by the missing Android NDK `28.2.13676358` and a crash in the local SDK manager. Install that NDK through Android Studio's SDK Manager, repair/update the command-line tools as needed, then rerun the build. No successful APK build or real-device verification is claimed.
+
+### Validation And References
+
+```powershell
+Set-Location mobile
+flutter test test/profile_screen_test.dart
+flutter test
+flutter analyze
+flutter build apk --debug
+```
+
+Focused tests cover save confirmation, retained edits on failure, private photo replacement/removal, rollback, stale-edit rejection, metadata removal, crop preview/cancellation on a narrow viewport, and password-reset validation/cooldown/error handling. Firestore rules passed compilation; Storage rule validation and live uploads require the bucket setup above.
+
+- Firebase user management: https://firebase.google.com/docs/auth/flutter/manage-users
+- Firebase Storage conditions: https://firebase.google.com/docs/storage/security/rules-conditions
+- OWASP password recovery guidance: https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html
+- Flutter image picker: https://pub.dev/packages/image_picker
+- Image cropping: https://pub.dev/packages/crop_your_image
+
 ## Create the First SystemAdmin
 
 SystemAdmin accounts are never created by the public Flutter app. They are created once, locally, by a developer using the Admin SDK script at `functions/scripts/createFirstAdmin.js`.

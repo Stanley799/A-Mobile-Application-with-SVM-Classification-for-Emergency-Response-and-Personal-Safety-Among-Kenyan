@@ -1,0 +1,82 @@
+{
+  "model": "SVM-RBF C=1",
+  "feature_order": [
+    "category",
+    "conscious",
+    "breathing",
+    "severe_bleeding",
+    "chest_pain",
+    "mobile",
+    "weapon_involved",
+    "people_count"
+  ],
+  "labels": [
+    "Low",
+    "Medium",
+    "High"
+  ],
+  "confidence_floor": 0.6,
+  "allowed_values": {
+    "category": [
+      "Medical Emergency",
+      "Road Accident",
+      "Fire & Rescue",
+      "Security Threat",
+      "Abduction",
+      "Other / General"
+    ],
+    "conscious": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "breathing": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "severe_bleeding": [
+      "Yes",
+      "No",
+      "Unknown",
+      "NotAsked"
+    ],
+    "chest_pain": [
+      "Yes",
+      "No",
+      "Unknown",
+      "NotAsked"
+    ],
+    "mobile": [
+      "Free",
+      "Trapped",
+      "Unknown",
+      "NotAsked"
+    ]
+  },
+  "sklearn": "1.9.1",
+  "imblearn": "0.14.2",
+  "data": "synthetic v2 - demo grade, not clinically validated",
+  "cv_report": {
+    "LogReg": {
+      "high_to_low": 106.2,
+      "high_recall": 0.8081277213352684,
+      "acc": 0.7107333333333334
+    },
+    "SVM-linear C=1": {
+      "high_to_low": 59.4,
+      "high_recall": 0.8181422351233671,
+      "acc": 0.7498666666666667
+    },
+    "SVM-RBF C=1": {
+      "high_to_low": 16.0,
+      "high_recall": 0.8730043541364296,
+      "acc": 0.7703333333333333
+    },
+    "RandomForest": {
+      "high_to_low": 33.2,
+      "high_recall": 0.9120464441219159,
+      "acc": 0.7641333333333333
+    }
+  }
+}

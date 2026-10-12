@@ -49,14 +49,13 @@ class SignInResult {
 
 /// Coordinates Firebase Authentication with the application's user documents.
 class AuthRepository {
-  AuthRepository({
-    FirebaseAuth? firebaseAuth,
-    FirebaseFirestore? firestore,
-  })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+  AuthRepository({FirebaseAuth? firebaseAuth, FirebaseFirestore? firestore})
+    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+      _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
+  DateTime? _lastPasswordResetAttempt;
 
   /// Emits the current Firebase user whenever authentication changes.
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
@@ -66,6 +65,28 @@ class AuthRepository {
   /// Signs out the current Firebase user.
   Future<void> signOut() async {
     await _firebaseAuth.signOut();
+  }
+
+  Future<void> requestPasswordReset(String email) async {
+    final now = DateTime.now();
+    if (_lastPasswordResetAttempt != null &&
+        now.difference(_lastPasswordResetAttempt!) <
+            const Duration(minutes: 1)) {
+      throw FirebaseAuthException(code: 'too-many-requests');
+    }
+    _lastPasswordResetAttempt = now;
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
+    } on FirebaseAuthException catch (error) {
+      if (![
+        'user-not-found',
+        'user-disabled',
+        'invalid-credential',
+      ].contains(error.code)) {
+        if (error.code != 'too-many-requests') _lastPasswordResetAttempt = null;
+        rethrow;
+      }
+    }
   }
 
   /// Creates authentication and profile records for [input].
@@ -93,7 +114,11 @@ class AuthRepository {
       'firstName': input.firstName.trim(),
       'lastName': input.lastName.trim(),
       'dateOfBirth': Timestamp.fromDate(
-        DateTime(input.dateOfBirth.year, input.dateOfBirth.month, input.dateOfBirth.day),
+        DateTime(
+          input.dateOfBirth.year,
+          input.dateOfBirth.month,
+          input.dateOfBirth.day,
+        ),
       ),
       'gender': input.gender.trim(),
       'phoneNumber': input.phoneNumber.trim(),
@@ -119,7 +144,8 @@ class AuthRepository {
         'organizationName': input.organizationName?.trim() ?? '',
         'organizationType': input.organizationType?.firestoreValue ?? 'Other',
         'registrationNumber': input.registrationNumber?.trim() ?? '',
-        'verificationStatus': ResponderVerificationStatus.pending.firestoreValue,
+        'verificationStatus':
+            ResponderVerificationStatus.pending.firestoreValue,
         'verificationNotes': null,
         'verifiedBy': null,
         'verifiedAt': null,
@@ -178,7 +204,10 @@ class AuthRepository {
 
   /// Loads responder verification details, or null when no record exists.
   Future<ResponderProfile?> getResponderProfile(String userId) async {
-    final snapshot = await _firestore.collection('responders').doc(userId).get();
+    final snapshot = await _firestore
+        .collection('responders')
+        .doc(userId)
+        .get();
     if (!snapshot.exists || snapshot.data() == null) {
       return null;
     }

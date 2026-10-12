@@ -32,6 +32,10 @@
 	<string>This app may use your location for responder availability in emergency workflows.</string>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>This app sends notifications for important account and emergency response updates.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select a photo to use as your profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo to use as your profile picture.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

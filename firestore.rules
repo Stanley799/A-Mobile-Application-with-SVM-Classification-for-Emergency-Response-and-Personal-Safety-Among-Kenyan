@@ -198,25 +198,37 @@ service cloud.firestore {
         "consentCrossBorderTransfer",
         "createdAt",
         "updatedAt",
-        "lastLoginAt"
+        "lastLoginAt",
+        "profilePhotoPath"
       ]);
     }
 
     function validUsersData(userId) {
       return request.resource.data.userId == userId
         && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() > 0
+        && request.resource.data.firstName.size() <= 100
         && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() > 0
+        && request.resource.data.lastName.size() <= 100
         && request.resource.data.dateOfBirth is timestamp
         && request.resource.data.gender is string
         && validPhoneNumber(request.resource.data.phoneNumber)
         && request.resource.data.email is string
-        && validPublicRole(request.resource.data.role)
+        && (validPublicRole(request.resource.data.role) || request.resource.data.role == "SystemAdmin")
         && validPreferredLanguage(request.resource.data.preferredLanguage)
         && validAccountStatus(request.resource.data.accountStatus)
         && request.resource.data.consentCrossBorderTransfer is bool
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
-        && request.resource.data.lastLoginAt is timestamp;
+        && request.resource.data.lastLoginAt is timestamp
+        && (
+          request.resource.data.get('profilePhotoPath', null) == null
+          || (
+            request.resource.data.profilePhotoPath is string
+            && request.resource.data.profilePhotoPath.matches('^profilePhotos/' + userId + '/[A-Za-z0-9-]+[.]jpg$')
+          )
+        );
     }
 
     function validRespondersCreateKeys() {
@@ -270,6 +282,10 @@ service cloud.firestore {
 
       // Owners may edit profile fields, but cannot change their identity, role, or creation time.
       allow update: if (isOwner(userId) || isSystemAdmin())
+        && (isSystemAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "firstName", "lastName", "phoneNumber", "preferredLanguage",
+          "profilePhotoPath", "updatedAt", "lastLoginAt"
+        ]))
         && validUsersUpdateKeys()
         && validUsersData(userId)
         && request.resource.data.userId == resource.data.userId

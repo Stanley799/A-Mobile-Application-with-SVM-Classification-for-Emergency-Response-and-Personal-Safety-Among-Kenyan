@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../app/auth_state_controller.dart';
 import '../services/auth_repository.dart';
+import 'password_reset_screen.dart';
 
 /// Authenticates an existing user and hands routing back to auth state.
 class SignInScreen extends StatefulWidget {
@@ -141,6 +142,21 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PasswordResetScreen(
+                              initialEmail: _emailController.text.trim(),
+                            ),
+                          ),
+                        ),
+                  child: const Text('Forgot password?'),
+                ),
+              ),
               SizedBox(
                 width: double.infinity,
                 child: TextButton(
