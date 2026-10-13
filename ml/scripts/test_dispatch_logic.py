@@ -35,4 +35,8 @@ assert contacts_to_notify(inc("Security Threat", "sexual_violence", "Medium"), [
 assert contacts_to_notify(inc("Security Threat", "sexual_violence", "Medium"), ["c1", "c2"], survivor_opted_in=True) == ["c1", "c2"]
 assert contacts_to_notify(inc("Medical Emergency"), ["c1"]) == ["c1"]
 print("12 trusted contacts: none for sexual violence unless the survivor opts in")
+i = inc("Other / General", "emotional_distress", "Low"); p = plan_dispatch(i, pool, NOW)
+print("13 emotional distress sends NO responder:", p["plan"], "| 922 shown:", p["show_922_always"]); assert p["plan"] == [] and not p["escalate_922"] and p["show_922_always"]
+assert contacts_to_notify(i, ["c1"]) == []; print("14 trusted contacts are not told about emotional distress by default")
+p = plan_dispatch(inc("Other / General", "mental_health_crisis", "High"), pool, NOW); print("15 self-harm crisis still gets a responder:", [x["responder"]["id"] for x in p["plan"]]); assert p["plan"]
 print("\nALL DISPATCH TESTS PASSED")

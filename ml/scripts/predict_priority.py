@@ -2,12 +2,17 @@
 import os, json, joblib, numpy as np, pandas as pd
 import triage_core as t
 
-_MODEL = joblib.load(os.path.join(t.ROOT, "models", "priority_classifier.joblib"))
-_META = json.load(open(os.path.join(t.ROOT, "models", "metadata.json")))
-_TABLE = json.load(open(os.path.join(t.ROOT, "models", "decision_table.json")))
-assert _TABLE["schema_version"] == t.SCHEMA["version"], "Decision table is out of date. Run build_decision_table.py."
-assert _META["feature_order"] == t.FEATURES, "Model was trained on a different feature list. Retrain."
-assert _META["schema_version"] == t.SCHEMA["version"], "Schema changed since training. Retrain."
+_LOAD_ERROR = None          # set (not raised) if a model file is missing, corrupt or out of date; suggest_priority_safe then fails SAFE
+_MODEL = _META = _TABLE = None
+try:
+    _MODEL = joblib.load(os.path.join(t.ROOT, "models", "priority_classifier.joblib"))
+    _META = json.load(open(os.path.join(t.ROOT, "models", "metadata.json")))
+    _TABLE = json.load(open(os.path.join(t.ROOT, "models", "decision_table.json")))
+    assert _TABLE["schema_version"] == t.SCHEMA["version"], "Decision table is out of date. Run build_decision_table.py."
+    assert _META["feature_order"] == t.FEATURES, "Model was trained on a different feature list. Retrain."
+    assert _META["schema_version"] == t.SCHEMA["version"], "Schema changed since training. Retrain."
+except Exception as _e:     # noqa: BLE001 - deliberately broad: ANY load problem must not stop an emergency app
+    _LOAD_ERROR = f"{type(_e).__name__}: {_e}"
 
 def suggest_priority(payload, subtype=None):
     """Looks the answers up in the compiled decision table (model + rule floors + monotone repair), then applies
@@ -19,6 +24,20 @@ def suggest_priority(payload, subtype=None):
     return {"priority": final, "priority_source": "rule_floor" if t.RANK[floor] > t.RANK[e["p"]] else "model_table",
             "rule_floor": floor, "rule_reasons": reasons, "model_confidence": e["c"],
             "needs_human_review": bool(e["r"]) and floor != "High" and final != "High"}
+
+def suggest_priority_safe(payload, subtype=None):
+    """PRODUCTION entry point. Never raises. If anything goes wrong (model files missing/corrupt, bad input, unknown
+    combination) it fails SAFE: priority High, flagged for human review, with the reason recorded in 'fallback_reason'.
+    Rationale: over-alerting one case costs a dispatcher a few seconds; silently under-alerting can cost a life."""
+    try:
+        if _LOAD_ERROR:
+            raise RuntimeError("model not loaded: " + _LOAD_ERROR)
+        r = suggest_priority(payload, subtype)
+        r["fallback_reason"] = None
+        return r
+    except Exception as e:  # noqa: BLE001
+        return {"priority": "High", "priority_source": "safe_fallback", "rule_floor": "High", "rule_reasons": [],
+                "model_confidence": 0.0, "needs_human_review": True, "fallback_reason": f"{type(e).__name__}: {e}"}
 
 def suggest_priority_raw_model(payload, subtype=None):
     """Same idea but straight from the trained model (used only to test the table)."""

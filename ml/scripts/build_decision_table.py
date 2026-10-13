@@ -15,7 +15,10 @@ def build():
     rank = np.array([t.RANK[cl[i]] for i in P.argmax(axis=1)])
     rank = np.where(P[:, cl.index("High")] >= t.SCHEMA["high_threshold"], 2, rank)
     floor = np.array([t.RANK[t.rule_floor(r)[0]] for r in rows])
-    final = np.maximum(rank, floor)
+    # PROTOCOL GUARD: the model may RAISE a priority above the protocol's own answer, never lower it.
+    # (Without this, 196 of 16,740 combinations were under-triaged by the SVM.)
+    protocol = np.array([t.RANK[t.reference_priority(r)] for r in rows])
+    final = np.maximum(np.maximum(rank, floor), protocol)
     conf = P.max(axis=1); ph = P[:, cl.index("High")]
     idx = {key_of(r): i for i, r in enumerate(rows)}
     # monotone repair: if a strictly better answer set is already at a higher priority, this one must be at least as high
@@ -40,6 +43,7 @@ def build():
     path = os.path.join(t.ROOT, "models", "decision_table.json")
     json.dump(out, open(path, "w"), separators=(",", ":"))
     print(f"decision table: {len(table)} entries, {os.path.getsize(path)/1e6:.2f} MB")
+    print(f"protocol guard raised {int((np.maximum(rank, floor) < protocol).sum())} combinations the model had under-triaged")
     print(f"repair raised {int((repaired > final).sum())} combinations (passes: {passes})")
     return rows, rank, floor, final, repaired, conf
 

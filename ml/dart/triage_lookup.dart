@@ -1,4 +1,4 @@
-// GENERATED FILE - DO NOT EDIT BY HAND (version 3.0.0). Looks up the priority in models/decision_table.json,
+// GENERATED FILE - DO NOT EDIT BY HAND (version 3.1.0). Looks up the priority in models/decision_table.json,
 // which you add to the app as an asset (pubspec.yaml: assets: - assets/decision_table.json).
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
@@ -31,5 +31,17 @@ class TriageLookup {
     final e = _entries[parts.join('|')];
     if (e == null) { throw ArgumentError('Unknown answer combination: ${parts.join('|')}'); }
     return TriageResult(e['p'] as String, (e['c'] as num).toDouble(), (e['r'] as num) == 1);
+  }
+
+  /// PRODUCTION entry point. Never throws. On ANY problem (unknown combination, bad input) it fails SAFE:
+  /// High priority, flagged for human review. Log [fallbackReason] to Crashlytics/Firestore so it can be investigated.
+  /// Over-alerting one case costs seconds; silently under-alerting can cost a life.
+  TriageResult lookupSafe(String category, Map<String, String> answers, {void Function(String reason)? onFallback}) {
+    try {
+      return lookup(category, answers);
+    } catch (e) {
+      if (onFallback != null) onFallback(e.toString());
+      return TriageResult('High', 0.0, true);
+    }
   }
 }

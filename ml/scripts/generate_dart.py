@@ -25,9 +25,10 @@ L += ["};", "", "/// Questions to show for each category, in order. Check askIf 
 L += [f"  {q(c)}: {lst(v['questions'])}," for c, v in S["categories"].items()] + ["};", "", "const Map<String, List<String>> kCategorySubtypes = {"]
 L += [f"  {q(c)}: {lst(v['subtypes'])}," for c, v in S["categories"].items()] + ["};", "",
       "class SubtypeRule { final bool confidential; final bool notifyTrustedContactsByDefault; final bool shareFreeTextWithResponder;",
-      "  const SubtypeRule(this.confidential, this.notifyTrustedContactsByDefault, this.shareFreeTextWithResponder); }", "",
+      "  final bool dispatchResponder; final String safetyQuestion;",
+      "  const SubtypeRule(this.confidential, this.notifyTrustedContactsByDefault, this.shareFreeTextWithResponder, this.dispatchResponder, this.safetyQuestion); }", "",
       "const Map<String, SubtypeRule> kSubtypeRules = {"]
-L += [f"  {q(k)}: SubtypeRule({str(v['confidential']).lower()}, {str(v['notify_trusted_contacts_by_default']).lower()}, {str(v['share_free_text_with_responder']).lower()})," for k, v in S["subtype_rules"].items()]
+L += [f"  {q(k)}: SubtypeRule({str(v['confidential']).lower()}, {str(v['notify_trusted_contacts_by_default']).lower()}, {str(v['share_free_text_with_responder']).lower()}, {str(v.get('dispatch_responder', True)).lower()}, {q(v.get('safety_question', ''))})," for k, v in S["subtype_rules"].items()]
 L += ["};", "", "class Hotline { final String number; final String name; final String showWhen; final bool verified;", "  const Hotline(this.number, this.name, this.showWhen, this.verified); }", "",
       "/// Only show hotlines where verified is true.", "const List<Hotline> kHotlines = ["]
 L += [f"  Hotline({q(h['number'])}, {q(h['name'])}, {q(h['show_when'])}, {str(h['verified']).lower()})," for h in S["hotlines"]]
@@ -68,6 +69,18 @@ class TriageLookup {{
     final e = _entries[parts.join('|')];
     if (e == null) {{ throw ArgumentError('Unknown answer combination: ${{parts.join('|')}}'); }}
     return TriageResult(e['p'] as String, (e['c'] as num).toDouble(), (e['r'] as num) == 1);
+  }}
+
+  /// PRODUCTION entry point. Never throws. On ANY problem (unknown combination, bad input) it fails SAFE:
+  /// High priority, flagged for human review. Log [fallbackReason] to Crashlytics/Firestore so it can be investigated.
+  /// Over-alerting one case costs seconds; silently under-alerting can cost a life.
+  TriageResult lookupSafe(String category, Map<String, String> answers, {{void Function(String reason)? onFallback}}) {{
+    try {{
+      return lookup(category, answers);
+    }} catch (e) {{
+      if (onFallback != null) onFallback(e.toString());
+      return TriageResult('High', 0.0, true);
+    }}
   }}
 }}
 '''

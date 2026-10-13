@@ -1,7 +1,7 @@
-// GENERATED FILE - DO NOT EDIT BY HAND. Source: schema/triage_schema.json (version 3.0.0).
+// GENERATED FILE - DO NOT EDIT BY HAND. Source: schema/triage_schema.json (version 3.1.0).
 // Regenerate with: py scripts\generate_dart.py
 
-const String kTriageSchemaVersion = "3.0.0";
+const String kTriageSchemaVersion = "3.1.0";
 const String kNotAsked = "NotAsked";
 const List<String> kPriorities = ["Low", "Medium", "High"];
 const List<String> kModelFeatureOrder = ["category", "age_group", "conscious", "breathing", "severe_bleeding", "chest_pain", "pregnant", "trapped", "hazard", "weapon_involved", "immediate_danger", "people_count"];
@@ -43,17 +43,19 @@ const Map<String, List<String>> kCategorySubtypes = {
   "Fire & Rescue": ["building_fire", "bush_or_vegetation_fire", "building_collapse", "flood_or_water_rescue"],
   "Security Threat": ["armed_robbery", "assault", "mob_violence", "looting_or_riot", "domestic_violence", "sexual_violence", "other_security"],
   "Abduction": ["kidnapping", "missing_child"],
-  "Other / General": ["mental_health_crisis", "wildlife_attack", "fall_or_injury", "burns", "unclear"],
+  "Other / General": ["mental_health_crisis", "emotional_distress", "wildlife_attack", "fall_or_injury", "burns", "unclear"],
 };
 
 class SubtypeRule { final bool confidential; final bool notifyTrustedContactsByDefault; final bool shareFreeTextWithResponder;
-  const SubtypeRule(this.confidential, this.notifyTrustedContactsByDefault, this.shareFreeTextWithResponder); }
+  final bool dispatchResponder; final String safetyQuestion;
+  const SubtypeRule(this.confidential, this.notifyTrustedContactsByDefault, this.shareFreeTextWithResponder, this.dispatchResponder, this.safetyQuestion); }
 
 const Map<String, SubtypeRule> kSubtypeRules = {
-  "sexual_violence": SubtypeRule(true, false, false),
-  "domestic_violence": SubtypeRule(true, false, false),
-  "mental_health_crisis": SubtypeRule(true, true, false),
-  "missing_child": SubtypeRule(false, true, true),
+  "sexual_violence": SubtypeRule(true, false, false, true, ""),
+  "domestic_violence": SubtypeRule(true, false, false, true, ""),
+  "mental_health_crisis": SubtypeRule(true, true, false, true, ""),
+  "missing_child": SubtypeRule(false, true, true, true, ""),
+  "emotional_distress": SubtypeRule(true, false, false, false, "Are you thinking of harming yourself?"),
 };
 
 class Hotline { final String number; final String name; final String showWhen; final bool verified;

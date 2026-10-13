@@ -1,0 +1,338 @@
+﻿file,section,tier,term,status,note,native_check
+lexicon_user.json,flags.self_harm,strong,vr:ua,USER_ROOT,your 'kujiua'. The 'ji' (self) marker is what separates killing yourself from killing someone,no
+lexicon_user.json,flags.self_harm,strong,vr:angamiza,USER_ROOT,your 'kujiangamiza',no
+lexicon_user.json,flags.self_harm,strong,vr:angamia,USER_ROOT,your 'kujiangamia',no
+lexicon_user.json,flags.self_harm,strong,v0:taka kufa,USER_ROOT,your 'nataka kufa'/'anataka kufa' (n- = contracted ni+na),no
+lexicon_user.json,flags.self_harm,strong,v0:tamani kufa,USER_ROOT,your 'anatamani kufa',no
+lexicon_user.json,flags.self_harm,strong,maliza maisha yangu,USER,,no
+lexicon_user.json,flags.self_harm,strong,v0:maliza maisha yangu,USER,,no
+lexicon_user.json,flags.self_harm,weak,v0:maliza maisha yake,USER,"no 'ji' marker, so it may describe a killing: WEAK (asks the resident)",yes
+lexicon_user.json,flags.self_harm,weak,v0:maliza maisha yao,USER,same reason: WEAK,yes
+lexicon_user.json,flags.self_harm,weak,v0:toa uhai,USER,'kutoa uhai' may mean take a life (murder) or one's own: WEAK,yes
+lexicon_user.json,flags.sexual_violence,strong,rape,USER,,no
+lexicon_user.json,flags.sexual_violence,strong,v:rape,USER_ROOT,your 'kumrape/kunirape',no
+lexicon_user.json,flags.sexual_violence,strong,v0:rapiwa,USER_ROOT,your 'kurapiwa/alirapiwa',no
+lexicon_user.json,flags.sexual_violence,strong,v:baka,USER_ROOT,your 'kubaka',no
+lexicon_user.json,flags.sexual_violence,strong,v0:bakwa,USER_ROOT,passive of your 'kubaka',no
+lexicon_user.json,flags.sexual_violence,strong,unajisi,USER,,no
+lexicon_user.json,flags.sexual_violence,strong,v:najisi,USER_ROOT,your 'kunajisiwa/unajisi',no
+lexicon_user.json,flags.sexual_violence,strong,v0:najisiwa,USER_ROOT,your 'kunajisiwa',no
+lexicon_user.json,flags.sexual_violence,strong,unyanyasaji wa kijinsia,KENYAN_DOC,Kenya Ministry of Gender service charter (Kiswahili): 'Unyanyasaji wa Kijinsia',no
+lexicon_user.json,flags.sexual_violence,strong,"{""pair"": {""who"": [""v0:dhalilishwa"", ""v:dhalilisha"", ""v0:nyanyaswa"", ""v:nyanyasa"", ""v0:jilazimisha"", ""v:lazimisha"", ""v0:lazimishwa""], ""act"": [""kingono"", ""ngono"", ""kijinsia""], ""window"": 6}}",GRAMMAR,pair: who + act within the window; built from your phrases,yes
+lexicon_user.json,flags.sexual_violence,weak,v0:dhalilishwa,KENYAN_DOC,"Constitution Kiswahili: 'ya kudhalilisha' = degrading treatment. It means humiliate/degrade, NOT specifically sexual, so WEAK alone",no
+lexicon_user.json,flags.sexual_violence,weak,v:dhalilisha,KENYAN_DOC,same as above,no
+lexicon_user.json,flags.sexual_violence,weak,v0:nyanyaswa,KENYAN_DOC,"from 'kutonyanyaswa' (freedom from abuse), Kenyan Constitution Kiswahili; general, so WEAK",no
+lexicon_user.json,flags.sexual_violence,weak,v:nyanyasa,KENYAN_DOC,"root of 'unyanyasaji'; general, so WEAK; strong only with kingono/ngono/kijinsia",no
+lexicon_user.json,flags.sexual_violence,weak,unyanyasaji,KENYAN_DOC,"Kenyan Constitution (Kiswahili) uses 'unyanyasaji' / 'kutonyanyaswa' for abuse; general, so WEAK",no
+lexicon_user.json,flags.sexual_violence,weak,uwaki,KENYAN_DOC,Ministry of Gender abbreviation for gender-based violence ('Kupambana na UWAKI'); WEAK,no
+lexicon_user.json,flags.sexual_violence,weak,v0:jilazimisha,USER_ROOT,"your 'kujilazimisha'; generic, so WEAK unless with a sexual-context word",yes
+lexicon_user.json,flags.domestic_violence,strong,ukatili wa nyumbani,USER,,no
+lexicon_user.json,flags.domestic_violence,strong,vurugu nyumbani,KENYAN_DOC,Title of Kiswahili text of the Protection Against Domestic Violence Act 2015: 'Vurugu Nyumbani',no
+lexicon_user.json,flags.domestic_violence,strong,v:piga mke,USER,your 'kupiga mke',no
+lexicon_user.json,flags.domestic_violence,strong,"{""pair"": {""who"": [""mume wangu"", ""mke wangu"", ""mpenzi wangu"", ""mchumba wangu"", ""baba yangu"", ""mama yangu"", ""mumewe"", ""mkewe"", ""mume wake"", ""mke wake"", ""mpenzi wake"", ""mchumba wake""], ""act"": [""vx:piga"", ""v0:pigwa""], ""window"": 8}}",GRAMMAR,pair: who + act within the window; built from your phrases,yes
+lexicon_user.json,flags.domestic_violence,weak,vo:piga,USER_ROOT,your 'ananipiga/hunipiga'; alone (no relative named) it is only WEAK,no
+lexicon_user.json,flags.domestic_violence,weak,unyanyasaji,KENYAN_DOC,"Kenyan Constitution (Kiswahili) uses 'unyanyasaji' / 'kutonyanyaswa' for abuse; general, so WEAK",no
+lexicon_user.json,flags.domestic_violence,weak,v0:nyanyaswa,KENYAN_DOC,"from 'kutonyanyaswa' (freedom from abuse), Kenyan Constitution Kiswahili; general, so WEAK",no
+lexicon_user.json,flags.domestic_violence,weak,uwaki,KENYAN_DOC,Ministry of Gender abbreviation for gender-based violence ('Kupambana na UWAKI'); WEAK,no
+lexicon_user.json,Medical Emergency,strong,amekosa fahamu,USER,,no
+lexicon_user.json,Medical Emergency,strong,hapumui,USER,,no
+lexicon_user.json,Medical Emergency,strong,hawezi kupumua,USER,,no
+lexicon_user.json,Medical Emergency,strong,ameshindwa kupumua,USER,,no
+lexicon_user.json,Medical Emergency,strong,mshtuko wa moyo,USER,,no
+lexicon_user.json,Medical Emergency,strong,maumivu ya kifua,USER,,no
+lexicon_user.json,Medical Emergency,strong,kifafa,USER,,no
+lexicon_user.json,Medical Emergency,strong,kutetemeka kwa nguvu,USER,,no
+lexicon_user.json,Medical Emergency,strong,mitetemo ya mwili,USER,,no
+lexicon_user.json,Medical Emergency,strong,kuzimia,USER,,no
+lexicon_user.json,Medical Emergency,strong,kutokwa na damu,USER,,no
+lexicon_user.json,Medical Emergency,strong,uchungu wa uzazi,USER,,no
+lexicon_user.json,Medical Emergency,strong,uchungu wa kuzaa,USER,,no
+lexicon_user.json,Medical Emergency,strong,mikazo ya uzazi,USER,,no
+lexicon_user.json,Medical Emergency,strong,kuharibika kwa mimba,USER,,no
+lexicon_user.json,Medical Emergency,strong,nyoka,USER,,no
+lexicon_user.json,Medical Emergency,strong,kung'atwa na nyoka,USER,,no
+lexicon_user.json,Medical Emergency,strong,sumu,USER,,no
+lexicon_user.json,Medical Emergency,strong,iliyotiwa sumu,USER,,no
+lexicon_user.json,Medical Emergency,strong,mzio wa chakula,USER,,no
+lexicon_user.json,Medical Emergency,strong,mzio wa dawa,USER,,no
+lexicon_user.json,Medical Emergency,strong,mwenye mzio,USER,,no
+lexicon_user.json,Medical Emergency,strong,chakula imekwama kwa koo,USER,,no
+lexicon_user.json,Medical Emergency,strong,kiharusi,USER,,no
+lexicon_user.json,Medical Emergency,strong,kisukari,USER,,no
+lexicon_user.json,Medical Emergency,strong,pumu,USER,,no
+lexicon_user.json,Medical Emergency,strong,mgonjwa,USER,,no
+lexicon_user.json,Medical Emergency,strong,homa,USER,,no
+lexicon_user.json,Medical Emergency,weak,damu,USER,"blood; WEAK because road, security and medical messages all mention it",no
+lexicon_user.json,Medical Emergency,weak,mja mzito,USER,pregnant woman; WEAK on its own,no
+lexicon_user.json,Medical Emergency,weak,mikono inatetemeka,USER_FIXED,"your 'mikon inatetemeka' with the typo fixed; WEAK (cold, fear, hunger also cause it)",no
+lexicon_user.json,Medical Emergency / maternal,subtype-strong,uchungu wa uzazi,USER,,no
+lexicon_user.json,Medical Emergency / maternal,subtype-strong,uchungu wa kuzaa,USER,,no
+lexicon_user.json,Medical Emergency / maternal,subtype-strong,mikazo ya uzazi,USER,,no
+lexicon_user.json,Medical Emergency / maternal,subtype-strong,kuharibika kwa mimba,USER,,no
+lexicon_user.json,Medical Emergency / maternal,subtype-strong,mja mzito,USER,pregnant woman; WEAK on its own,no
+lexicon_user.json,Medical Emergency / snakebite_or_poison,subtype-strong,nyoka,USER,,no
+lexicon_user.json,Medical Emergency / snakebite_or_poison,subtype-strong,sumu,USER,,no
+lexicon_user.json,Medical Emergency / snakebite_or_poison,subtype-strong,iliyotiwa sumu,USER,,no
+lexicon_user.json,Medical Emergency / cardiac,subtype-strong,mshtuko wa moyo,USER,,no
+lexicon_user.json,Medical Emergency / cardiac,subtype-strong,maumivu ya kifua,USER,,no
+lexicon_user.json,Medical Emergency / seizure_or_collapse,subtype-strong,kifafa,USER,,no
+lexicon_user.json,Medical Emergency / seizure_or_collapse,subtype-strong,kutetemeka kwa nguvu,USER,,no
+lexicon_user.json,Medical Emergency / seizure_or_collapse,subtype-strong,mitetemo ya mwili,USER,,no
+lexicon_user.json,Medical Emergency / seizure_or_collapse,subtype-strong,kuzimia,USER,,no
+lexicon_user.json,Medical Emergency / breathing_problem,subtype-strong,hapumui,USER,,no
+lexicon_user.json,Medical Emergency / breathing_problem,subtype-strong,hawezi kupumua,USER,,no
+lexicon_user.json,Medical Emergency / breathing_problem,subtype-strong,ameshindwa kupumua,USER,,no
+lexicon_user.json,Medical Emergency / breathing_problem,subtype-strong,pumu,USER,,no
+lexicon_user.json,Road Accident,strong,ajali,USER,,no
+lexicon_user.json,Road Accident,strong,mgongano,USER,,no
+lexicon_user.json,Road Accident,strong,v:gongana,USER_ROOT,your 'kugongana/waligongana',no
+lexicon_user.json,Road Accident,strong,v0:gongwa,USER_ROOT,your 'aligongwa',no
+lexicon_user.json,Road Accident,weak,matatu,USER,,no
+lexicon_user.json,Road Accident,weak,boda boda,USER,,no
+lexicon_user.json,Road Accident,weak,bodaboda,USER,,no
+lexicon_user.json,Road Accident,weak,pikipiki,USER,,no
+lexicon_user.json,Road Accident,weak,v0:pinduka,USER_ROOT,your 'ikapinduka'; weak because it can also mean overturn without an accident,yes
+lexicon_user.json,Road Accident / boda_boda,subtype-strong,boda boda,USER,,no
+lexicon_user.json,Road Accident / boda_boda,subtype-strong,bodaboda,USER,,no
+lexicon_user.json,Road Accident / boda_boda,subtype-strong,pikipiki,USER,,no
+lexicon_user.json,Road Accident / boda_boda,subtype-strong,piki piki,USER,,no
+lexicon_user.json,Road Accident / matatu_or_bus,subtype-strong,matatu,USER,,no
+lexicon_user.json,Road Accident / matatu_or_bus,subtype-strong,"{""pair"": {""who"": [""basi"", ""mabasi""], ""act"": [""ajali"", ""v0:pinduka"", ""v:gongana"", ""v0:gongwa""], ""window"": 6}}",GRAMMAR,pair: who + act within the window; built from your phrases,yes
+lexicon_user.json,Road Accident / pedestrian_hit,subtype-strong,v0:kanyagwa,USER_ROOT,your 'alikanyagwa',no
+lexicon_user.json,Road Accident / pedestrian_hit,subtype-strong,mpita njia,USER,,no
+lexicon_user.json,Road Accident / truck_or_heavy,subtype-strong,lori,USER,,no
+lexicon_user.json,Road Accident / truck_or_heavy,subtype-strong,malori,USER,,no
+lexicon_user.json,Road Accident / truck_or_heavy,subtype-strong,traki,USER,,no
+lexicon_user.json,Fire & Rescue,strong,moto,USER,STRONG for fire. 'maji ya moto' (hot water) is protected by the longest-span rule,no
+lexicon_user.json,Fire & Rescue,strong,moshi,USER,,no
+lexicon_user.json,Fire & Rescue,strong,ndimi za moto,USER,,no
+lexicon_user.json,Fire & Rescue,strong,kuporomoka kwa jengo,USER,,no
+lexicon_user.json,Fire & Rescue,strong,jengo limeporomoka,USER,,no
+lexicon_user.json,Fire & Rescue,strong,mafuriko,USER,,no
+lexicon_user.json,Fire & Rescue,strong,imefurika,USER,,no
+lexicon_user.json,Fire & Rescue,strong,v0:zama,USER_ROOT,your 'kuzama/amezama',no
+lexicon_user.json,Fire & Rescue,strong,imeangukia wafanyakazi,USER,,no
+lexicon_user.json,Fire & Rescue,weak,inachomeka,USER,WEAK: 'chomeka' can mean plug in / insert / tuck in. Please confirm it is used for fire,yes
+lexicon_user.json,Fire & Rescue,weak,chomeka,USER,WEAK: same polysemy,yes
+lexicon_user.json,Fire & Rescue,weak,amekwama,USER,WEAK: 'stuck' is generic (car in mud),no
+lexicon_user.json,Fire & Rescue,weak,amezikwa,USER,WEAK: also means 'was buried (funeral)',yes
+lexicon_user.json,Fire & Rescue,weak,imeporomoka,USER,WEAK: also used for the economy ('imeporomoka'),yes
+lexicon_user.json,Fire & Rescue / building_fire,subtype-strong,moto,USER,STRONG for fire. 'maji ya moto' (hot water) is protected by the longest-span rule,no
+lexicon_user.json,Fire & Rescue / building_fire,subtype-strong,ndimi za moto,USER,,no
+lexicon_user.json,Fire & Rescue / building_collapse,subtype-strong,kuporomoka kwa jengo,USER,,no
+lexicon_user.json,Fire & Rescue / building_collapse,subtype-strong,jengo limeporomoka,USER,,no
+lexicon_user.json,Fire & Rescue / flood_or_water_rescue,subtype-strong,mafuriko,USER,,no
+lexicon_user.json,Fire & Rescue / flood_or_water_rescue,subtype-strong,imefurika,USER,,no
+lexicon_user.json,Fire & Rescue / flood_or_water_rescue,subtype-strong,v0:zama,USER_ROOT,your 'kuzama/amezama',no
+lexicon_user.json,Fire & Rescue / building_fire,subtype-weak,inachomeka,USER,WEAK: 'chomeka' can mean plug in / insert / tuck in. Please confirm it is used for fire,yes
+lexicon_user.json,Fire & Rescue / building_fire,subtype-weak,chomeka,USER,WEAK: same polysemy,yes
+lexicon_user.json,Security Threat,strong,ujambazi,USER,,no
+lexicon_user.json,Security Threat,strong,jambazi,USER,,no
+lexicon_user.json,Security Threat,strong,wajambazi,USER,,no
+lexicon_user.json,Security Threat,strong,wezi,USER,,no
+lexicon_user.json,Security Threat,strong,mwizi,USER,,no
+lexicon_user.json,Security Threat,strong,v0:ibiwa,USER_FIXED,"your 'amibiwa' looked like a typo of 'ameibiwa' (has been stolen from); this pattern covers nimeibiwa, ameibiwa, kuibiwa. Please confirm",yes
+lexicon_user.json,Security Threat,strong,bunduki,USER,,no
+lexicon_user.json,Security Threat,strong,mlio wa risasi,USER,,no
+lexicon_user.json,Security Threat,strong,risasi,USER,,no
+lexicon_user.json,Security Threat,strong,v:piga risasi,USER_ROOT,your 'kupiga risasi',no
+lexicon_user.json,Security Threat,strong,kisu,USER,,no
+lexicon_user.json,Security Threat,strong,v0:dungwa,USER_ROOT,your 'amedungwa na kisu',no
+lexicon_user.json,Security Threat,strong,panga,USER,,no
+lexicon_user.json,Security Threat,strong,v0:shambuliwa,USER_ROOT,your 'shambuliwa',no
+lexicon_user.json,Security Threat,strong,v:shambulia,USER_ROOT,root of 'shambulio',yes
+lexicon_user.json,Security Threat,strong,shambulio,USER,,no
+lexicon_user.json,Security Threat,strong,washambulizi,USER,standard form may be 'washambuliaji'; please confirm yours,yes
+lexicon_user.json,Security Threat,strong,uporaji,USER,,no
+lexicon_user.json,Security Threat,strong,waporaji,USER,,no
+lexicon_user.json,Security Threat,strong,ghasia,USER,owned by looting_or_riot only (it was in two subtypes),no
+lexicon_user.json,Security Threat,strong,wahuni,USER,,no
+lexicon_user.json,Security Threat,strong,kundi la wahalifu,USER,,no
+lexicon_user.json,Security Threat,strong,vo:ua,USER_ROOT,"'kuniua / ananiua' = kill ME (object marker, no 'ji'): a threat to the speaker, so Security Threat, not self-harm",yes
+lexicon_user.json,Security Threat,strong,v:ua mtu,USER_FIXED,your 'anataka kuuwa mtu' (wants to kill someone) moved OUT of self_harm,yes
+lexicon_user.json,Security Threat,weak,kundi la watu,USER,WEAK: 'a group of people' is generic,no
+lexicon_user.json,Security Threat,weak,v0:pigwa,USER_ROOT,"passive 'amepigwa'; alone WEAK, with a relative STRONG for domestic violence",no
+lexicon_user.json,Security Threat,weak,vo:piga,USER_ROOT,your 'ananipiga/hunipiga'; alone (no relative named) it is only WEAK,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,ujambazi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,jambazi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,wajambazi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,bunduki,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,mlio wa risasi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,risasi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,kisu,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,panga,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,genge la wezi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,kundi la wezi,USER,,no
+lexicon_user.json,Security Threat / armed_robbery,subtype-strong,kundi la wahalifu,USER,,no
+lexicon_user.json,Security Threat / looting_or_riot,subtype-strong,uporaji,USER,,no
+lexicon_user.json,Security Threat / looting_or_riot,subtype-strong,waporaji,USER,,no
+lexicon_user.json,Security Threat / looting_or_riot,subtype-strong,ghasia,USER,owned by looting_or_riot only (it was in two subtypes),no
+lexicon_user.json,Security Threat / assault,subtype-strong,v0:shambuliwa,USER_ROOT,your 'shambuliwa',no
+lexicon_user.json,Security Threat / assault,subtype-strong,v:shambulia,USER_ROOT,root of 'shambulio',yes
+lexicon_user.json,Security Threat / assault,subtype-strong,shambulio,USER,,no
+lexicon_user.json,Security Threat / assault,subtype-strong,washambulizi,USER,standard form may be 'washambuliaji'; please confirm yours,yes
+lexicon_user.json,Security Threat / assault,subtype-strong,v0:dungwa,USER_ROOT,your 'amedungwa na kisu',no
+lexicon_user.json,Security Threat / assault,subtype-strong,v0:pigwa,USER_ROOT,"passive 'amepigwa'; alone WEAK, with a relative STRONG for domestic violence",no
+lexicon_user.json,Security Threat / mob_violence,subtype-weak,kundi la watu,USER,WEAK: 'a group of people' is generic,no
+lexicon_user.json,Abduction,strong,v0:tekwa nyara,USER_FIXED,your 'kutekwa nyara' (typo 'kitekwa nyara' removed),no
+lexicon_user.json,Abduction,strong,v:teka nyara,USER_ROOT,your 'alitekwa nyara',no
+lexicon_user.json,Abduction,strong,utekaji nyara,USER,,no
+lexicon_user.json,Abduction,strong,v0:chukuliwa kwa nguvu,USER,,no
+lexicon_user.json,Abduction,strong,v0:lazimishwa kuingia kwenye gari,USER,,no
+lexicon_user.json,Abduction,strong,v0:vutwa ndani,USER,,no
+lexicon_user.json,Abduction,strong,v0:nyakuliwa na kuondoshwa kwa gari,USER,,no
+lexicon_user.json,Abduction,strong,v0:chukuliwa kinyume na matakwa yake,USER,,no
+lexicon_user.json,Abduction,strong,v0:chukuliwa bila hiari,USER,,no
+lexicon_user.json,Abduction,strong,mtoto amepotea,USER,,no
+lexicon_user.json,Abduction,strong,mtoto aliyepotea,USER,,no
+lexicon_user.json,Abduction,strong,mtoi amepotea,USER,your Sheng for 'mtoto amepotea',no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:tekwa nyara,USER_FIXED,your 'kutekwa nyara' (typo 'kitekwa nyara' removed),no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v:teka nyara,USER_ROOT,your 'alitekwa nyara',no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,utekaji nyara,USER,,no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:chukuliwa kwa nguvu,USER,,no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:lazimishwa kuingia kwenye gari,USER,,no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:vutwa ndani,USER,,no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:nyakuliwa na kuondoshwa kwa gari,USER,,no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:chukuliwa kinyume na matakwa yake,USER,,no
+lexicon_user.json,Abduction / kidnapping,subtype-strong,v0:chukuliwa bila hiari,USER,,no
+lexicon_user.json,Abduction / missing_child,subtype-strong,mtoto aliyepotea,USER,,no
+lexicon_user.json,Abduction / missing_child,subtype-strong,mtoto amepotea,USER,,no
+lexicon_user.json,Abduction / missing_child,subtype-strong,mtoi amepotea,USER,your Sheng for 'mtoto amepotea',no
+lexicon_user.json,Other / General,strong,fisi,USER,,no
+lexicon_user.json,Other / General,strong,simba,USER,,no
+lexicon_user.json,Other / General,strong,tembo,USER,,no
+lexicon_user.json,Other / General,strong,ndovu,USER,,no
+lexicon_user.json,Other / General,strong,nyati,USER,,no
+lexicon_user.json,Other / General,strong,mamba,USER,,no
+lexicon_user.json,Other / General,strong,kuchomwa kwa maji ya moto,USER,STRONG scald phrase; beats 'moto' by longest span,no
+lexicon_user.json,Other / General,strong,v0:huzunika,USER_ROOT,your 'amehuzunika',no
+lexicon_user.json,Other / General,strong,akona huzuni,USER,your Sheng,no
+lexicon_user.json,Other / General,strong,ako na huzuni,USER_FIXED,spaced form of your 'akona huzuni',yes
+lexicon_user.json,Other / General,weak,kiboko,USER,WEAK: slang for 'the best/champion' or a whip as well as hippo,yes
+lexicon_user.json,Other / General,weak,v0:anguka,USER_ROOT,your 'anguka/alianguka/ameanguka'; WEAK because 'kuanguka' is also used for failing/collapsing generally. Moved out of Medical (one owner),yes
+lexicon_user.json,Other / General,weak,v0:choma,USER_ROOT,your 'kuchoma'; WEAK: also roast/inject,no
+lexicon_user.json,Other / General,weak,v0:chomwa,USER_ROOT,your 'kuchomwa'; WEAK,no
+lexicon_user.json,Other / General,weak,maji ya moto,USER_ROOT,from your 'kuchomwa kwa maji ya moto'; WEAK so it can beat 'moto' (fire) but still asks,no
+lexicon_user.json,Other / General,weak,v0:achwa,USER_ROOT,your 'ameachwa'; WEAK (left behind / dumped),no
+lexicon_user.json,Other / General,weak,huzuni,USER_ROOT,sadness; WEAK,no
+lexicon_user.json,Other / General,weak,wasiwasi,USER,worry/anxiety; WEAK (idiom 'hakuna wasiwasi' masked),no
+lexicon_user.json,Other / General,weak,hofu,USER,fear; WEAK because fear is also normal in a robbery,no
+lexicon_user.json,Other / General,weak,kisaikolojia,USER,psychological; WEAK,no
+lexicon_user.json,Other / General,weak,v0:choshwa,USER_ROOT,your 'amechoshwa'; WEAK,yes
+lexicon_user.json,Other / General / wildlife_attack,subtype-strong,fisi,USER,,no
+lexicon_user.json,Other / General / wildlife_attack,subtype-strong,simba,USER,,no
+lexicon_user.json,Other / General / wildlife_attack,subtype-strong,tembo,USER,,no
+lexicon_user.json,Other / General / wildlife_attack,subtype-strong,ndovu,USER,,no
+lexicon_user.json,Other / General / wildlife_attack,subtype-strong,nyati,USER,,no
+lexicon_user.json,Other / General / wildlife_attack,subtype-strong,mamba,USER,,no
+lexicon_user.json,Other / General / burns,subtype-strong,kuchomwa kwa maji ya moto,USER,STRONG scald phrase; beats 'moto' by longest span,no
+lexicon_user.json,Other / General / emotional_distress,subtype-strong,v0:huzunika,USER_ROOT,your 'amehuzunika',no
+lexicon_user.json,Other / General / emotional_distress,subtype-strong,akona huzuni,USER,your Sheng,no
+lexicon_user.json,Other / General / emotional_distress,subtype-strong,ako na huzuni,USER_FIXED,spaced form of your 'akona huzuni',yes
+lexicon_user.json,Other / General / fall_or_injury,subtype-weak,v0:anguka,USER_ROOT,your 'anguka/alianguka/ameanguka'; WEAK because 'kuanguka' is also used for failing/collapsing generally. Moved out of Medical (one owner),yes
+lexicon_user.json,Other / General / burns,subtype-weak,v0:choma,USER_ROOT,your 'kuchoma'; WEAK: also roast/inject,no
+lexicon_user.json,Other / General / burns,subtype-weak,v0:chomwa,USER_ROOT,your 'kuchomwa'; WEAK,no
+lexicon_user.json,Other / General / burns,subtype-weak,maji ya moto,USER_ROOT,from your 'kuchomwa kwa maji ya moto'; WEAK so it can beat 'moto' (fire) but still asks,no
+lexicon_user.json,Other / General / emotional_distress,subtype-weak,huzuni,USER_ROOT,sadness; WEAK,no
+lexicon_user.json,Other / General / emotional_distress,subtype-weak,wasiwasi,USER,worry/anxiety; WEAK (idiom 'hakuna wasiwasi' masked),no
+lexicon_user.json,Other / General / emotional_distress,subtype-weak,hofu,USER,fear; WEAK because fear is also normal in a robbery,no
+lexicon_user.json,Other / General / emotional_distress,subtype-weak,kisaikolojia,USER,psychological; WEAK,no
+lexicon_user.json,Other / General / emotional_distress,subtype-weak,v0:choshwa,USER_ROOT,your 'amechoshwa'; WEAK,yes
+lexicon_user.json,Other / General / wildlife_attack,subtype-weak,kiboko,USER,WEAK: slang for 'the best/champion' or a whip as well as hippo,yes
+lexicon_user.json,ignore_phrases,mask,hakuna wasiwasi,IDIOM,'no worries'; masked so it never counts as anxiety,yes
+lexicon_user.json,ignore_phrases,mask,usiwe na wasiwasi,IDIOM,'do not worry'; masked,yes
+lexicon_user.json,ignore_phrases,mask,hakuna matata,IDIOM,'no problem'; masked,no
+lexicon_user.json,ignore_phrases,mask,v:piga simu,IDIOM,'piga simu' = make a phone call; masked,no
+lexicon_user.json,ignore_phrases,mask,v:piga picha,IDIOM,'piga picha' = take a photo; masked,no
+lexicon_user.json,ignore_phrases,mask,v:piga kelele,IDIOM,'piga kelele' = shout; masked,no
+lexicon_user.json,ignore_phrases,mask,v0:pigwa picha,IDIOM,being photographed; masked,no
+lexicon_proposed.json,flags.self_harm,strong,vr:nyonga,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,flags.self_harm,strong,vr:dhuru,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,flags.self_harm,strong,vr:toa uhai,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.self_harm,strong,sitaki kuishi,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.self_harm,strong,hataki kuishi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,flags.self_harm,strong,afadhali nife,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.self_harm,strong,afadhali afe,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.self_harm,weak,nimechoka na maisha,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.self_harm,weak,sina matumaini,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.self_harm,weak,v0:kata tamaa,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.sexual_violence,strong,ubakaji,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,flags.sexual_violence,strong,mbakaji,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,flags.sexual_violence,strong,wabakaji,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,flags.sexual_violence,strong,unyanyasaji wa kingono,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.sexual_violence,strong,v0:lazimishwa kufanya ngono,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.domestic_violence,strong,unyanyasaji wa nyumbani,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,flags.domestic_violence,strong,vurugu za nyumbani,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Medical Emergency,strong,v0:jifungua,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Medical Emergency,strong,chakula kimekwama kooni,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Medical Emergency,weak,v0:umwa,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Medical Emergency,weak,mjamzito,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Medical Emergency / maternal,subtype-strong,v0:jifungua,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Medical Emergency / maternal,subtype-strong,mjamzito,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Fire & Rescue,strong,ajali ya moto,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Fire & Rescue,strong,v0:ungua,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Fire & Rescue,weak,kifusi,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Fire & Rescue / building_fire,subtype-strong,ajali ya moto,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Fire & Rescue / building_fire,subtype-strong,v0:ungua,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Security Threat,strong,mob justice,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Security Threat,strong,v:iba,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Security Threat,weak,umati,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Security Threat,weak,uhalifu,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Security Threat / mob_violence,subtype-strong,mob justice,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Security Threat / mob_violence,subtype-strong,umati,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Other / General,strong,msongo wa mawazo,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Other / General,strong,sonona,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Other / General,strong,mfadhaiko,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Other / General,strong,v0:vunjika moyo,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Other / General,weak,upweke,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Other / General,weak,vx:acha,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Other / General / emotional_distress,subtype-strong,msongo wa mawazo,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Other / General / emotional_distress,subtype-strong,sonona,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Other / General / emotional_distress,subtype-strong,mfadhaiko,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,Other / General / emotional_distress,subtype-strong,v0:vunjika moyo,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Other / General / emotional_distress,subtype-weak,upweke,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,Other / General / emotional_distress,subtype-weak,vx:acha,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,themes.relationship,context,v0:achana,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.relationship,context,talaka,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.relationship,context,vx:acha,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,themes.relationship,context,mpenzi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.academic,context,mtihani,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.academic,context,ada,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.academic,context,matokeo,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.financial,context,deni,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.financial,context,madeni,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.financial,context,mkopo,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.financial,context,kodi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.financial,context,v0:futwa kazi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.financial,context,ukosefu wa kazi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.family,context,wazazi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.family,context,familia,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.grief,context,msiba,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.grief,context,mazishi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.grief,context,kifo,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.postpartum,context,baada ya kujifungua,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.postpartum,context,mtoto mchanga,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.substance,context,pombe,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.substance,context,v0:lewa,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,themes.substance,context,ulevi,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.substance,context,dawa za kulevya,PROPOSED_HIGH,"standard Kiswahili; assistant suggestion, not found in a fetched Kenyan source",yes
+lexicon_proposed.json,themes.bullying,context,v0:onewa,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+lexicon_proposed.json,themes.bullying,context,vx:onea,PROPOSED_MEDIUM,less certain or Kenyan usage unknown,yes
+(removed),,,mwenye nia ya kujiua / anataka kujiua / anajaribu kujiua / nataka kujiua (x2) / kujiua (x2) / anajaribu kujiangamiza / anataka kujiangamia,REMOVED_OR_MERGED,"covered by vr:ua, vr:angamiza, vr:angamia (one pattern replaces every form)",no
+(removed),,,anataka kuuwa mtu,REMOVED_OR_MERGED,NOT self-harm; moved to Security Threat as v:ua mtu,no
+(removed),,,mume wangu hunipiga / mke wangu hunipiga / ananipiga / anapenda kunipiga / huwa ananipiga,REMOVED_OR_MERGED,replaced by the who+act pair; a bare 'ananipiga' is only WEAK,no
+(removed),,,kudhalilishwa / kujilazimisha / kunajisiwa / kubakwa / kubaka / kumrape / kurapiwa / alirapiwa / alikua raped / anataka kumrape / anataka kunirape / anajaribu kunirape,REMOVED_OR_MERGED,"covered by v:baka, v0:bakwa, v:rape, v0:rapiwa, v0:najisiwa; generic ones are WEAK",no
+(removed),,,kufanyiwa unyanyasaji wa kijinsia,REMOVED_OR_MERGED,covered by 'unyanyasaji wa kijinsia',no
+(removed),,,hapumui vizuri / mwenye kisukari / kitekwa nyara / kutekwa nyara (typo pair),REMOVED_OR_MERGED,contained in a shorter term or typo; duplicates counted once anyway,no
+(removed),,,"anguka (Medical and Other), mikon inatetemeka (typo)",REMOVED_OR_MERGED,ONE owner: fall_or_injury (weak); typo fixed,no
+(removed),,,boda boda ajali / ajali ya barabara / ajali ya matatu / ajali ya lori / ajali ya pikipiki / ajali ya baiskeli / aligongwa / aligongwa na gari / waligongana / kugongana,REMOVED_OR_MERGED,all contain 'ajali' or are covered by v:gongana / v0:gongwa,no
+(removed),,,amibiwa,REMOVED_OR_MERGED,looked like a typo: replaced by v0:ibiwa (please confirm),no
+(removed),,,upandikaji wa gari,REMOVED_OR_MERGED,meaning unclear ('planting a car'?). Removed; tell me what you meant (carjacking?),no
+(removed),,,ikazunguka,REMOVED_OR_MERGED,'kuzunguka' means to go around; removed (too ambiguous),no
+(removed),,,alikanyagwa na gari / alikanyagwa,REMOVED_OR_MERGED,covered by v0:kanyagwa,no
+(removed),,,kujitoa uhai / kutoa uhai wake,REMOVED_OR_MERGED,'kutoa uhai' kept as weak; 'wake' variant covered by the same pattern,no
+(removed),,,amedungwa na kisu / amedungwa,REMOVED_OR_MERGED,covered by v0:dungwa and 'kisu',no
+(removed),,,genge la wezi / kundi la wezi (category level),REMOVED_OR_MERGED,contain 'wezi'; kept only for the armed_robbery subtype,no
+(removed),,,risasi zimepigwa / kupiga risasi,REMOVED_OR_MERGED,'risasi' is strong; v:piga risasi kept,no
+(removed),,,shambuliwa / amepigwa / amepigwa (dups) / washambulizi (dup),REMOVED_OR_MERGED,"merged into v0:shambuliwa, v0:pigwa",no
+(removed),,,kuzama / amezama / kutetemeka etc. duplicates,REMOVED_OR_MERGED,merged into v0:zama,no

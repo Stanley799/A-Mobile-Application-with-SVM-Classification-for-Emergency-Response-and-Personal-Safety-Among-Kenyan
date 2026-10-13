@@ -140,6 +140,8 @@ def required_capabilities(n, subtype=None):
             continue
         if "set_required" in r:
             req = list(r["set_required"])
+        if "set_preferred" in r:                          # e.g. emotional distress: no ambulance by default
+            pref = list(r["set_preferred"])
         for c in r.get("add_required", []):
             if c not in req:
                 req.append(c)

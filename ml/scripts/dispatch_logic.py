@@ -24,6 +24,11 @@ def plan_dispatch(incident, responders, now):
     """incident: {lat, lng, priority, answers (normalized), subtype}
     responder: {id, name, type, phone, lat, lng, status, capabilities[], last_seen}   (times are epoch seconds)"""
     n, subtype, pr = incident["answers"], incident.get("subtype"), incident["priority"]
+    if t.SCHEMA["subtype_rules"].get(subtype, {}).get("dispatch_responder", True) is False:
+        # e.g. emotional distress: no ambulance or police. The app shows support resources and asks the safety question.
+        return {"plan": [], "required": [], "preferred": [], "missing_roles": [], "escalate_922": False, "escalate_reason": "",
+                "show_922_always": True, "hotlines": hotlines_for(subtype), "excluded": {}, "offer_timeout_seconds": R["offer_timeout_seconds"],
+                "no_responder_reason": "support resources only; ask the safety question first"}
     required, preferred = t.required_capabilities(n, subtype)
     radius = R["max_radius_km"][pr]
     excluded, pool = {}, []

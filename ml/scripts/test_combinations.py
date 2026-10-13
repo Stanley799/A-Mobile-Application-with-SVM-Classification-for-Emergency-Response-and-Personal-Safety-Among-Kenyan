@@ -24,6 +24,9 @@ for cat, g in D.groupby("category"):
 hl_all = int(((D.ref == 2) & (D.final == 0)).sum()); hm_all = D[(D.ref == 2) & (D.final == 1)]
 print(f"   Total High->Low: {hl_all} (must be 0). Total High->Medium: {len(hm_all)}, of which flagged for human review: {int(hm_all.review.sum())} ({hm_all.review.mean():.0%})")
 if hl_all: failures.append(f"{hl_all} High->Low")
+under = int((D.final < D.ref).sum())
+print(f"   Under-triage versus protocol (any level): {under} (must be 0, protocol guard)")
+if under: failures.append(f"{under} under-triage vs protocol")
 
 key = {tuple(r[f] for f in t.FEATURES): i for i, r in enumerate(D[t.FEATURES].to_dict("records"))}
 viol = []

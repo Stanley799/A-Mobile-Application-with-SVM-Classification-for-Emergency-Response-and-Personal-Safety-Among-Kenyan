@@ -1,7 +1,8 @@
 """Scores the text path on a labelled CSV.  Default: data/text_dev_set.csv.  Real messages: py scripts\\evaluate_text.py data\\real_messages.csv"""
 import sys, os, csv
 import triage_core as t
-from text_triage import triage_text
+from text_triage import triage_text, LOAD_WARNINGS
+if LOAD_WARNINGS: print('LEXICON WARNINGS (fix these first):', *LOAD_WARNINGS, sep='\n  ')
 
 path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(t.ROOT, "data", "text_dev_set.csv")
 rows = list(csv.DictReader(open(path, encoding="utf-8")))

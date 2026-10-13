@@ -1,0 +1,194 @@
+Run started 2026-10-13 16:23:22 | Python 3.14.4 | Windows-11-10.0.26200-SP0
+
+==============================================================================
+1/12 Generate synthetic data (23 safety checks run first)
+==============================================================================
+anchors: 23 clinical checks passed
+
+coverage: 16740 rows   {'High': 0.963, 'Medium': 0.032, 'Low': 0.005}
+
+realistic: 4000 rows   {'High': 0.468, 'Medium': 0.278, 'Low': 0.254}
+
+realistic rows by category and priority:
+priority           High  Low  Medium
+category                            
+Abduction           141    0       0
+Fire & Rescue       316   33     187
+Medical Emergency   570  156     414
+Other / General      52  468     110
+Road Accident       379  327     291
+Security Threat     413   31     112
+noised labels: 88
+[generate_synthetic_data.py finished in 5s]
+
+==============================================================================
+2/12 Train and compare models (cross-validation)
+==============================================================================
+realistic rows: 4000 | boundary sample from coverage: 1217 {'High': 600, 'Medium': 539, 'Low': 78}
+cross-validation took 109s
+
+model                            mode          acc Highrecall High->Low High->Med   (per test fold of 800 cases)
+LogReg                           model_only  0.820      0.869      2.90     46.10
+LogReg                           hybrid      0.826      0.913      2.50     30.20
+SVM-linear                       model_only  0.829      0.905      1.60     33.90
+SVM-linear                       hybrid      0.834      0.937      1.60     21.90
+SVM-RBF                          model_only  0.847      0.905      2.00     33.40
+SVM-RBF                          hybrid      0.848      0.925      2.00     26.00
+RandomForest                     model_only  0.829      0.864      1.70     49.10
+RandomForest                     hybrid      0.838      0.917      1.70     29.30
+NaiveBayes (Bayesian baseline)   model_only  0.751      0.806      1.80     70.90
+NaiveBayes (Bayesian baseline)   hybrid      0.768      0.892      1.80     38.60
+candidates within 1.0 High->Low of the safest: ['LogReg', 'SVM-linear', 'SVM-RBF', 'RandomForest', 'NaiveBayes (Bayesian baseline)']
+
+SELECTED (safe enough, then most accurate): SVM-RBF
+saved models/priority_classifier.joblib and models/metadata.json
+[train_classifier.py finished in 121s]
+
+==============================================================================
+3/12 Compile the decision table
+==============================================================================
+decision table: 16740 entries, 1.90 MB
+protocol guard raised 197 combinations the model had under-triaged
+repair raised 0 combinations (passes: 1)
+[build_decision_table.py finished in 10s]
+
+==============================================================================
+4/12 Test EVERY answer combination
+==============================================================================
+1. Combinations tested: 16740  (every possible set of answers)
+   Rule floor broken: 0  (must be 0)
+
+2. Table priority versus the protocol label, per category
+   category              cases   agree High->Low High->Med  over-triage to High  flagged for review
+   Abduction               135   1.000         0         0                    0               0.000
+   Fire & Rescue          1215   1.000         0         0                    0               0.021
+   Medical Emergency      2835   0.997         0         0                    8               0.016
+   Other / General         405   1.000         0         0                    0               0.069
+   Road Accident          8505   1.000         0         0                    0               0.035
+   Security Threat        3645   0.999         0         0                    4               0.012
+   Total High->Low: 0 (must be 0). Total High->Medium: 0, of which flagged for human review: 0 (nan%)
+   Under-triage versus protocol (any level): 0 (must be 0, protocol guard)
+
+3. Monotonic check (a worse answer lowers the priority): 0 violations (must be 0)
+
+Saved docs/all_combinations_results.csv (open in Excel to inspect any combination)
+RESULT: PASS
+[test_combinations.py finished in 12s]
+
+==============================================================================
+5/12 Test responder matching and briefing
+==============================================================================
+haversine 1 deg lat = 111.2 km (expected about 111.2)
+1 trapped + fire: {'medical_transport': 'A1', 'extrication': 'F1'}
+2 pregnant prefers maternal_care hospital (5.9 km vs ambulance 5.0 km): H1
+3 plain medical nearest: A1
+4 sexual violence plan: ['H1'] hotlines: ['922', '1195']
+5 abduction: ['P1']
+6 busy and stale: {'A9': 'not available', 'A8': 'location is out of date'} | escalate: True no suitable responder: medical_transport
+7 outside radius: {'A7': 'outside 10 km'} True
+8 far warning: True nearest responder is far away
+9 922 always shown: True
+10 confidential briefing keys: ['category', 'confidential', 'flags', 'incident_id', 'location', 'people_count', 'priority', 'priority_source', 'resident_first_name', 'resident_phone', 'subtype', 'summary_text']
+11 before accept: Road Accident (boda_boda) | HIGH | 1 person | Person trapped; Fire, smoke, fuel or collapse danger
+12 trusted contacts: none for sexual violence unless the survivor opts in
+13 emotional distress sends NO responder: [] | 922 shown: True
+14 trusted contacts are not told about emotional distress by default
+15 self-harm crisis still gets a responder: ['A1']
+
+ALL DISPATCH TESTS PASSED
+[test_dispatch_logic.py finished in 0s]
+
+==============================================================================
+6/12 Check the lexicon files (lint + built-in tests)
+==============================================================================
+INFO  Medical Emergency: 'iliyotiwa sumu' is already covered by the shorter strong term 'sumu'
+INFO  Medical Emergency: "kung'atwa na nyoka" is already covered by the shorter strong term 'nyoka'
+INFO  Fire & Rescue: 'on fire' is already covered by the shorter strong term 'fire'
+INFO  Fire & Rescue: 'ndimi za moto' is already covered by the shorter strong term 'moto'
+INFO  Security Threat: 'mlio wa risasi' is already covered by the shorter strong term 'risasi'
+INFO  Security Threat: 'armed robbers' is already covered by the shorter strong term 'robbers'
+
+Checked 255 category terms, 78 flag terms, 11 idiom masks. Built-in tests: 19 passed, 0 failed.
+0 errors, 0 warnings, 6 notes.
+[check_lexicon.py finished in 4s]
+
+==============================================================================
+7/12 Train the text classifier
+==============================================================================
+trained text classifier on 1800 messages (0 real messages from you x5, rest English templates)
+[train_text_classifier.py finished in 5s]
+
+==============================================================================
+8/12 Evaluate the text path
+==============================================================================
+lexicon only           messages 49 | decided 34 | correct 34 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
+classifier only        messages 49 | decided 34 | correct 24 | wrong 10 | correctly unclear 4 | flags found 0/10, false flags 0
+combined (used)        messages 49 | decided 38 | correct 38 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
+[evaluate_text.py finished in 5s]
+
+==============================================================================
+9/12 Robustness and safe-fallback tests
+==============================================================================
+PASS  1. fuzz: 1519 odd inputs, no crash, always a well-formed answer
+PASS  1b. empty/None/number input asks the resident (never guesses)
+PASS  2. flag wins over other content: 'the house is on fire and I want to kill mysel'
+PASS  2. flag wins over other content: 'he raped me at the matatu stage'
+PASS  2. flag wins over other content: 'there was an accident and I want to commit su'
+PASS  3. all 7 idiom masks leave self-harm and rape flags visible
+PASS  4. mistyped flag words still raise the flag
+PASS  4b. typo snapping never raises a flag on ordinary words
+PASS  5. every lexicon category, subtype and flag target exists in the schema
+PASS  6. end-to-end priority never below the safety floor
+PASS  7. safe fallback on invalid category: High + human review + reason
+PASS  7. safe fallback on None payload: High + human review + reason
+PASS  7. safe fallback on empty dict: High + human review + reason
+PASS  7. safe fallback on bad value: High + human review + reason
+PASS  7. safe fallback on string payload: High + human review + reason
+PASS  7b. a valid request is not turned into a fallback
+PASS  7c. decision table missing/out of date -> High + human review
+PASS  8. text classifier missing: flags and lexicon still work
+PASS  9. corrupt lexicon_user.json: loads, warns, English safety flags still work
+PASS  10. no responders available -> 922 escalation, no crash
+
+RESULT: PASS
+[test_robustness.py finished in 16s]
+
+==============================================================================
+10/12 Draw the exploration charts
+==============================================================================
+Saved 3 charts in C:\EmergencyResponseSystem\ml\charts
+[explore_data.py finished in 7s]
+
+==============================================================================
+11/12 Feature importance audit (about 1-2 minutes)
+==============================================================================
+Rows used: 4000 realistic cases | baseline balanced accuracy of the saved model: 0.836
+
+         feature  permutation_drop  permutation_sd  mutual_information  protocol_max_weight
+        category               NaN             NaN              0.1788                  3.7
+       conscious            0.1087          0.0042              0.1049                  4.0
+    people_count            0.1073          0.0048              0.0468                  2.2
+ severe_bleeding            0.0776          0.0020              0.1184                  3.8
+       breathing            0.0740          0.0038              0.0751                  4.0
+         trapped            0.0592          0.0028              0.0173                  2.0
+      chest_pain            0.0372          0.0024              0.0538                  3.8
+          hazard            0.0357          0.0024              0.0335                  1.8
+        pregnant            0.0242          0.0046              0.0109                  1.5
+immediate_danger            0.0204          0.0024              0.0705                  2.5
+ weapon_involved            0.0184          0.0016              0.0703                  3.8
+       age_group            0.0068          0.0014              0.0064                  0.8
+
+Spearman rank correlation, permutation drop vs protocol weight (11 questions): rho = 0.55 (p = 0.082)
+A high rho means the model learned the protocol. It does NOT prove the questions are medically important.
+
+Saved docs\feature_importance.csv
+Saved charts\4_feature_importance.png
+[feature_importance.py finished in 98s]
+
+==============================================================================
+12/12 Generate Flutter constants
+==============================================================================
+wrote dart/triage_schema.dart and dart/triage_lookup.dart
+[generate_dart.py finished in 0s]
+
+ALL STEPS COMPLETED
