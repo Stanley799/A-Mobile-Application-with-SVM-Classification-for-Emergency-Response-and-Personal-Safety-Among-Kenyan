@@ -23,13 +23,14 @@
  "flags": {
   "self_harm": {
    "strong": [
-    "vr:jiua",
-    "vr:jiangamiza",
-    "vr:jiangamia",
+    "vr:ua",
+    "vr:angamiza",
+    "vr:angamia",
     "v0:taka kufa",
     "v0:tamani kufa",
     "maliza maisha yake",
-    "v0:maliza maisha yake",
+    "maliza maisha yangu",
+    "v0:maliza maisha yangu",
     "vr:nyonga",
     "vr:dhuru",
     "vr:toa uhai",
@@ -39,7 +40,6 @@
     "afadhali afe"
    ],
    "weak": [
-    "v0:maliza maisha yetu",
     "v0:maliza maisha yao",
     "v0:jitoa uhai",
     "nimechoka na maisha",
@@ -89,8 +89,7 @@
     "v0:nyanyaswa",
     "v:nyanyasa",
     "unyanyasaji",
-    "uwaki",
-    "v0:jilazimisha"
+    "uwaki"
    ]
   },
   "domestic_violence": {
@@ -116,9 +115,9 @@
       ],
       "act": [
        "vx:piga",
-       "chapwa",
-       "chapa",
-       "gonga",
+       "v0:chapwa",
+       "vx:chapa",
+       "vx:gonga",
        "v0:pigwa"
       ],
       "window": 8
@@ -166,6 +165,7 @@
     "pumu",
     "mgonjwa",
     "homa",
+    "hawezi akapumua",
     "v0:jifungua",
     "chakula kimekwama kooni"
    ],
@@ -278,8 +278,6 @@
     "inachomeka",
     "chomeka",
     "amekwama",
-    "amezikwa",
-    "imeporomoka",
     "kifusi"
    ],
    "subtypes": {
@@ -324,7 +322,6 @@
     "v0:shambuliwa",
     "v:shambulia",
     "shambulio",
-    "washambulizi",
     "uporaji",
     "waporaji",
     "ghasia",
@@ -365,7 +362,6 @@
      "v0:shambuliwa",
      "v:shambulia",
      "shambulio",
-     "washambulizi",
      "v0:dungwa",
      "v0:pigwa"
     ],
@@ -433,7 +429,6 @@
     "v0:vunjika moyo"
    ],
    "weak_terms": [
-    "kiboko",
     "v0:anguka",
     "v0:choma",
     "v0:chomwa",
@@ -443,7 +438,6 @@
     "wasiwasi",
     "hofu",
     "kisaikolojia",
-    "v0:choshwa",
     "upweke",
     "vx:acha"
    ],
@@ -483,13 +477,10 @@
      "wasiwasi",
      "hofu",
      "kisaikolojia",
-     "v0:choshwa",
      "upweke",
      "vx:acha"
     ],
-    "wildlife_attack": [
-     "kiboko"
-    ]
+    "wildlife_attack": []
    }
   }
  },

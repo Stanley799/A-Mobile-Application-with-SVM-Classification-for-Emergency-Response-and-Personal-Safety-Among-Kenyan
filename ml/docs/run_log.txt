@@ -1,4 +1,4 @@
-Run started 2026-10-13 16:23:22 | Python 3.14.4 | Windows-11-10.0.26200-SP0
+Run started 2026-10-13 23:27:39 | Python 3.14.4 | Windows-11-10.0.26200-SP0
 
 ==============================================================================
 1/12 Generate synthetic data (23 safety checks run first)
@@ -19,13 +19,13 @@ Other / General      52  468     110
 Road Accident       379  327     291
 Security Threat     413   31     112
 noised labels: 88
-[generate_synthetic_data.py finished in 5s]
+[generate_synthetic_data.py finished in 3s]
 
 ==============================================================================
 2/12 Train and compare models (cross-validation)
 ==============================================================================
 realistic rows: 4000 | boundary sample from coverage: 1217 {'High': 600, 'Medium': 539, 'Low': 78}
-cross-validation took 109s
+cross-validation took 113s
 
 model                            mode          acc Highrecall High->Low High->Med   (per test fold of 800 cases)
 LogReg                           model_only  0.820      0.869      2.90     46.10
@@ -42,7 +42,7 @@ candidates within 1.0 High->Low of the safest: ['LogReg', 'SVM-linear', 'SVM-RBF
 
 SELECTED (safe enough, then most accurate): SVM-RBF
 saved models/priority_classifier.joblib and models/metadata.json
-[train_classifier.py finished in 121s]
+[train_classifier.py finished in 123s]
 
 ==============================================================================
 3/12 Compile the decision table
@@ -50,7 +50,7 @@ saved models/priority_classifier.joblib and models/metadata.json
 decision table: 16740 entries, 1.90 MB
 protocol guard raised 197 combinations the model had under-triaged
 repair raised 0 combinations (passes: 1)
-[build_decision_table.py finished in 10s]
+[build_decision_table.py finished in 9s]
 
 ==============================================================================
 4/12 Test EVERY answer combination
@@ -105,11 +105,13 @@ INFO  Medical Emergency: 'iliyotiwa sumu' is already covered by the shorter stro
 INFO  Medical Emergency: "kung'atwa na nyoka" is already covered by the shorter strong term 'nyoka'
 INFO  Fire & Rescue: 'on fire' is already covered by the shorter strong term 'fire'
 INFO  Fire & Rescue: 'ndimi za moto' is already covered by the shorter strong term 'moto'
+INFO  Fire & Rescue: 'ajali ya moto' is already covered by the shorter strong term 'moto'
+INFO  Security Threat: 'mob justice' is already covered by the shorter strong term 'mob'
 INFO  Security Threat: 'mlio wa risasi' is already covered by the shorter strong term 'risasi'
 INFO  Security Threat: 'armed robbers' is already covered by the shorter strong term 'robbers'
 
-Checked 255 category terms, 78 flag terms, 11 idiom masks. Built-in tests: 19 passed, 0 failed.
-0 errors, 0 warnings, 6 notes.
+Checked 268 category terms, 94 flag terms, 11 idiom masks. Built-in tests: 19 passed, 0 failed.
+0 errors, 0 warnings, 8 notes.
 [check_lexicon.py finished in 4s]
 
 ==============================================================================
@@ -124,7 +126,7 @@ trained text classifier on 1800 messages (0 real messages from you x5, rest Engl
 lexicon only           messages 49 | decided 34 | correct 34 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
 classifier only        messages 49 | decided 34 | correct 24 | wrong 10 | correctly unclear 4 | flags found 0/10, false flags 0
 combined (used)        messages 49 | decided 38 | correct 38 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
-[evaluate_text.py finished in 5s]
+[evaluate_text.py finished in 4s]
 
 ==============================================================================
 9/12 Robustness and safe-fallback tests
@@ -151,13 +153,13 @@ PASS  9. corrupt lexicon_user.json: loads, warns, English safety flags still wor
 PASS  10. no responders available -> 922 escalation, no crash
 
 RESULT: PASS
-[test_robustness.py finished in 16s]
+[test_robustness.py finished in 15s]
 
 ==============================================================================
 10/12 Draw the exploration charts
 ==============================================================================
 Saved 3 charts in C:\EmergencyResponseSystem\ml\charts
-[explore_data.py finished in 7s]
+[explore_data.py finished in 4s]
 
 ==============================================================================
 11/12 Feature importance audit (about 1-2 minutes)
@@ -183,7 +185,7 @@ A high rho means the model learned the protocol. It does NOT prove the questions
 
 Saved docs\feature_importance.csv
 Saved charts\4_feature_importance.png
-[feature_importance.py finished in 98s]
+[feature_importance.py finished in 96s]
 
 ==============================================================================
 12/12 Generate Flutter constants
