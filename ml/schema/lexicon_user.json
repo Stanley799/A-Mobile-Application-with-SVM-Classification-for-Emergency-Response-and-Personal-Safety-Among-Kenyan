@@ -23,18 +23,28 @@
  "flags": {
   "self_harm": {
    "strong": [
-    "vr:ua",
-    "vr:angamiza",
-    "vr:angamia",
+    "vr:jiua",
+    "vr:jiangamiza",
+    "vr:jiangamia",
     "v0:taka kufa",
     "v0:tamani kufa",
-    "maliza maisha yangu",
-    "v0:maliza maisha yangu"
+    "maliza maisha yake",
+    "v0:maliza maisha yake",
+    "vr:nyonga",
+    "vr:dhuru",
+    "vr:toa uhai",
+    "sitaki kuishi",
+    "hataki kuishi",
+    "afadhali nife",
+    "afadhali afe"
    ],
    "weak": [
-    "v0:maliza maisha yake",
+    "v0:maliza maisha yetu",
     "v0:maliza maisha yao",
-    "v0:toa uhai"
+    "v0:jitoa uhai",
+    "nimechoka na maisha",
+    "sina matumaini",
+    "v0:kata tamaa"
    ]
   },
   "sexual_violence": {
@@ -66,7 +76,12 @@
       ],
       "window": 6
      }
-    }
+    },
+    "ubakaji",
+    "mbakaji",
+    "wabakaji",
+    "unyanyasaji wa kingono",
+    "v0:lazimishwa kufanya ngono"
    ],
    "weak": [
     "v0:dhalilishwa",
@@ -101,11 +116,16 @@
       ],
       "act": [
        "vx:piga",
+       "chapwa",
+       "chapa",
+       "gonga",
        "v0:pigwa"
       ],
       "window": 8
      }
-    }
+    },
+    "unyanyasaji wa nyumbani",
+    "vurugu za nyumbani"
    ],
    "weak": [
     "vo:piga",
@@ -145,12 +165,16 @@
     "kisukari",
     "pumu",
     "mgonjwa",
-    "homa"
+    "homa",
+    "v0:jifungua",
+    "chakula kimekwama kooni"
    ],
    "weak_terms": [
     "damu",
     "mja mzito",
-    "mikono inatetemeka"
+    "mikono inatetemeka",
+    "v0:umwa",
+    "mjamzito"
    ],
    "subtypes": {
     "maternal": [
@@ -158,7 +182,9 @@
      "uchungu wa kuzaa",
      "mikazo ya uzazi",
      "kuharibika kwa mimba",
-     "mja mzito"
+     "mja mzito",
+     "v0:jifungua",
+     "mjamzito"
     ],
     "snakebite_or_poison": [
      "nyoka",
@@ -178,6 +204,7 @@
     "breathing_problem": [
      "hapumui",
      "hawezi kupumua",
+     "hawezi akapumua",
      "ameshindwa kupumua",
      "pumu"
     ]
@@ -243,19 +270,24 @@
     "mafuriko",
     "imefurika",
     "v0:zama",
-    "imeangukia wafanyakazi"
+    "imeangukia wafanyakazi",
+    "ajali ya moto",
+    "v0:ungua"
    ],
    "weak_terms": [
     "inachomeka",
     "chomeka",
     "amekwama",
     "amezikwa",
-    "imeporomoka"
+    "imeporomoka",
+    "kifusi"
    ],
    "subtypes": {
     "building_fire": [
      "moto",
-     "ndimi za moto"
+     "ndimi za moto",
+     "ajali ya moto",
+     "v0:ungua"
     ],
     "building_collapse": [
      "kuporomoka kwa jengo",
@@ -299,12 +331,16 @@
     "wahuni",
     "kundi la wahalifu",
     "vo:ua",
-    "v:ua mtu"
+    "v:ua mtu",
+    "mob justice",
+    "v:iba"
    ],
    "weak_terms": [
     "kundi la watu",
     "v0:pigwa",
-    "vo:piga"
+    "vo:piga",
+    "umati",
+    "uhalifu"
    ],
    "subtypes": {
     "armed_robbery": [
@@ -332,6 +368,10 @@
      "washambulizi",
      "v0:dungwa",
      "v0:pigwa"
+    ],
+    "mob_violence": [
+     "mob justice",
+     "umati"
     ]
    },
    "subtype_weak": {
@@ -372,7 +412,8 @@
      "mtoto amepotea",
      "mtoi amepotea"
     ]
-   }
+   },
+   "weak_terms": []
   },
   "Other / General": {
    "terms": [
@@ -385,7 +426,11 @@
     "kuchomwa kwa maji ya moto",
     "v0:huzunika",
     "akona huzuni",
-    "ako na huzuni"
+    "ako na huzuni",
+    "msongo wa mawazo",
+    "sonona",
+    "mfadhaiko",
+    "v0:vunjika moyo"
    ],
    "weak_terms": [
     "kiboko",
@@ -398,7 +443,9 @@
     "wasiwasi",
     "hofu",
     "kisaikolojia",
-    "v0:choshwa"
+    "v0:choshwa",
+    "upweke",
+    "vx:acha"
    ],
    "subtypes": {
     "wildlife_attack": [
@@ -415,7 +462,11 @@
     "emotional_distress": [
      "v0:huzunika",
      "akona huzuni",
-     "ako na huzuni"
+     "ako na huzuni",
+     "msongo wa mawazo",
+     "sonona",
+     "mfadhaiko",
+     "v0:vunjika moyo"
     ]
    },
    "subtype_weak": {
@@ -432,7 +483,9 @@
      "wasiwasi",
      "hofu",
      "kisaikolojia",
-     "v0:choshwa"
+     "v0:choshwa",
+     "upweke",
+     "vx:acha"
     ],
     "wildlife_attack": [
      "kiboko"
@@ -440,7 +493,51 @@
    }
   }
  },
- "themes": {},
+ "themes": {
+  "relationship": [
+   "v0:achana",
+   "talaka",
+   "vx:acha",
+   "mpenzi"
+  ],
+  "academic": [
+   "mtihani",
+   "ada",
+   "matokeo"
+  ],
+  "financial": [
+   "deni",
+   "madeni",
+   "mkopo",
+   "kodi",
+   "v0:futwa kazi",
+   "ukosefu wa kazi"
+  ],
+  "family": [
+   "wazazi",
+   "familia"
+  ],
+  "grief": [
+   "msiba",
+   "mazishi",
+   "kifo"
+  ],
+  "postpartum": [
+   "baada ya kujifungua",
+   "mtoto mchanga"
+  ],
+  "substance": [
+   "pombe",
+   "v0:lewa",
+   "ulevi",
+   "dawa za kulevya"
+  ],
+  "bullying": [
+   "v0:onewa",
+   "vx:onea"
+  ]
+ },
+ "common_words": [],
  "tests": [
   {
    "text": "nimeumwa na nyoka",
