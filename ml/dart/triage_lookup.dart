@@ -13,6 +13,9 @@ class TriageLookup {
   final Map<String, dynamic> _entries;
   TriageLookup._(this._entries);
 
+  /// For unit tests only (lets a test supply the table without the Flutter asset bundle).
+  factory TriageLookup.fromEntriesForTest(Map<String, dynamic> entries) => TriageLookup._(entries);
+
   static Future<TriageLookup> load() async {
     final raw = jsonDecode(await rootBundle.loadString('assets/decision_table.json')) as Map<String, dynamic>;
     if (raw['schema_version'] != kTriageSchemaVersion) {
@@ -22,7 +25,7 @@ class TriageLookup {
   }
 
   /// answers: question id -> value as text (people_count as '1'..'5'). Questions not asked for the category are filled with NotAsked.
-  TriageResult lookup(String category, Map<String, String> answers) {
+  TriageResult lookup(String category, Map<String, String> answers, {String? subtype}) {
     final parts = <String>[];
     for (final f in kModelFeatureOrder) {
       if (f == 'category') { parts.add(category); continue; }
@@ -30,15 +33,20 @@ class TriageLookup {
     }
     final e = _entries[parts.join('|')];
     if (e == null) { throw ArgumentError('Unknown answer combination: ${parts.join('|')}'); }
-    return TriageResult(e['p'] as String, (e['c'] as num).toDouble(), (e['r'] as num) == 1);
+    var priority = e['p'] as String;
+    var review = (e['r'] as num) == 1;
+    final floor = subtype == null ? null : kSubtypeFloors[subtype];
+    if (floor != null && kPriorities.indexOf(floor) > kPriorities.indexOf(priority)) { priority = floor; }
+    if (floor == 'High' || priority == 'High') { review = false; }   // same rule as predict_priority.py
+    return TriageResult(priority, (e['c'] as num).toDouble(), review);
   }
 
   /// PRODUCTION entry point. Never throws. On ANY problem (unknown combination, bad input) it fails SAFE:
   /// High priority, flagged for human review. Log [fallbackReason] to Crashlytics/Firestore so it can be investigated.
   /// Over-alerting one case costs seconds; silently under-alerting can cost a life.
-  TriageResult lookupSafe(String category, Map<String, String> answers, {void Function(String reason)? onFallback}) {
+  TriageResult lookupSafe(String category, Map<String, String> answers, {String? subtype, void Function(String reason)? onFallback}) {
     try {
-      return lookup(category, answers);
+      return lookup(category, answers, subtype: subtype);
     } catch (e) {
       if (onFallback != null) onFallback(e.toString());
       return TriageResult('High', 0.0, true);

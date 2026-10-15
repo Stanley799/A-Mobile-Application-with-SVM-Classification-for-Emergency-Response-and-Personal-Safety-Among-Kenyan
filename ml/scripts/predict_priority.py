@@ -1,11 +1,11 @@
 """Hybrid priority suggestion = rule floors + classifier with a safety bias.  Import suggest_priority() or run this file for examples."""
-import os, json, joblib, numpy as np, pandas as pd
+import os, json
 import triage_core as t
 
-_LOAD_ERROR = None          # set (not raised) if a model file is missing, corrupt or out of date; suggest_priority_safe then fails SAFE
+_LOAD_ERROR = None          # set (not raised) if the decision table is missing, corrupt or out of date; suggest_priority_safe then fails SAFE
 _MODEL = _META = _TABLE = None
+_MODEL_NOTE = None          # the SVM file itself is NOT needed to serve answers (the table already contains its decisions)
 try:
-    _MODEL = joblib.load(os.path.join(t.ROOT, "models", "priority_classifier.joblib"))
     _META = json.load(open(os.path.join(t.ROOT, "models", "metadata.json")))
     _TABLE = json.load(open(os.path.join(t.ROOT, "models", "decision_table.json")))
     assert _TABLE["schema_version"] == t.SCHEMA["version"], "Decision table is out of date. Run build_decision_table.py."
@@ -13,6 +13,11 @@ try:
     assert _META["schema_version"] == t.SCHEMA["version"], "Schema changed since training. Retrain."
 except Exception as _e:     # noqa: BLE001 - deliberately broad: ANY load problem must not stop an emergency app
     _LOAD_ERROR = f"{type(_e).__name__}: {_e}"
+try:                        # optional: only needed to re-test the table against the raw model (test_combinations.py)
+    import joblib
+    _MODEL = joblib.load(os.path.join(t.ROOT, "models", "priority_classifier.joblib"))
+except Exception as _e:     # noqa: BLE001
+    _MODEL_NOTE = f"{type(_e).__name__}: {_e}"
 
 def suggest_priority(payload, subtype=None):
     """Looks the answers up in the compiled decision table (model + rule floors + monotone repair), then applies
@@ -41,6 +46,9 @@ def suggest_priority_safe(payload, subtype=None):
 
 def suggest_priority_raw_model(payload, subtype=None):
     """Same idea but straight from the trained model (used only to test the table)."""
+    import pandas as pd
+    if _MODEL is None:
+        raise RuntimeError("raw model not loaded: " + str(_MODEL_NOTE))
     n = t.normalize(payload)
     floor, reasons = t.rule_floor(n, subtype)
     X = pd.DataFrame([[n[f] for f in t.FEATURES]], columns=t.FEATURES)

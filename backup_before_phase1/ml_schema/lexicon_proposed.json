@@ -1,0 +1,181 @@
+{
+ "_version": 2,
+ "_instructions": "PROPOSED by the assistant from standard Kiswahili and Kenyan documents. NOT loaded by the app. Read each term, DELETE what you disagree with, ask a native speaker about the MEDIUM ones, then run `py scripts\\merge_proposed.py`. To test them first without merging: set TRIAGE_INCLUDE_PROPOSED=1 (PowerShell: $env:TRIAGE_INCLUDE_PROPOSED='1').",
+ "flags": {
+  "self_harm": {
+   "strong": [
+    "vr:kujiua",
+    "vr:kujiangamiza",
+    "kujinyonga",
+    "vr:kujidhuru",
+    "vr:kujitoa uhai",
+    "sitaki kuishi",
+    "hataki kuishi",
+    "afadhali nife",
+    "afadhali nikufe",
+    "afadhali nijiue"
+   ],
+   "weak": [
+    "nimechoka na maisha",
+    "sina matumaini",
+    "v0:kata tamaa",
+    "afadhali nijimade",
+    "kujimada"
+   ]
+  },
+  "sexual_violence": {
+   "strong": [
+    "ubakaji",
+    "mbakaji",
+    "wabakaji",
+    "unyanyasaji wa kingono",
+    "v0:lazimishwa kufanya ngono"
+   ],
+   "weak": [
+    "kurapiwa",
+    "amerapiwa",
+    "amemrape",
+    "amebakwa"
+   ]
+  },
+  "domestic_violence": {
+   "strong": [
+    "unyanyasaji wa nyumbani",
+    "vurugu za nyumbani"
+   ],
+   "weak": [
+    "baba amepiga mtoto",
+    "amepiga bibi yake",
+    "amepiga mtoto",
+    "amepiga mke wake",
+    "amepiga baba yake",
+    "amepiga dada yake",
+    "amepiga kaka yake",
+    "amepiga mjomba wake",
+    "amepiga shangazi yake",
+    "amepiga mjukuu wake",
+    "wanapigana kwa nyuma",
+    "mandugu wanapigana"
+   ]
+  }
+ },
+ "categories": {
+  "Medical Emergency": {
+   "terms": [
+    "v0:jifungua",
+    "chakula kimekwama kooni"
+   ],
+   "weak_terms": [
+    "v0:umwa",
+    "mjamzito"
+   ],
+   "subtypes": {
+    "maternal": [
+     "v0:jifungua",
+     "mjamzito"
+    ]
+   }
+  },
+  "Fire & Rescue": {
+   "terms": [
+    "ajali ya moto",
+    "v0:ungua"
+   ],
+   "weak_terms": [
+    "kifusi"
+   ],
+   "subtypes": {
+    "building_fire": [
+     "ajali ya moto",
+     "v0:ungua"
+    ]
+   }
+  },
+  "Security Threat": {
+   "terms": [
+    "mob justice",
+    "v:iba"
+   ],
+   "weak_terms": [
+    "umati",
+    "uhalifu"
+   ],
+   "subtypes": {
+    "mob_violence": [
+     "mob justice",
+     "umati"
+    ]
+   }
+  },
+  "Other / General": {
+   "terms": [
+    "msongo wa mawazo",
+    "sonona",
+    "mfadhaiko",
+    "v0:vunjika moyo"
+   ],
+   "weak_terms": [
+    "upweke",
+    "vx:acha"
+   ],
+   "subtypes": {
+    "emotional_distress": [
+     "msongo wa mawazo",
+     "sonona",
+     "mfadhaiko",
+     "v0:vunjika moyo"
+    ]
+   },
+   "subtype_weak": {
+    "emotional_distress": [
+     "upweke",
+     "vx:acha"
+    ]
+   }
+  }
+ },
+ "themes": {
+  "relationship": [
+   "v0:achana",
+   "talaka",
+   "vx:acha",
+   "mpenzi"
+  ],
+  "academic": [
+   "mtihani",
+   "ada",
+   "matokeo"
+  ],
+  "financial": [
+   "deni",
+   "madeni",
+   "mkopo",
+   "kodi",
+   "v0:futwa kazi",
+   "ukosefu wa kazi"
+  ],
+  "family": [
+   "wazazi",
+   "familia"
+  ],
+  "grief": [
+   "msiba",
+   "mazishi",
+   "kifo"
+  ],
+  "postpartum": [
+   "baada ya kujifungua",
+   "mtoto mchanga"
+  ],
+  "substance": [
+   "pombe",
+   "v0:lewa",
+   "ulevi",
+   "dawa za kulevya"
+  ],
+  "bullying": [
+   "v0:onewa",
+   "vx:onea"
+  ]
+ }
+}

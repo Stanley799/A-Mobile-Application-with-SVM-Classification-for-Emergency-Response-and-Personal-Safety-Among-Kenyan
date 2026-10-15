@@ -102,3 +102,12 @@ IDIOM / GUARD (protects against a wrong match), PROPOSED_HIGH / PROPOSED_MEDIUM 
 - Morphology covers common forms (subject, tense, one object marker). It does not cover every dialect form, negatives ("hakuna"), or relative forms.
 - The English dev set was tuned by the author: treat the score as a regression check, not accuracy.
 - Weights and floors are still not clinician-reviewed.
+
+## Text classifier training, version 2 (14 Oct 2026)
+Why: the first version learned from only about 10 phrases per category and effectively memorised them (on its own it was wrong on 10 of 34 test messages).
+What changed:
+- About 40 varied English / Kenyan-English phrases per category (typos, openers and place names added at random).
+- 573 Swahili / Sheng lines built from the owner's own lexicon terms in neutral frames ("msaada <term>", "<term> hapa"); no Swahili grammar is invented.
+- An honest check holds out 20% of the *phrases* before training: accuracy 0.83 on wording it never saw; where the model is confident (>= 0.55, 62% of cases) it is right 0.97 of the time.
+- Result on the 49-message development set: classifier alone wrong 10 -> 6, combined engine decided 38 -> 42 with 0 wrong, 10/10 safety flags, 0 false flags.
+Limits: the development set and the phrases were both written by the assistant, so these numbers are optimistic; the classifier never decides safety flags (lexicon only) and the resident always confirms.

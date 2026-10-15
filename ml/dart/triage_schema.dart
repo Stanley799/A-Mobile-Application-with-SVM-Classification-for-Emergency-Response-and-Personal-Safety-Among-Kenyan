@@ -46,6 +46,16 @@ const Map<String, List<String>> kCategorySubtypes = {
   "Other / General": ["mental_health_crisis", "emotional_distress", "wildlife_attack", "fall_or_injury", "burns", "unclear"],
 };
 
+/// The 3 questions asked before the alert is refined, in this order (measured: every required responder type is covered).
+const Map<String, List<String>> kQuickQuestions = {
+  "Medical Emergency": ["conscious", "breathing", "severe_bleeding"],
+  "Road Accident": ["trapped", "hazard", "conscious"],
+  "Fire & Rescue": ["conscious", "trapped", "breathing"],
+  "Security Threat": ["conscious", "breathing", "severe_bleeding"],
+  "Abduction": ["immediate_danger", "weapon_involved", "age_group"],
+  "Other / General": ["conscious", "breathing", "severe_bleeding"],
+};
+
 class SubtypeRule { final bool confidential; final bool notifyTrustedContactsByDefault; final bool shareFreeTextWithResponder;
   final bool dispatchResponder; final String safetyQuestion;
   const SubtypeRule(this.confidential, this.notifyTrustedContactsByDefault, this.shareFreeTextWithResponder, this.dispatchResponder, this.safetyQuestion); }
@@ -58,6 +68,12 @@ const Map<String, SubtypeRule> kSubtypeRules = {
   "emotional_distress": SubtypeRule(true, false, false, false, "Are you thinking of harming yourself?"),
 };
 
+/// Lowest priority allowed for a subtype (rule floors F09, F10). The decision table does not know the subtype, so lookupSafe applies these.
+const Map<String, String> kSubtypeFloors = {
+  "sexual_violence": "Medium",
+  "mental_health_crisis": "High",
+};
+
 class Hotline { final String number; final String name; final String showWhen; final bool verified;
   const Hotline(this.number, this.name, this.showWhen, this.verified); }
 
@@ -65,9 +81,9 @@ class Hotline { final String number; final String name; final String showWhen; f
 const List<Hotline> kHotlines = [
   Hotline("922", "National Ambulance Dispatch Centre (SHA 922 Lifeline)", "always", true),
   Hotline("1195", "National GBV helpline (run by HAK with the government)", "sexual_violence,domestic_violence", true),
-  Hotline("999", "General emergency number", "none_until_verified", false),
-  Hotline("112", "General emergency number", "none_until_verified", false),
-  Hotline("116", "Child helpline", "none_until_verified", false),
+  Hotline("999", "Police and general emergency number (112 also works)", "always", true),
+  Hotline("112", "General emergency number", "never", true),
+  Hotline("116", "National Child Helpline (free, 24 hours)", "kidnapping,missing_child", true),
 ];
 
 const double kOfferTimeoutSeconds = 45;

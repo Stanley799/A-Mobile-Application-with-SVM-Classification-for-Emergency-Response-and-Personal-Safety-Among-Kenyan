@@ -1,45 +1,61 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/models/emergency_enums.dart';
-import '../../../core/services/priority_classifier.dart';
+import '../../../core/services/triage_text_service.dart';
 import '../../../core/theme/app_theme.dart';
+import 'hotline_card.dart';
 
-/// Structured fallback for emergency reports that do not fit the fixed category
-/// list. The prompt is required so the system always has a meaningful text
-/// signal to classify, even when it cannot rely on a structured branch.
-class OtherFreeTextSheet extends StatefulWidget {
-  const OtherFreeTextSheet({super.key, required this.classifier});
+/// What the resident typed, the box they ticked and the category they confirmed.
+class FreeTextResult {
+  const FreeTextResult({
+    required this.text,
+    required this.consent,
+    this.suggestion,
+    this.chosenCategory,
+  });
 
-  final PriorityClassifier classifier;
-
-  @override
-  State<OtherFreeTextSheet> createState() => _OtherFreeTextSheetState();
+  final String text;
+  final bool consent;
+  final TextSuggestion? suggestion;
+  final String? chosenCategory;
 }
 
-class _OtherFreeTextSheetState extends State<OtherFreeTextSheet> {
-  final TextEditingController _controller = TextEditingController();
-  bool _isProcessing = false;
-  String? _error;
-  PrioritySuggestion? _suggestion;
-  EmergencyCategory? _suggestedCategory;
-  List<String> _keywords = const <String>[];
+/// An optional description box.
+/// With [suggestMode] (used for Other / General) the server suggests a category and the resident confirms it.
+/// Without it (used at the end of other categories) the text is just extra detail for responders.
+class FreeTextStep extends StatefulWidget {
+  const FreeTextStep({
+    super.key,
+    required this.suggestMode,
+    required this.initialText,
+    required this.initialConsent,
+    required this.onContinue,
+  });
 
-  static const List<String> _keywordMap = [
-    'bleeding',
-    'fire',
-    'smoke',
-    'knife',
-    'gun',
-    'choking',
-    'unconscious',
-    'trapped',
-    'accident',
-    'stolen',
-    'abducted',
-    'kidnapped',
-    'breathing',
-    'difficulty',
-  ];
+  final bool suggestMode;
+  final String initialText;
+  final bool initialConsent;
+  final ValueChanged<FreeTextResult> onContinue;
+
+  @override
+  State<FreeTextStep> createState() => _FreeTextStepState();
+}
+
+class _FreeTextStepState extends State<FreeTextStep> {
+  late final TextEditingController _controller;
+  final TriageTextService _service = TriageTextService();
+  late bool _consent;
+  bool _loading = false;
+  bool _failed = false;
+  TextSuggestion? _suggestion;
+  String? _chosen;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText)
+      ..addListener(() => setState(() {}));
+    _consent = widget.initialConsent;
+  }
 
   @override
   void dispose() {
@@ -47,268 +63,153 @@ class _OtherFreeTextSheetState extends State<OtherFreeTextSheet> {
     super.dispose();
   }
 
-  Future<void> _submitText() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _isProcessing) {
-      return;
-    }
+  String get _text => _controller.text.trim();
 
-    FocusScope.of(context).unfocus();
+  bool get _needsSuggestion =>
+      widget.suggestMode && _text.length >= 3 && _suggestion == null && !_failed;
+
+  Future<void> _suggest() async {
     setState(() {
-      _isProcessing = true;
-      _error = null;
+      _loading = true;
+      _failed = false;
     });
-
-    try {
-      final keywords = _extractKeywords(text);
-      final category = _suggestCategory(text, keywords);
-      final suggestion = await widget.classifier.suggestPriority(
-        category: category,
-        conscious: ConsciousnessStatus.unknown,
-        breathing: BreathingStatus.unknown,
-        mobile: MobilityStatus.unknown,
-        weaponInvolved: keywords.contains('knife') || keywords.contains('gun'),
-        peopleCount: 1,
-        freeTextDescription: text,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isProcessing = false;
-        _suggestedCategory = category;
-        _keywords = keywords;
-        _suggestion = suggestion;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isProcessing = false;
-        _error = 'Unable to process your description. Please try again.';
-      });
+    final suggestion = await _service.suggest(_text);
+    if (!mounted) return;
+    String? pick;
+    if (suggestion != null &&
+        suggestion.category != null &&
+        !suggestion.needsClarification) {
+      pick = suggestion.category;
     }
+    setState(() {
+      _loading = false;
+      _suggestion = suggestion;
+      _failed = suggestion == null;
+      _chosen = pick;
+    });
   }
 
-  List<String> _extractKeywords(String rawText) {
-    final normalized = rawText.toLowerCase();
-    final matches = <String>[];
-
-    for (final keyword in _keywordMap) {
-      if (normalized.contains(keyword)) {
-        matches.add(keyword);
-      }
-    }
-
-    return matches;
+  void _continue() {
+    widget.onContinue(
+      FreeTextResult(
+        text: _text,
+        consent: _consent && _text.isNotEmpty,
+        suggestion: _suggestion,
+        chosenCategory: widget.suggestMode ? _chosen : null,
+      ),
+    );
   }
 
-  EmergencyCategory _suggestCategory(String rawText, List<String> keywords) {
-    final normalized = rawText.toLowerCase();
-    if (keywords.contains('knife') ||
-        keywords.contains('gun') ||
-        keywords.contains('stolen') ||
-        keywords.contains('abducted') ||
-        keywords.contains('kidnapped')) {
-      return EmergencyCategory.security;
-    }
-    if (keywords.contains('fire') || keywords.contains('smoke')) {
-      return EmergencyCategory.fire;
-    }
-    if (keywords.contains('trapped') || keywords.contains('accident')) {
-      return EmergencyCategory.roadAccident;
-    }
-    if (keywords.contains('choking') ||
-        keywords.contains('breathing') ||
-        keywords.contains('unconscious') ||
-        keywords.contains('bleeding')) {
-      return EmergencyCategory.medical;
-    }
-    if (normalized.contains('abduct') || normalized.contains('kidnap')) {
-      return EmergencyCategory.abduction;
-    }
-    return EmergencyCategory.other;
+  List<String> get _options {
+    final s = _suggestion;
+    if (s == null) return const [];
+    final list = <String>[
+      if (s.category != null) s.category!,
+      ...s.alternatives,
+      'Other / General',
+    ];
+    return list.toSet().toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: _buildContent(context),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    if (_suggestion != null && _suggestedCategory != null) {
-      final confidence = (_suggestion!.confidence * 100).round();
-      final suggestedCategoryLabel = _suggestedCategory!.label;
-      final priorityLabel = _suggestion!.priority.label;
-
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Suggested response',
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontSize: 20),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Based on your description, this looks like a $suggestedCategoryLabel',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Priority: $priorityLabel ($confidence% confident)',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _suggestion!.reason,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Your description',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(_controller.text.trim()),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop({
-                      'category': _suggestedCategory,
-                      'suggestion': _suggestion,
-                      'text': _controller.text.trim(),
-                      'keywords': _keywords,
-                    });
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.brand,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text('Confirm & Send'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _suggestion = null;
-                      _suggestedCategory = null;
-                    });
-                  },
-                  child: const Text('Edit Description'),
-                ),
-              ),
-            ],
+    final theme = Theme.of(context);
+    final label = _loading
+        ? 'Checking...'
+        : _text.isEmpty
+        ? 'Skip'
+        : _needsSuggestion
+        ? 'Suggest what this is'
+        : 'Continue';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.suggestMode
+              ? 'Tell us what is happening'
+              : 'Anything else responders should know?',
+          style: theme.textTheme.headlineSmall?.copyWith(fontSize: 22),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          widget.suggestMode
+              ? 'Optional. Write in English or Swahili. We will suggest the right type of help and you confirm it.'
+              : 'Optional. Keep it short.',
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        TextField(
+          controller: _controller,
+          maxLength: 280,
+          maxLines: 4,
+          minLines: 3,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: 'Describe what is happening',
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              borderSide: const BorderSide(color: AppColors.divider),
+            ),
           ),
         ),
-      );
-    }
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Describe what is happening',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontSize: 20),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _controller,
-              onChanged: (_) => setState(() {}),
-              enabled: !_isProcessing,
-              maxLines: 3,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: "Example: 'baby choking on something, can't breathe'",
-                filled: true,
-                fillColor: AppColors.surfaceAlt,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: BorderSide.none,
+        if (_suggestion?.mentionsSelfHarm ?? false) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'You are not alone. If you might hurt yourself, please call now:',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final h in hotlinesFor(null)) HotlineCard(hotline: h),
+        ],
+        if (_failed) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            "We couldn't suggest a type right now. You can continue.",
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+        if (_options.length > 1) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text('This looks like:', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final c in _options)
+                ChoiceChip(
+                  label: Text(c),
+                  selected: _chosen == c,
+                  onSelected: (_) => setState(() => _chosen = c),
                 ),
-              ),
+            ],
+          ),
+        ],
+        if (_text.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _consent,
+            onChanged: (v) => setState(() => _consent = v ?? false),
+            title: const Text(
+              'Save this description (no name or phone number) to help improve the app. You will still get help if you leave this unticked.',
+              style: TextStyle(fontSize: 13),
             ),
-            const SizedBox(height: 18),
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: AppColors.warning)),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _controller.text.trim().isNotEmpty && !_isProcessing
-                    ? _submitText
-                    : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.brand,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _isProcessing
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Get Help'),
-              ),
-            ),
-          ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: _loading ? null : (_needsSuggestion ? _suggest : _continue),
+            child: Text(label),
+          ),
         ),
-      ),
+      ],
     );
   }
 }

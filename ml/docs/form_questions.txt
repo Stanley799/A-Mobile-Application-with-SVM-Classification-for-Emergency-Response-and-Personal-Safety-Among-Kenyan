@@ -1,0 +1,33 @@
+QUESTION TITLES TO PASTE INTO THE FORM (one 'Paragraph' / long-answer question each; keep the S-number at the start).
+Make S01-S24 and S28-S30 optional too, but ask people to answer at least 12. Mark S25-S27 as optional and sensitive.
+
+S01 A person next to you collapses and does not respond when you call them.
+S02 A child has just been bitten by a snake in the compound.
+S03 A woman is in labour at home and the hospital is far.
+S04 An older relative has chest pain, is sweating and cannot speak well.
+S05 Someone starts shaking violently on the ground (a seizure).
+S06 A child is choking on food and cannot breathe.
+S07 A matatu has overturned on the highway and passengers are screaming.
+S08 A boda boda rider has been knocked down by a car at a junction.
+S09 Two cars collided and the driver of one is trapped inside.
+S10 A house is on fire and a family may still be inside.
+S11 A building under construction has collapsed and workers are buried.
+S12 A river has burst its banks and people are stuck on a roof.
+S13 Thieves with knives are breaking into the shop next to you.
+S14 An angry mob is chasing a man and about to beat him.
+S15 You hear gunshots near your home.
+S16 A group of youths is attacking you in the street and taking your phone.
+S17 You see a person forced into a car at the bus stage.
+S18 A small child is missing at the market and you cannot find them.
+S19 A hyena has entered the compound.
+S20 Someone fell from a tree and cannot stand up.
+S21 A child has been burned by hot water.
+S22 You are lost in the forest and your phone battery is low.
+S23 You are panicking and can only type a very short message asking for help, without saying what is wrong.
+S24 You think something is wrong with your neighbour but you do not know what.
+S25 A friend tells you she was raped last night and needs help. Write what YOU would type for her. (optional, sensitive - skip it if you prefer)
+S26 You hear a neighbour's wife being beaten by her husband again tonight. Write what you would type. (optional, sensitive - skip it if you prefer)
+S27 A friend says he wants to end his life tonight. Write what you would type. (optional, sensitive - skip it if you prefer)
+S28 Someone you know is heartbroken after a break-up and says they cannot cope.
+S29 A student is devastated and very stressed after failing exams.
+S30 A new mother is very sad and keeps crying.

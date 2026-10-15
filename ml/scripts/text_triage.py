@@ -269,23 +269,19 @@ except Exception as _e:                                        # a broken/old mo
 # ----------------------------------------------------------------------------------------------
 # Typo tolerance for SAFETY FLAGS only (a mistyped 'suicde' or 'molestd' must still raise the flag)
 # ----------------------------------------------------------------------------------------------
-def _within_one_edit(a, b):
-    """True if a and b differ by at most one insertion, deletion, substitution or swap of two neighbouring letters."""
-    if a == b:
-        return True
-    la, lb = len(a), len(b)
-    if abs(la - lb) > 1:
-        return False
-    if la == lb:
-        diff = [i for i in range(la) if a[i] != b[i]]
-        if len(diff) == 1:
-            return True
-        return len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]]
-    short, long_ = (a, b) if la < lb else (b, a)
-    i = 0
-    while i < len(short) and short[i] == long_[i]:
-        i += 1
-    return short[i:] == long_[i + 1:]
+def _one_slip(tok, word):
+    """True if `tok` is `word` with ONE letter missing or with two neighbouring letters swapped ('suicde', 'sucidie').
+    Deliberately NOT substitutions or insertions: those turn too many ordinary words into flag words
+    (an external test showed 'raging' -> 'raping' and 'defined' -> 'defiled')."""
+    if len(tok) == len(word) - 1:
+        return any(word[:i] + word[i + 1:] == tok for i in range(len(word)))
+    if len(tok) == len(word) and tok != word:
+        d = [i for i in range(len(word)) if tok[i] != word[i]]
+        return len(d) == 2 and d[1] == d[0] + 1 and tok[d[0]] == word[d[1]] and tok[d[1]] == word[d[0]]
+    return False
+
+
+SNAP_NEVER = {"defied"}                                         # real words that are one missing letter from a flag word
 
 
 def _build_snap_vocab():
@@ -293,7 +289,7 @@ def _build_snap_vocab():
     vocab = {}
     for name, f in LEX["flags"].items():
         for tm in f["strong"]:
-            if tm.plain and " " not in tm.plain and len(tm.plain) >= 6 and tm.plain not in LEX["common"]:
+            if tm.plain and " " not in tm.plain and len(tm.plain) >= 7 and tm.plain not in LEX["common"]:
                 vocab[tm.plain] = name
     return vocab
 
@@ -317,12 +313,12 @@ KNOWN_TOKENS = _all_known_tokens()
 
 
 def snap_flag_typos(s):
-    """Replace a token that is exactly ONE typo away from exactly ONE flag word (same first letter, 6+ letters, not itself a
+    """Replace a token that is exactly ONE slip (a missing letter or a neighbouring-letter swap) away from exactly ONE flag word (same first letter, 7+ letter flag words, not itself a
     known lexicon word) with that flag word. Used for flag detection only, so it can add a safety flag but never changes a category."""
     out = []
     for tok in s.split():
-        if len(tok) >= 6 and tok not in KNOWN_TOKENS and tok not in SNAP_VOCAB:
-            cands = [v for v in SNAP_VOCAB if v[0] == tok[0] and _within_one_edit(tok, v)]
+        if len(tok) >= 6 and tok not in KNOWN_TOKENS and tok not in SNAP_VOCAB and tok not in SNAP_NEVER:
+            cands = [v for v in SNAP_VOCAB if v[0] == tok[0] and _one_slip(tok, v)]
             if cands and len({SNAP_VOCAB[c] for c in cands}) == 1:      # unambiguous: every candidate belongs to the same flag
                 tok = sorted(cands)[0]
         out.append(tok)

@@ -138,6 +138,7 @@
  "categories": {
   "Medical Emergency": {
    "code": "medical",
+   "quick_questions": ["conscious", "breathing", "severe_bleeding"],
    "questions": [
     "age_group",
     "conscious",
@@ -159,6 +160,7 @@
   },
   "Road Accident": {
    "code": "road",
+   "quick_questions": ["trapped", "hazard", "conscious"],
    "questions": [
     "age_group",
     "conscious",
@@ -179,6 +181,7 @@
   },
   "Fire & Rescue": {
    "code": "fire",
+   "quick_questions": ["conscious", "trapped", "breathing"],
    "questions": [
     "age_group",
     "conscious",
@@ -196,6 +199,7 @@
   },
   "Security Threat": {
    "code": "security",
+   "quick_questions": ["conscious", "breathing", "severe_bleeding"],
    "questions": [
     "age_group",
     "conscious",
@@ -217,6 +221,7 @@
   },
   "Abduction": {
    "code": "abduction",
+   "quick_questions": ["immediate_danger", "weapon_involved", "age_group"],
    "questions": [
     "age_group",
     "weapon_involved",
@@ -230,6 +235,7 @@
   },
   "Other / General": {
    "code": "other",
+   "quick_questions": ["conscious", "breathing", "severe_bleeding"],
    "questions": [
     "age_group",
     "conscious",
@@ -926,26 +932,26 @@
   {
    "id": "999",
    "number": "999",
-   "name": "General emergency number",
-   "show_when": "none_until_verified",
-   "verified": false,
-   "source": "NOT VERIFIED in this study. Confirm before enabling."
+   "name": "Police and general emergency number (112 also works)",
+   "show_when": "always",
+   "verified": true,
+   "source": "Kenya National Police Service Customer Service Charter (Jan 2025): Hotline 999/112/911. Checked Oct 2026."
   },
   {
    "id": "112",
    "number": "112",
    "name": "General emergency number",
-   "show_when": "none_until_verified",
-   "verified": false,
-   "source": "NOT VERIFIED in this study. Confirm before enabling."
+   "show_when": "never",
+   "verified": true,
+   "source": "Same charter as 999. Not shown separately because the 999 card already says 112 also works."
   },
   {
    "id": "116",
    "number": "116",
-   "name": "Child helpline",
-   "show_when": "none_until_verified",
-   "verified": false,
-   "source": "NOT VERIFIED in this study. Confirm before enabling."
+   "name": "National Child Helpline (free, 24 hours)",
+   "show_when": "kidnapping,missing_child",
+   "verified": true,
+   "source": "Government of Kenya, State Department for Children Services (migecah.go.ke/child-helpline). Checked Oct 2026."
   }
  ]
 }

@@ -1,7 +1,7 @@
-Run started 2026-10-13 23:27:39 | Python 3.14.4 | Windows-11-10.0.26200-SP0
+Run started 2026-10-14 23:40:36 | Python 3.14.4 | Windows-11-10.0.26200-SP0
 
 ==============================================================================
-1/12 Generate synthetic data (23 safety checks run first)
+1/13 Generate synthetic data (23 safety checks run first)
 ==============================================================================
 anchors: 23 clinical checks passed
 
@@ -19,13 +19,13 @@ Other / General      52  468     110
 Road Accident       379  327     291
 Security Threat     413   31     112
 noised labels: 88
-[generate_synthetic_data.py finished in 3s]
+[generate_synthetic_data.py finished in 5s]
 
 ==============================================================================
-2/12 Train and compare models (cross-validation)
+2/13 Train and compare models (cross-validation)
 ==============================================================================
 realistic rows: 4000 | boundary sample from coverage: 1217 {'High': 600, 'Medium': 539, 'Low': 78}
-cross-validation took 113s
+cross-validation took 136s
 
 model                            mode          acc Highrecall High->Low High->Med   (per test fold of 800 cases)
 LogReg                           model_only  0.820      0.869      2.90     46.10
@@ -42,18 +42,18 @@ candidates within 1.0 High->Low of the safest: ['LogReg', 'SVM-linear', 'SVM-RBF
 
 SELECTED (safe enough, then most accurate): SVM-RBF
 saved models/priority_classifier.joblib and models/metadata.json
-[train_classifier.py finished in 123s]
+[train_classifier.py finished in 148s]
 
 ==============================================================================
-3/12 Compile the decision table
+3/13 Compile the decision table
 ==============================================================================
 decision table: 16740 entries, 1.90 MB
 protocol guard raised 197 combinations the model had under-triaged
 repair raised 0 combinations (passes: 1)
-[build_decision_table.py finished in 9s]
+[build_decision_table.py finished in 10s]
 
 ==============================================================================
-4/12 Test EVERY answer combination
+4/13 Test EVERY answer combination
 ==============================================================================
 1. Combinations tested: 16740  (every possible set of answers)
    Rule floor broken: 0  (must be 0)
@@ -76,7 +76,7 @@ RESULT: PASS
 [test_combinations.py finished in 12s]
 
 ==============================================================================
-5/12 Test responder matching and briefing
+5/13 Test responder matching and briefing
 ==============================================================================
 haversine 1 deg lat = 111.2 km (expected about 111.2)
 1 trapped + fire: {'medical_transport': 'A1', 'extrication': 'F1'}
@@ -99,7 +99,7 @@ ALL DISPATCH TESTS PASSED
 [test_dispatch_logic.py finished in 0s]
 
 ==============================================================================
-6/12 Check the lexicon files (lint + built-in tests)
+6/13 Check the lexicon files (lint + built-in tests)
 ==============================================================================
 INFO  Medical Emergency: 'iliyotiwa sumu' is already covered by the shorter strong term 'sumu'
 INFO  Medical Emergency: "kung'atwa na nyoka" is already covered by the shorter strong term 'nyoka'
@@ -110,34 +110,36 @@ INFO  Security Threat: 'mob justice' is already covered by the shorter strong te
 INFO  Security Threat: 'mlio wa risasi' is already covered by the shorter strong term 'risasi'
 INFO  Security Threat: 'armed robbers' is already covered by the shorter strong term 'robbers'
 
-Checked 268 category terms, 94 flag terms, 11 idiom masks. Built-in tests: 19 passed, 0 failed.
+Checked 281 category terms, 107 flag terms, 38 idiom masks. Built-in tests: 19 passed, 0 failed.
 0 errors, 0 warnings, 8 notes.
 [check_lexicon.py finished in 4s]
 
 ==============================================================================
-7/12 Train the text classifier
+7/13 Train the text classifier
 ==============================================================================
-trained text classifier on 1800 messages (0 real messages from you x5, rest English templates)
-[train_text_classifier.py finished in 5s]
+honest check on 360 messages built from phrases the model never saw: accuracy 0.831; it is confident (>=0.55) on 62% and right on 0.968 of those
+trained text classifier on 2508 messages (0 real messages from you x5, 588 Swahili/Sheng lines from your lexicon, rest English phrases)
+[train_text_classifier.py finished in 7s]
 
 ==============================================================================
-8/12 Evaluate the text path
+8/13 Evaluate the text path
 ==============================================================================
 lexicon only           messages 49 | decided 34 | correct 34 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
-classifier only        messages 49 | decided 34 | correct 24 | wrong 10 | correctly unclear 4 | flags found 0/10, false flags 0
-combined (used)        messages 49 | decided 38 | correct 38 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
-[evaluate_text.py finished in 4s]
+classifier only        messages 49 | decided 38 | correct 32 | wrong 6 | correctly unclear 4 | flags found 0/10, false flags 0
+combined (used)        messages 49 | decided 42 | correct 42 | wrong 0 | correctly unclear 4 | flags found 10/10, false flags 0
+[evaluate_text.py finished in 5s]
 
 ==============================================================================
-9/12 Robustness and safe-fallback tests
+9/13 Robustness and safe-fallback tests
 ==============================================================================
 PASS  1. fuzz: 1519 odd inputs, no crash, always a well-formed answer
 PASS  1b. empty/None/number input asks the resident (never guesses)
 PASS  2. flag wins over other content: 'the house is on fire and I want to kill mysel'
 PASS  2. flag wins over other content: 'he raped me at the matatu stage'
 PASS  2. flag wins over other content: 'there was an accident and I want to commit su'
-PASS  3. all 7 idiom masks leave self-harm and rape flags visible
+PASS  3. all 34 idiom masks leave self-harm and rape flags visible
 PASS  4. mistyped flag words still raise the flag
+PASS  4c. ordinary English words one letter from a flag word are NEVER flagged (found by external test)
 PASS  4b. typo snapping never raises a flag on ordinary words
 PASS  5. every lexicon category, subtype and flag target exists in the schema
 PASS  6. end-to-end priority never below the safety floor
@@ -148,21 +150,23 @@ PASS  7. safe fallback on bad value: High + human review + reason
 PASS  7. safe fallback on string payload: High + human review + reason
 PASS  7b. a valid request is not turned into a fallback
 PASS  7c. decision table missing/out of date -> High + human review
+PASS  7d. SVM file missing/incompatible on the server: table still answers (no needless High)
+PASS  7e. subtype floor applied (sexual violence >= Medium, mental health crisis = High)
 PASS  8. text classifier missing: flags and lexicon still work
 PASS  9. corrupt lexicon_user.json: loads, warns, English safety flags still work
 PASS  10. no responders available -> 922 escalation, no crash
 
 RESULT: PASS
-[test_robustness.py finished in 15s]
+[test_robustness.py finished in 17s]
 
 ==============================================================================
-10/12 Draw the exploration charts
+10/13 Draw the exploration charts
 ==============================================================================
 Saved 3 charts in C:\EmergencyResponseSystem\ml\charts
 [explore_data.py finished in 4s]
 
 ==============================================================================
-11/12 Feature importance audit (about 1-2 minutes)
+11/13 Feature importance audit (about 1-2 minutes)
 ==============================================================================
 Rows used: 4000 realistic cases | baseline balanced accuracy of the saved model: 0.836
 
@@ -185,12 +189,19 @@ A high rho means the model learned the protocol. It does NOT prove the questions
 
 Saved docs\feature_importance.csv
 Saved charts\4_feature_importance.png
-[feature_importance.py finished in 96s]
+[feature_importance.py finished in 102s]
 
 ==============================================================================
-12/12 Generate Flutter constants
+12/13 Generate Flutter constants
 ==============================================================================
 wrote dart/triage_schema.dart and dart/triage_lookup.dart
 [generate_dart.py finished in 0s]
+
+==============================================================================
+13/13 Write app-versus-Python parity test cases
+==============================================================================
+exhaustive: 112185 combination x subtype cases; Dart-logic mirror disagrees on 0
+1130 vectors written; Dart-logic mirror disagrees on 0
+[make_test_vectors.py finished in 10s]
 
 ALL STEPS COMPLETED

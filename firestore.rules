@@ -1,6 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------------------------------
     function isSignedIn() {
       return request.auth != null;
     }
@@ -50,6 +54,9 @@ service cloud.firestore {
       return status in ["Available", "Busy", "Offline"];
     }
 
+    // ------------------------------------------------------------------------------------------
+    // Trusted contacts and safety check-ins (unchanged)
+    // ------------------------------------------------------------------------------------------
     function validTrustedContactData() {
       return request.resource.data.keys().hasOnly([
           "userId",
@@ -107,63 +114,103 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
-    function validIncidentCreate() {
-      return request.resource.data.keys().hasOnly([
-          "incidentId",
-          "reporterId",
-          "userId",
-          "activationPath",
-          "category",
-          "priority",
-          "classifierConfidence",
-          "classifierReason",
-          "latitude",
-          "longitude",
-          "triageAnswers",
-          "freeTextDescription",
-          "nlpExtractedKeywords",
-          "status",
-          "channel",
-          "createdAt",
-          "updatedAt",
-          "dispatchedAt",
-          "responderId"
-        ])
-        && request.resource.data.keys().hasAll([
-          "reporterId",
-          "activationPath",
-          "category",
-          "priority",
-          "status",
-          "channel",
-          "createdAt",
-          "updatedAt"
-        ])
-        && (request.resource.data.reporterId == request.auth.uid || request.resource.data.userId == request.auth.uid)
-        && request.resource.data.activationPath in ["sos_button", "category_selection", "other_free_text"]
-        && request.resource.data.category in [
-          "Medical Emergency",
-          "Road Accident",
-          "Fire & Rescue",
-          "Security Threat",
-          "Abduction",
-          "Other / General",
-          "Unknown"
-        ]
-        && request.resource.data.priority in ["High", "Medium", "Low", "PendingHumanTriage"]
-        && request.resource.data.classifierConfidence is number
-        && request.resource.data.status in ["New", "Dispatched", "EnRoute", "Arrived", "Resolved", "Cancelled", "Active"]
-        && request.resource.data.channel in ["internet", "sms"]
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && (request.resource.data.get('latitude', null) == null || request.resource.data.latitude is number)
-        && (request.resource.data.get('longitude', null) == null || request.resource.data.longitude is number)
-        && (request.resource.data.get('freeTextDescription', null) == null || request.resource.data.freeTextDescription is string)
-        && (request.resource.data.get('nlpExtractedKeywords', null) == null || request.resource.data.nlpExtractedKeywords is list)
-        && (request.resource.data.get('dispatchedAt', null) == null || request.resource.data.dispatchedAt is timestamp)
-        && (request.resource.data.get('responderId', null) == null || request.resource.data.responderId is string);
+    // ------------------------------------------------------------------------------------------
+    // Incidents (emergency alerts)
+    //
+    // Life cycle written by the resident's phone:
+    //   1. CREATE  at the end of the 5-second countdown: always the fail-safe (High, pending review).
+    //   2. UPDATE  "quick": the 3 quick answers (and the category if it was changed). Priority stays High.
+    //   3. UPDATE  "complete": all details; the priority may now be refined by the decision table.
+    //   4. UPDATE  "cancel": the resident reports it was a mistake or they are safe.
+    // Everything else (dispatch plan, reference, responders) is written by Cloud Functions, which bypass these rules.
+    // Responders never read this collection. They read their own briefing in /offers instead.
+    // ------------------------------------------------------------------------------------------
+    function validIncidentCategory(category) {
+      return category in [
+        "Medical Emergency",
+        "Road Accident",
+        "Fire & Rescue",
+        "Security Threat",
+        "Abduction",
+        "Other / General"
+      ];
     }
 
+    function validIncidentCreate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          "userId", "category", "status", "location", "createdAt", "updatedAt",
+          "priority", "prioritySource", "needsHumanReview", "triageStatus"
+        ])
+        && d.keys().hasAll([
+          "userId", "category", "status", "location", "createdAt", "updatedAt",
+          "priority", "prioritySource", "needsHumanReview", "triageStatus"
+        ])
+        && validIncidentCategory(d.category)
+        && d.status == "Active"
+        && (d.location == null || d.location is latlng)
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp
+        && d.priority == "High"
+        && d.prioritySource == "safe_fallback"
+        && d.needsHumanReview == true
+        && d.triageStatus == "pending";
+    }
+
+    function incidentChange() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Step 2: quick answers only. May repeat (the phone saves after every answer). The priority cannot change here (it is not an allowed key).
+    function validIncidentQuickUpdate() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly(["category", "subtype", "triage", "triageStatus", "updatedAt"])
+        && resource.data.get("triageStatus", "") in ["pending", "quick"]
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.triageStatus == "quick"
+        && validIncidentCategory(d.category)
+        && (d.get("subtype", "") == null || d.get("subtype", "") is string)
+        && d.triage is map
+        && d.updatedAt is timestamp;
+    }
+
+    // Step 3: full details. Allowed from "pending" (the resident skipped the quick step) or from "quick".
+    function validIncidentCompleteUpdate() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly([
+          "category", "subtype", "priority", "prioritySource", "needsHumanReview",
+          "triageStatus", "triage", "description", "flags", "status", "updatedAt"
+        ])
+        && resource.data.get("triageStatus", "") in ["pending", "quick"]
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.triageStatus == "complete"
+        && validIncidentCategory(d.category)
+        && d.priority in ["Low", "Medium", "High"]
+        && d.prioritySource is string
+        && d.prioritySource.size() <= 40
+        && d.needsHumanReview is bool
+        && d.triage is map
+        && d.status in ["Active", "SupportOnly"]
+        && (d.get("subtype", "") == null || d.get("subtype", "") is string)
+        && (d.get("description", "") is string && d.get("description", "").size() <= 280)
+        && (d.get("flags", []) is list && d.get("flags", []).size() <= 10)
+        && d.updatedAt is timestamp;
+    }
+
+    // Step 4: the resident closes their own alert. Nothing else may change.
+    function validIncidentCancel() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly(["status", "cancelledAt", "updatedAt"])
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.status == "Cancelled"
+        && d.cancelledAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Users and responders (unchanged except: responders may also report "lastSeenAt" so that
+    // dispatch can ignore responders whose location is out of date)
+    // ------------------------------------------------------------------------------------------
     function validUsersCreateKeys() {
       return request.resource.data.keys().hasOnly([
         "userId",
@@ -198,37 +245,25 @@ service cloud.firestore {
         "consentCrossBorderTransfer",
         "createdAt",
         "updatedAt",
-        "lastLoginAt",
-        "profilePhotoPath"
+        "lastLoginAt"
       ]);
     }
 
     function validUsersData(userId) {
       return request.resource.data.userId == userId
         && request.resource.data.firstName is string
-        && request.resource.data.firstName.size() > 0
-        && request.resource.data.firstName.size() <= 100
         && request.resource.data.lastName is string
-        && request.resource.data.lastName.size() > 0
-        && request.resource.data.lastName.size() <= 100
         && request.resource.data.dateOfBirth is timestamp
         && request.resource.data.gender is string
         && validPhoneNumber(request.resource.data.phoneNumber)
         && request.resource.data.email is string
-        && (validPublicRole(request.resource.data.role) || request.resource.data.role == "SystemAdmin")
+        && validPublicRole(request.resource.data.role)
         && validPreferredLanguage(request.resource.data.preferredLanguage)
         && validAccountStatus(request.resource.data.accountStatus)
         && request.resource.data.consentCrossBorderTransfer is bool
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
-        && request.resource.data.lastLoginAt is timestamp
-        && (
-          request.resource.data.get('profilePhotoPath', null) == null
-          || (
-            request.resource.data.profilePhotoPath is string
-            && request.resource.data.profilePhotoPath.matches('^profilePhotos/' + userId + '/[A-Za-z0-9-]+[.]jpg$')
-          )
-        );
+        && request.resource.data.lastLoginAt is timestamp;
     }
 
     function validRespondersCreateKeys() {
@@ -267,6 +302,20 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    // ------------------------------------------------------------------------------------------
+    // Offers: what a responder is asked to do. Written by the dispatch Cloud Function (a minimal
+    // briefing, never the resident's full record). The responder may only move the offer forward.
+    // ------------------------------------------------------------------------------------------
+    function validOfferMove(from, to) {
+      return (from == "offered" && to in ["accepted", "declined"])
+        || (from == "accepted" && to in ["enroute", "arrived", "completed"])
+        || (from == "enroute" && to in ["arrived", "completed"])
+        || (from == "arrived" && to == "completed");
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Collections
+    // ------------------------------------------------------------------------------------------
     match /users/{userId} {
       allow read: if isOwner(userId) || isSystemAdmin();
 
@@ -282,10 +331,6 @@ service cloud.firestore {
 
       // Owners may edit profile fields, but cannot change their identity, role, or creation time.
       allow update: if (isOwner(userId) || isSystemAdmin())
-        && (isSystemAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "firstName", "lastName", "phoneNumber", "preferredLanguage",
-          "profilePhotoPath", "updatedAt", "lastLoginAt"
-        ]))
         && validUsersUpdateKeys()
         && validUsersData(userId)
         && request.resource.data.userId == resource.data.userId
@@ -310,18 +355,20 @@ service cloud.firestore {
         && request.resource.data.verifiedAt == null
         && request.resource.data.availabilityStatus == "Offline";
 
-      // Owners can change availability/location; only admins can change verification fields.
+      // Owners can change availability, location and the "last seen" time; only admins can change verification fields.
       allow update: if (
           isOwner(responderId)
           && request.resource.data.registrationNumber == resource.data.registrationNumber
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "availabilityStatus",
             "currentLatitude",
-            "currentLongitude"
+            "currentLongitude",
+            "lastSeenAt"
           ])
           && request.resource.data.availabilityStatus in ["Available", "Busy", "Offline"]
           && (request.resource.data.currentLatitude == null || request.resource.data.currentLatitude is number)
           && (request.resource.data.currentLongitude == null || request.resource.data.currentLongitude is number)
+          && (request.resource.data.get("lastSeenAt", request.time) == null || request.resource.data.get("lastSeenAt", request.time) is timestamp)
         ) || (
           isSystemAdmin()
           && request.resource.data.registrationNumber == resource.data.registrationNumber
@@ -386,22 +433,41 @@ service cloud.firestore {
     }
 
     match /incidents/{incidentId} {
-      allow read: if isSignedIn()
-        && (resource.data.reporterId == request.auth.uid || resource.data.userId == request.auth.uid);
+      // A resident sees only their own alerts. Administrators see all of them.
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
 
-      allow create: if isSignedIn()
-        && (request.resource.data.reporterId == request.auth.uid || request.resource.data.userId == request.auth.uid)
+      allow create: if isOwner(request.resource.data.userId)
         && validIncidentCreate();
 
-      allow update: if (
-          isSignedIn()
-          && (resource.data.reporterId == request.auth.uid || resource.data.userId == request.auth.uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
-          && request.resource.data.status == "Cancelled"
-          && request.resource.data.updatedAt is timestamp
-        ) || isSystemAdmin();
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && (
+          validIncidentQuickUpdate()
+          || validIncidentCompleteUpdate()
+          || validIncidentCancel()
+        );
 
       allow delete: if false;
+    }
+
+    match /offers/{offerId} {
+      // A responder reads only the offers addressed to them. Administrators read all.
+      allow read: if isSignedIn()
+        && (resource.data.responderId == request.auth.uid || isSystemAdmin());
+
+      // Offers are created and removed only by the dispatch Cloud Function.
+      allow create, delete: if false;
+
+      allow update: if isSignedIn()
+        && resource.data.responderId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt"])
+        && validOfferMove(resource.data.status, request.resource.data.status)
+        && (resource.data.status != "offered" || request.time < resource.data.expiresAt);
+    }
+
+    // Training messages are written only by the save_text_feedback_fn Cloud Function.
+    match /text_feedback/{feedbackId} {
+      allow read, write: if false;
     }
 
     match /auditLogs/{logId} {

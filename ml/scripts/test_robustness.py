@@ -56,6 +56,10 @@ check(f"3. all {len(ign)} idiom masks leave self-harm and rape flags visible", n
 # 4. Typo tolerance for flags ----------------------------------------------------------------------------------------
 tests = [("I want to commit suicde", "self_harm"), ("she was molestd on the way home", "sexual_violence"), ("sucidal thoughts tonight", "self_harm")]
 check("4. mistyped flag words still raise the flag", all(f in x.triage_text(m)["flags"] for m, f in tests))
+common = ["raging", "racing", "pacing", "facing", "defined", "defied", "defiles", "designed", "suicides", "molesting", "rapid", "rapidly", "raped", "paying", "painted"]
+check("4c. ordinary English words one letter from a flag word are NEVER flagged (found by external test)",
+      not [w for w in common if w not in ("raped", "suicides", "molesting") and x.triage_text(f"it was {w} again")["flags"]],
+      str([w for w in common if x.triage_text(f"it was {w} again")["flags"]]))
 check("4b. typo snapping never raises a flag on ordinary words", not any(x.triage_text(m)["flags"] for m in
       ("the building is burning near the market", "my brother was attacked by robbers", "please send an ambulance quickly", "the lorry overturned at the junction")))
 
@@ -100,6 +104,15 @@ pp._LOAD_ERROR = "FileNotFoundError: decision_table.json"
 r = pp.suggest_priority_safe({**BASE, "category": "Road Accident"})
 pp._LOAD_ERROR = saved
 check("7c. decision table missing/out of date -> High + human review", r["priority"] == "High" and r["needs_human_review"])
+
+saved_m = pp._MODEL
+pp._MODEL = None
+r = pp.suggest_priority_safe({**BASE, "category": "Road Accident"})
+pp._MODEL = saved_m
+check("7d. SVM file missing/incompatible on the server: table still answers (no needless High)", r["priority_source"] != "safe_fallback")
+r = pp.suggest_priority_safe({**BASE, "category": "Security Threat"}, "sexual_violence")
+check("7e. subtype floor applied (sexual violence >= Medium, mental health crisis = High)",
+      t.RANK[r["priority"]] >= 1 and pp.suggest_priority_safe({**BASE, "category": "Other / General"}, "mental_health_crisis")["priority"] == "High")
 
 # 8. Text classifier missing: lexicon and flags still work ---------------------------------------------------------------
 saved_clf = x.CLF

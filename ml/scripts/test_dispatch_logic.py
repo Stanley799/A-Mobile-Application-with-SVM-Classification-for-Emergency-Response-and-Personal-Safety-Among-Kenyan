@@ -39,4 +39,22 @@ i = inc("Other / General", "emotional_distress", "Low"); p = plan_dispatch(i, po
 print("13 emotional distress sends NO responder:", p["plan"], "| 922 shown:", p["show_922_always"]); assert p["plan"] == [] and not p["escalate_922"] and p["show_922_always"]
 assert contacts_to_notify(i, ["c1"]) == []; print("14 trusted contacts are not told about emotional distress by default")
 p = plan_dispatch(inc("Other / General", "mental_health_crisis", "High"), pool, NOW); print("15 self-harm crisis still gets a responder:", [x["responder"]["id"] for x in p["plan"]]); assert p["plan"]
+# 16. quick questions: at most 3, valid for their category, and EVERY required responder type is still found when only they are answered
+for cat, spec in t.SCHEMA["categories"].items():
+    qq = spec["quick_questions"]
+    assert 1 <= len(qq) <= 3 and len(set(qq)) == len(qq), (cat, qq)
+    assert all(q in spec["questions"] and "ask_if" not in t.QUESTIONS[q] for q in qq), (cat, qq)
+    enums = {q: "Unknown" for q in spec["questions"] if t.QUESTIONS[q]["type"] == "enum"}
+    missed = total = 0
+    for full in t.all_combinations(cat):
+        part = {"category": cat, **enums, "people_count": 1}
+        for q in qq:
+            if full[q] != t.NOT_ASKED:
+                part[q] = full[q]
+        total += 1
+        if not set(t.required_capabilities(full)[0]) <= set(t.required_capabilities(t.normalize(part))[0]):
+            missed += 1
+    print(f"16 quick questions {cat}: {qq} -> first dispatch misses a required responder type in {missed} of {total} combinations")
+    assert missed == 0, (cat, missed)
+assert [h["number"] for h in t.SCHEMA["hotlines"] if h["verified"] and h["show_when"] == "always"] == ["922", "999"]
 print("\nALL DISPATCH TESTS PASSED")

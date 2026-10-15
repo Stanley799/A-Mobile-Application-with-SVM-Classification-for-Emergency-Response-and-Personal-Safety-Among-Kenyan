@@ -1,93 +1,76 @@
-import '../models/emergency_enums.dart';
+import 'package:flutter/foundation.dart';
 
-/// DTO returned by the classifier to the UI layer.
-class PrioritySuggestion {
-  final PriorityLevel priority;
-  final double confidence;
-  final String reason;
+import '../triage/triage_lookup.dart';
 
-  const PrioritySuggestion({
+/// One priority decision, with where it came from.
+class PriorityResult {
+  const PriorityResult({
     required this.priority,
     required this.confidence,
-    required this.reason,
+    required this.needsHumanReview,
+    required this.source,
+    this.fallbackReason,
   });
+
+  /// Used whenever anything is missing or broken: High and a human looks at it.
+  const PriorityResult.failSafe(String reason)
+    : priority = 'High',
+      confidence = 0,
+      needsHumanReview = true,
+      source = 'safe_fallback',
+      fallbackReason = reason;
+
+  final String priority;
+  final double confidence;
+  final bool needsHumanReview;
+  final String source;
+  final String? fallbackReason;
 }
 
-/// Contract every priority classifier must satisfy.
-/// The real SVM/RF model can replace the implementation later without changing
-/// the UI-facing contract.
-abstract class PriorityClassifier {
-  Future<PrioritySuggestion> suggestPriority({
-    required EmergencyCategory category,
-    required ConsciousnessStatus conscious,
-    required BreathingStatus breathing,
-    required MobilityStatus mobile,
-    required bool weaponInvolved,
-    required int peopleCount,
-    String? freeTextDescription,
-  });
-}
+/// Looks up the priority in the compiled decision table (assets/decision_table.json).
+/// Works fully offline. Never throws: any problem becomes High + human review.
+class PriorityClassifier {
+  PriorityClassifier._();
+  static final PriorityClassifier instance = PriorityClassifier._();
 
-/// Rule-based stub used until a production ML model is trained.
-class RuleBasedPriorityClassifier implements PriorityClassifier {
-  @override
-  Future<PrioritySuggestion> suggestPriority({
-    required EmergencyCategory category,
-    required ConsciousnessStatus conscious,
-    required BreathingStatus breathing,
-    required MobilityStatus mobile,
-    required bool weaponInvolved,
-    required int peopleCount,
-    String? freeTextDescription,
-  }) async {
-    if (conscious == ConsciousnessStatus.no ||
-        breathing == BreathingStatus.no) {
-      return const PrioritySuggestion(
-        priority: PriorityLevel.high,
-        confidence: 0.95,
-        reason: 'Unconscious or not breathing',
-      );
+  TriageLookup? _lookup;
+  String? _loadError;
+  Future<void>? _loading;
+
+  /// Safe to call many times; loads the table once.
+  Future<void> ensureLoaded() => _loading ??= _load();
+
+  Future<void> _load() async {
+    try {
+      _lookup = await TriageLookup.load();
+    } catch (e) {
+      _loadError = e.toString();
+      debugPrint('Triage decision table failed to load: $e');
     }
+  }
 
-    if (weaponInvolved) {
-      return const PrioritySuggestion(
-        priority: PriorityLevel.high,
-        confidence: 0.90,
-        reason: 'Weapon involved',
-      );
+  PriorityResult classify({
+    required String category,
+    required Map<String, String> answers,
+    String? subtype,
+  }) {
+    final lookup = _lookup;
+    if (lookup == null) {
+      return PriorityResult.failSafe(_loadError ?? 'decision table not loaded');
     }
-
-    if (mobile == MobilityStatus.trapped &&
-        (category == EmergencyCategory.roadAccident ||
-            category == EmergencyCategory.fire)) {
-      return const PrioritySuggestion(
-        priority: PriorityLevel.high,
-        confidence: 0.88,
-        reason: 'Trapped in accident or fire',
-      );
-    }
-
-    if (peopleCount >= 3) {
-      return const PrioritySuggestion(
-        priority: PriorityLevel.medium,
-        confidence: 0.75,
-        reason: 'Multiple people affected',
-      );
-    }
-
-    if (category == EmergencyCategory.medical ||
-        category == EmergencyCategory.fire) {
-      return const PrioritySuggestion(
-        priority: PriorityLevel.medium,
-        confidence: 0.70,
-        reason: 'Category requires attention',
-      );
-    }
-
-    return const PrioritySuggestion(
-      priority: PriorityLevel.low,
-      confidence: 0.65,
-      reason: 'No immediate life threat detected',
+    String? reason;
+    final result = lookup.lookupSafe(
+      category,
+      answers,
+      subtype: subtype,
+      onFallback: (why) => reason = why,
+    );
+    return PriorityResult(
+      priority: result.priority,
+      confidence: result.confidence,
+      needsHumanReview: result.needsHumanReview,
+      source: reason == null ? 'decision_table' : 'safe_fallback',
+      fallbackReason: reason,
     );
   }
 }

@@ -1,0 +1,5 @@
+// Add inside "match /databases/{database}/documents { ... }" in firestore.rules.
+// The phone can NEVER read or write the training messages directly; only the Cloud Function (admin access) can.
+match /text_feedback/{id} {
+  allow read, write: if false;
+}

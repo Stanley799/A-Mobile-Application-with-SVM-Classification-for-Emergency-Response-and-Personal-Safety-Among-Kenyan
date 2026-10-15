@@ -9,18 +9,19 @@ import datetime
 
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.abspath(os.path.join(here, ".."))
-STEPS = [("1/12 Generate synthetic data (23 safety checks run first)", "generate_synthetic_data.py"),
-         ("2/12 Train and compare models (cross-validation)", "train_classifier.py"),
-         ("3/12 Compile the decision table", "build_decision_table.py"),
-         ("4/12 Test EVERY answer combination", "test_combinations.py"),
-         ("5/12 Test responder matching and briefing", "test_dispatch_logic.py"),
-         ("6/12 Check the lexicon files (lint + built-in tests)", "check_lexicon.py"),
-         ("7/12 Train the text classifier", "train_text_classifier.py"),
-         ("8/12 Evaluate the text path", "evaluate_text.py"),
-         ("9/12 Robustness and safe-fallback tests", "test_robustness.py"),
-         ("10/12 Draw the exploration charts", "explore_data.py"),
-         ("11/12 Feature importance audit (about 1-2 minutes)", "feature_importance.py"),
-         ("12/12 Generate Flutter constants", "generate_dart.py")]
+STEPS = [("1/13 Generate synthetic data (23 safety checks run first)", "generate_synthetic_data.py"),
+         ("2/13 Train and compare models (cross-validation)", "train_classifier.py"),
+         ("3/13 Compile the decision table", "build_decision_table.py"),
+         ("4/13 Test EVERY answer combination", "test_combinations.py"),
+         ("5/13 Test responder matching and briefing", "test_dispatch_logic.py"),
+         ("6/13 Check the lexicon files (lint + built-in tests)", "check_lexicon.py"),
+         ("7/13 Train the text classifier", "train_text_classifier.py"),
+         ("8/13 Evaluate the text path", "evaluate_text.py"),
+         ("9/13 Robustness and safe-fallback tests", "test_robustness.py"),
+         ("10/13 Draw the exploration charts", "explore_data.py"),
+         ("11/13 Feature importance audit (about 1-2 minutes)", "feature_importance.py"),
+         ("12/13 Generate Flutter constants", "generate_dart.py"),
+         ("13/13 Write app-versus-Python parity test cases", "make_test_vectors.py")]
 
 try:
     sys.stdout.reconfigure(errors="replace")            # a Windows console must never crash on a special character
