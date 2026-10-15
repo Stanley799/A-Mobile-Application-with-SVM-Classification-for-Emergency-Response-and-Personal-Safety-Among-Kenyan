@@ -1,3 +1,5 @@
+import '../triage/triage_schema.dart';
+
 /// Everything the triage sheet learned about one emergency, ready to be saved on the incident.
 class TriageOutcome {
   const TriageOutcome({
@@ -15,6 +17,22 @@ class TriageOutcome {
     this.supportOnly = false,
     required this.schemaVersion,
   });
+
+  factory TriageOutcome.supportOnly({
+    required String category,
+    required String? subtype,
+  }) => TriageOutcome(
+        category: category,
+        subtype: subtype,
+        answers: const {},
+        priority: 'Low',
+        confidence: 1,
+        needsHumanReview: true,
+        source: 'support_only',
+        supportOnly: true,
+        saveForTraining: false,
+        schemaVersion: kTriageSchemaVersion,
+      );
 
   final String category;
   final String? subtype;

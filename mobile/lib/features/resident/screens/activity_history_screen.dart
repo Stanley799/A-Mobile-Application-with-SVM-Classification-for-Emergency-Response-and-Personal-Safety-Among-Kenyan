@@ -1,137 +1,387 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
-/// Shows a time-ordered history merged from incidents and safety check-ins.
-///
-/// When [limit] is set, the widget omits its page heading and renders only that
-/// many recent records for embedding in another screen.
-class ActivityHistoryScreen extends StatelessWidget {
+import '../../../core/theme/app_theme.dart';
+import '../widgets/activity_record.dart';
+
+enum _Filter { all, alerts, checkins }
+
+class ActivityHistoryScreen extends StatefulWidget {
   const ActivityHistoryScreen({super.key, this.limit});
 
   final int? limit;
 
   @override
-  Widget build(BuildContext context) {
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    final incidents = FirebaseFirestore.instance
+  State<ActivityHistoryScreen> createState() => _ActivityHistoryScreenState();
+}
+
+class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
+  _Filter _filter = _Filter.all;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _incidentsStream;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _checkinsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _initStreams();
+  }
+
+  void _initStreams() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final limitVal = widget.limit ?? 20;
+
+    _incidentsStream = FirebaseFirestore.instance
         .collection('incidents')
         .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
-        .limit(limit ?? 20)
+        .limit(limitVal)
         .snapshots();
-    final checkins = FirebaseFirestore.instance
+
+    _checkinsStream = FirebaseFirestore.instance
         .collection('safetyCheckins')
         .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
-        .limit(limit ?? 20)
+        .limit(limitVal)
         .snapshots();
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (limit == null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-            child: Text('Recent Activity', style: Theme.of(context).textTheme.headlineSmall),
-          ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: incidents,
-            builder: (context, incidentSnapshot) {
-              if (incidentSnapshot.hasError) {
-                return const Center(child: Text('Unable to load recent activity.'));
-              }
-              if (!incidentSnapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: checkins,
-                builder: (context, checkinSnapshot) {
-                  if (checkinSnapshot.hasError) {
-                    return const Center(child: Text('Unable to load recent activity.'));
-                  }
-                  if (!checkinSnapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+  void _retry() {
+    setState(() {
+      _initStreams();
+    });
+  }
 
-                  // Keep both collections in one chronological list for the resident.
-                  final items = <_ActivityItem>[
-                    ...incidentSnapshot.data!.docs.map(
-                      (document) => _ActivityItem.fromDocument(
-                        document,
-                        type: 'SOS',
-                        label: document.data()['category'] as String? ?? 'Emergency',
-                      ),
-                    ),
-                    ...checkinSnapshot.data!.docs.map(
-                      (document) => _ActivityItem.fromDocument(
-                        document,
-                        type: 'Check-In',
-                        label: 'Safety check-in',
-                      ),
-                    ),
-                  ]..sort((first, second) => second.createdAt.compareTo(first.createdAt));
-                  final visibleItems = items.take(limit ?? items.length).toList();
-                  if (visibleItems.isEmpty) {
-                    return const Center(child: Text("No recent activity. You're all set."));
-                  }
+  @override
+  Widget build(BuildContext context) {
+    if (_incidentsStream == null || _checkinsStream == null) {
+      return const SizedBox.shrink();
+    }
 
-                  return ListView.separated(
-                    padding: EdgeInsets.fromLTRB(12, limit == null ? 0 : 8, 12, 24),
-                    itemCount: visibleItems.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final item = visibleItems[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: item.type == 'SOS'
-                              ? Theme.of(context).colorScheme.errorContainer
-                              : Theme.of(context).colorScheme.tertiaryContainer,
-                          child: Icon(item.type == 'SOS' ? Icons.sos : Icons.check_circle_outline),
-                        ),
-                        title: Text('${item.type} · ${item.label}'),
-                        subtitle: Text(DateFormat('MMM d, h:mm a').format(item.createdAt)),
-                        trailing: Text(item.status),
-                      );
-                    },
-                  );
-                },
+    final isEmbedded = widget.limit != null;
+
+    final content = StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _incidentsStream,
+      builder: (context, incidentSnapshot) {
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _checkinsStream,
+          builder: (context, checkinSnapshot) {
+            final incidentsError = incidentSnapshot.hasError;
+            final checkinsError = checkinSnapshot.hasError;
+
+            if (incidentsError) {
+              debugPrint('Incidents stream error: ${incidentSnapshot.error}');
+            }
+            if (checkinsError) {
+              debugPrint('Checkins stream error: ${checkinSnapshot.error}');
+            }
+
+            final isWaiting =
+                (!incidentSnapshot.hasData && !incidentsError) ||
+                (!checkinSnapshot.hasData && !checkinsError);
+
+            if (isWaiting && !incidentSnapshot.hasData && !checkinSnapshot.hasData) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.xl),
+                  child: CircularProgressIndicator(),
+                ),
               );
-            },
-          ),
-        ),
-      ],
+            }
+
+            final records = <ActivityRecord>[];
+
+            if (incidentSnapshot.hasData) {
+              for (final doc in incidentSnapshot.data!.docs) {
+                records.add(ActivityRecord.fromIncident(doc.id, doc.data()));
+              }
+            }
+
+            if (checkinSnapshot.hasData) {
+              for (final doc in checkinSnapshot.data!.docs) {
+                records.add(ActivityRecord.fromCheckin(doc.id, doc.data()));
+              }
+            }
+
+            records.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+            var filtered = records;
+            if (_filter == _Filter.alerts) {
+              filtered = records.where((r) => r.isAlert).toList();
+            } else if (_filter == _Filter.checkins) {
+              filtered = records.where((r) => !r.isAlert).toList();
+            }
+
+            if (widget.limit != null && filtered.length > widget.limit!) {
+              filtered = filtered.take(widget.limit!).toList();
+            }
+
+            final hasPartialError = incidentsError || checkinsError;
+            String errorMessage = 'Some activity could not be loaded.';
+            final errStr =
+                '${incidentSnapshot.error ?? ''} ${checkinSnapshot.error ?? ''}'
+                    .toLowerCase();
+            if (errStr.contains('index')) {
+              errorMessage = 'Setting things up. This should work in a few minutes.';
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isEmbedded) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
+                    child: Text(
+                      'Recent activity',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                    child: Text(
+                      'Your alerts and safety check-ins',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        _FilterChip(
+                          label: 'All',
+                          selected: _filter == _Filter.all,
+                          onTap: () => setState(() => _filter = _Filter.all),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _FilterChip(
+                          label: 'Alerts',
+                          selected: _filter == _Filter.alerts,
+                          onTap: () => setState(() => _filter = _Filter.alerts),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _FilterChip(
+                          label: 'Check-ins',
+                          selected: _filter == _Filter.checkins,
+                          onTap: () => setState(() => _filter = _Filter.checkins),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (hasPartialError)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningLight,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              errorMessage,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.warningText,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _retry,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (filtered.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xxl),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.history,
+                            size: 48,
+                            color: AppColors.textTertiary,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          const Text(
+                            'No activity yet',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          const Text(
+                            'Your alerts and safety check-ins will appear here.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  _GroupedActivityList(records: filtered, shrinkWrap: isEmbedded),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (isEmbedded) {
+      return content;
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+      child: content,
     );
   }
 }
 
-class _ActivityItem {
-  const _ActivityItem({
-    required this.type,
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
     required this.label,
-    required this.status,
-    required this.createdAt,
+    required this.selected,
+    required this.onTap,
   });
 
-  final String type;
   final String label;
-  final String status;
-  final DateTime createdAt;
+  final bool selected;
+  final VoidCallback onTap;
 
-  factory _ActivityItem.fromDocument(
-    QueryDocumentSnapshot<Map<String, dynamic>> document, {
-    required String type,
-    required String label,
-  }) {
-    final data = document.data();
-    final createdAt = data['createdAt'];
-    return _ActivityItem(
-      type: type,
-      label: label,
-      status: data['status'] as String? ?? 'Unknown',
-      createdAt: createdAt is Timestamp ? createdAt.toDate() : DateTime.now(),
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? AppColors.brand : AppColors.surface,
+          foregroundColor: selected ? AppColors.surface : AppColors.textPrimary,
+          side: BorderSide(
+            color: selected ? AppColors.brand : AppColors.divider,
+          ),
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        ),
+        onPressed: onTap,
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupedActivityList extends StatelessWidget {
+  const _GroupedActivityList({required this.records, required this.shrinkWrap});
+
+  final List<ActivityRecord> records;
+  final bool shrinkWrap;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    final todayList = <ActivityRecord>[];
+    final yesterdayList = <ActivityRecord>[];
+    final earlierList = <ActivityRecord>[];
+
+    for (final r in records) {
+      final date = DateTime(r.createdAt.year, r.createdAt.month, r.createdAt.day);
+      if (date == today) {
+        todayList.add(r);
+      } else if (date == yesterday) {
+        yesterdayList.add(r);
+      } else {
+        earlierList.add(r);
+      }
+    }
+
+    final children = <Widget>[];
+
+    if (todayList.isNotEmpty) {
+      children.add(_GroupHeader(label: 'TODAY'));
+      for (final r in todayList) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: ActivityCard(record: r),
+        ));
+      }
+    }
+
+    if (yesterdayList.isNotEmpty) {
+      children.add(_GroupHeader(label: 'YESTERDAY'));
+      for (final r in yesterdayList) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: ActivityCard(record: r),
+        ));
+      }
+    }
+
+    if (earlierList.isNotEmpty) {
+      children.add(_GroupHeader(label: 'EARLIER'));
+      for (final r in earlierList) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: ActivityCard(record: r),
+        ));
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, AppSpacing.md, 0, AppSpacing.sm),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textTertiary,
+          letterSpacing: 1.2,
+        ),
+      ),
     );
   }
 }

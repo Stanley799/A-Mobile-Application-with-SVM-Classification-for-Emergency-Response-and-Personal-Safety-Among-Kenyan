@@ -5,17 +5,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:intl/intl.dart';
-import 'package:shimmer/shimmer.dart';
 
-import '../../../core/models/triage_outcome.dart';
-import '../../../core/services/triage_text_service.dart';
 import '../../../core/theme/app_theme.dart';
-import '../widgets/activity_item.dart';
+import '../../../core/utils/incident_id.dart';
+import '../widgets/activity_record.dart';
+import '../widgets/alert_status_sheet.dart';
 import '../widgets/category_chip.dart';
 import '../widgets/sos_button.dart';
 import '../widgets/status_card.dart';
-import '../widgets/triage_question_sheet.dart';
 import 'activity_history_screen.dart';
 import 'safety_checkin_screen.dart';
 import 'sos_confirmation_sheet.dart';
@@ -353,7 +350,7 @@ class _ResidentDashboard extends StatelessWidget {
                 child: Center(
                   child: SosButton(
                     onPressed: () =>
-                        _confirmEmergency(context, 'Other / General'),
+                        _confirmEmergency(context, 'SOS'),
                   ),
                 ),
               ),
@@ -434,7 +431,7 @@ class _ResidentDashboard extends StatelessWidget {
   }
 
   Future<void> _confirmEmergency(BuildContext context, String category) async {
-    // Only create an incident after the user lets the countdown finish.
+    final confirmCat = category == 'SOS' ? 'Other / General' : category;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       useSafeArea: true,
@@ -444,82 +441,66 @@ class _ResidentDashboard extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (context) => SosConfirmationSheet(category: category),
+      builder: (context) => SosConfirmationSheet(category: confirmCat),
     );
     if (confirmed != true || !context.mounted) return;
 
     final userId = FirebaseAuth.instance.currentUser!.uid;
-    final location = await _optionalCurrentLocation();
-    final DocumentReference<Map<String, dynamic>> incident;
-    try {
-      incident = await FirebaseFirestore.instance.collection('incidents').add({
-        'userId': userId,
-        'category': category,
-        'status': 'Active',
-        'location': location,
-        // Fail-safe until the follow-up questions are answered: High, and a person looks at it.
-        'priority': 'High',
-        'prioritySource': 'safe_fallback',
-        'needsHumanReview': true,
-        'triageStatus': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unable to send alert. Please try again. ($error)'),
-            duration: const Duration(seconds: 20),
-          ),
-        );
-      }
-      return;
-    }
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Emergency alert sent.')));
+    final location = await _optionalCurrentLocationQuick();
 
-    // The alert is already out. These quick questions only make it more precise.
-    final outcome = await showModalBottomSheet<TriageOutcome>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
-      builder: (context) => TriageQuestionSheet(
-        category: category,
-        startWithDescribe: category == 'Other / General',
+    final actualCategory = category == 'SOS' ? 'Other / General' : category;
+    final id = newIncidentId(category: category == 'SOS' ? 'Other / General' : category);
+    final ref = FirebaseFirestore.instance.collection('incidents').doc(id);
+
+    final data = <String, Object?>{
+      'userId': userId,
+      'category': actualCategory,
+      'status': 'Active',
+      'location': location,
+      'priority': 'High',
+      'prioritySource': 'safe_fallback',
+      'needsHumanReview': true,
+      'triageStatus': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    final createFuture = ref.set(data);
+
+    if (!context.mounted) return;
+
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: AppColors.background,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        enableDrag: false,
+        isDismissible: true,
+        builder: (context) => FractionallySizedBox(
+          heightFactor: 0.94,
+          child: AlertStatusSheet(
+            incidentRef: ref,
+            createFuture: createFuture,
+            retryCreate: () => ref.set(data),
+            category: category,
+            locationShared: location != null,
+          ),
+        ),
       ),
     );
-    if (outcome == null) return; // skipped: the alert stays High until reviewed
-
-    if (outcome.saveForTraining && outcome.description != null) {
-      unawaited(
-        TriageTextService().saveFeedback(
-          text: outcome.description!,
-          confirmedCategory: outcome.category,
-          confirmedSubtype: outcome.subtype,
-        ),
-      );
-    }
-    try {
-      await incident.update({
-        ...outcome.toIncidentFields(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {
-      // The alert is already sent and still High; nothing more the resident can do here.
-    }
   }
 
-  /// Attempts a location lookup, returning null when unavailable.
-  Future<GeoPoint?> _optionalCurrentLocation() async {
-    if (kIsWeb || !await Geolocator.isLocationServiceEnabled()) return null;
+  Future<GeoPoint?> _optionalCurrentLocationQuick() async {
+    if (kIsWeb) return null;
     try {
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        return GeoPoint(lastKnown.latitude, lastKnown.longitude);
+      }
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -531,9 +512,9 @@ class _ResidentDashboard extends StatelessWidget {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 4),
+          timeLimit: Duration(seconds: 3),
         ),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 3));
       return GeoPoint(position.latitude, position.longitude);
     } catch (_) {
       return null;
@@ -612,7 +593,6 @@ class _SafetyCheckinPreviewState extends State<_SafetyCheckinPreview> {
         .where('status', isEqualTo: 'Active')
         .limit(1)
         .snapshots();
-    // Repaint the countdown without recreating the Firestore subscription.
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -688,26 +668,56 @@ class _SafetyCheckinPreviewState extends State<_SafetyCheckinPreview> {
       );
 }
 
-class _RecentActivityPreview extends StatelessWidget {
+class _RecentActivityPreview extends StatefulWidget {
   const _RecentActivityPreview({required this.onViewAll});
 
   final VoidCallback onViewAll;
 
   @override
-  Widget build(BuildContext context) {
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    final incidents = FirebaseFirestore.instance
+  State<_RecentActivityPreview> createState() => _RecentActivityPreviewState();
+}
+
+class _RecentActivityPreviewState extends State<_RecentActivityPreview> {
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _incidentsStream;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _checkinsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _initStreams();
+  }
+
+  void _initStreams() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    _incidentsStream = FirebaseFirestore.instance
         .collection('incidents')
         .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .limit(3)
         .snapshots();
-    final checkins = FirebaseFirestore.instance
+
+    _checkinsStream = FirebaseFirestore.instance
         .collection('safetyCheckins')
         .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .limit(3)
         .snapshots();
+  }
+
+  void _retry() {
+    setState(() {
+      _initStreams();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_incidentsStream == null || _checkinsStream == null) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -719,97 +729,102 @@ class _RecentActivityPreview extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            TextButton(onPressed: onViewAll, child: const Text('View All')),
+            TextButton(onPressed: widget.onViewAll, child: const Text('View All')),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: incidents,
-          builder: (context, incidentSnapshot) =>
-              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: checkins,
-                builder: (context, checkinSnapshot) {
-                  if (incidentSnapshot.hasError || checkinSnapshot.hasError) {
-                    return const _ActivityEmptyState(
-                      title: 'Activity unavailable',
-                      subtitle: 'Please try again in a moment.',
-                    );
-                  }
-                  if (incidentSnapshot.connectionState ==
-                          ConnectionState.waiting ||
-                      checkinSnapshot.connectionState ==
-                          ConnectionState.waiting) {
-                    return const _ActivityListSkeleton();
-                  }
-                  if (!incidentSnapshot.hasData || !checkinSnapshot.hasData) {
-                    return const _ActivityEmptyState(
-                      title: 'No recent activity',
-                      subtitle: 'Your safety check-ins and emergency alerts will appear here',
-                    );
-                  }
-                  // Firestore cannot join collections, so merge their small result sets here.
-                  final items = <_DashboardActivity>[
-                    for (final doc in incidentSnapshot.data!.docs)
-                      _DashboardActivity(
-                        title: doc.data()['category'] as String? ?? 'Emergency',
-                        status: doc.data()['status'] as String? ?? 'Unknown',
-                        timestamp: doc.data()['createdAt'],
-                        isIncident: true,
-                      ),
-                    for (final doc in checkinSnapshot.data!.docs)
-                      _DashboardActivity(
-                        title: 'Safety Check-In',
-                        status: doc.data()['status'] as String? ?? 'Unknown',
-                        timestamp: doc.data()['createdAt'],
-                        isIncident: false,
-                      ),
-                  ]..sort((a, b) => b.date.compareTo(a.date));
-                  final visibleItems = items.take(3).toList();
-                  if (visibleItems.isEmpty) {
-                    return const _ActivityEmptyState(
-                      title: 'No recent activity',
-                      subtitle: 'Your safety check-ins and emergency alerts will appear here',
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final item in visibleItems)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: ActivityItem(
-                            title: item.title,
-                            dateLabel: DateFormat('MMM d · h:mm a')
-                                .format(item.date),
-                            status: item.status,
-                            isIncident: item.isIncident,
+          stream: _incidentsStream,
+          builder: (context, incidentSnapshot) {
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _checkinsStream,
+              builder: (context, checkinSnapshot) {
+                final incidentsError = incidentSnapshot.hasError;
+                final checkinsError = checkinSnapshot.hasError;
+
+                if (incidentsError) {
+                  debugPrint('Incidents preview error: ${incidentSnapshot.error}');
+                }
+                if (checkinsError) {
+                  debugPrint('Checkins preview error: ${checkinSnapshot.error}');
+                }
+
+                if (incidentsError && checkinsError) {
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      boxShadow: AppShadows.card,
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Activity unavailable',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
-                    ],
+                        TextButton(
+                          onPressed: _retry,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   );
-                },
-              ),
+                }
+
+                final isWaiting =
+                    (!incidentSnapshot.hasData && !incidentsError) ||
+                    (!checkinSnapshot.hasData && !checkinsError);
+
+                if (isWaiting && !incidentSnapshot.hasData && !checkinSnapshot.hasData) {
+                  return const _ActivityListSkeleton();
+                }
+
+                final records = <ActivityRecord>[];
+
+                if (incidentSnapshot.hasData) {
+                  for (final doc in incidentSnapshot.data!.docs) {
+                    records.add(ActivityRecord.fromIncident(doc.id, doc.data()));
+                  }
+                }
+
+                if (checkinSnapshot.hasData) {
+                  for (final doc in checkinSnapshot.data!.docs) {
+                    records.add(ActivityRecord.fromCheckin(doc.id, doc.data()));
+                  }
+                }
+
+                records.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                final visible = records.take(3).toList();
+
+                if (visible.isEmpty) {
+                  return const _ActivityEmptyState(
+                    title: 'No recent activity',
+                    subtitle: 'Your safety check-ins and emergency alerts will appear here',
+                  );
+                }
+
+                return Column(
+                  children: [
+                    for (final item in visible)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: ActivityCard(record: item),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
         ),
       ],
     );
   }
-}
-
-class _DashboardActivity {
-  const _DashboardActivity({
-    required this.title,
-    required this.status,
-    required this.timestamp,
-    required this.isIncident,
-  });
-
-  final String title;
-  final String status;
-  final Object? timestamp;
-  final bool isIncident;
-
-  DateTime get date => timestamp is Timestamp
-      ? (timestamp as Timestamp).toDate()
-      : DateTime(1970);
 }
 
 class _StatusPill extends StatelessWidget {
@@ -844,36 +859,32 @@ class _StatusCardSkeleton extends StatelessWidget {
   const _StatusCardSkeleton();
 
   @override
-  Widget build(BuildContext context) => Shimmer.fromColors(
-    baseColor: AppColors.neutralLight,
-    highlightColor: AppColors.background,
-    child: Container(
-      height: 72,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        boxShadow: AppShadows.card,
-      ),
-      child: Row(
-        children: [
-          const _SkeletonBlock(width: 40, height: 40, circular: true),
-          const SizedBox(width: AppSpacing.md),
-          const Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SkeletonBlock(width: 112, height: 12),
-                SizedBox(height: AppSpacing.sm),
-                _SkeletonBlock(width: 148, height: 10),
-              ],
-            ),
+  Widget build(BuildContext context) => Container(
+    height: 72,
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      boxShadow: AppShadows.card,
+    ),
+    child: const Row(
+      children: [
+        _SkeletonBlock(width: 40, height: 40, circular: true),
+        SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SkeletonBlock(width: 112, height: 12),
+              SizedBox(height: AppSpacing.sm),
+              _SkeletonBlock(width: 148, height: 10),
+            ],
           ),
-          const SizedBox(width: AppSpacing.md),
-          const _SkeletonBlock(width: 52, height: 14),
-        ],
-      ),
+        ),
+        SizedBox(width: AppSpacing.md),
+        _SkeletonBlock(width: 52, height: 14),
+      ],
     ),
   );
 }
@@ -885,36 +896,32 @@ class _ActivityListSkeleton extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       for (var index = 0; index < 3; index++) ...[
-        Shimmer.fromColors(
-          baseColor: AppColors.neutralLight,
-          highlightColor: AppColors.background,
-          child: Container(
-            height: 68,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              boxShadow: AppShadows.card,
-            ),
-            child: const Row(
-              children: [
-                _SkeletonBlock(width: 36, height: 36, circular: true),
-                SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SkeletonBlock(width: 132, height: 12),
-                      SizedBox(height: AppSpacing.sm),
-                      _SkeletonBlock(width: 96, height: 10),
-                    ],
-                  ),
+        Container(
+          height: 68,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppShadows.card,
+          ),
+          child: const Row(
+            children: [
+              _SkeletonBlock(width: 36, height: 36, circular: true),
+              SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SkeletonBlock(width: 132, height: 12),
+                    SizedBox(height: AppSpacing.sm),
+                    _SkeletonBlock(width: 96, height: 10),
+                  ],
                 ),
-                SizedBox(width: AppSpacing.md),
-                _SkeletonBlock(width: 52, height: 16),
-              ],
-            ),
+              ),
+              SizedBox(width: AppSpacing.md),
+              _SkeletonBlock(width: 52, height: 16),
+            ],
           ),
         ),
         if (index < 2) const SizedBox(height: AppSpacing.sm),

@@ -4,45 +4,10 @@ import '../../../core/models/triage_outcome.dart';
 import '../../../core/services/priority_classifier.dart';
 import '../../../core/services/triage_text_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/triage/subtype_labels.dart';
 import '../../../core/triage/triage_schema.dart';
 import 'hotline_card.dart';
 import 'other_free_text_sheet.dart';
-
-const _subtypeLabels = <String, String>{
-  'cardiac': 'Heart problem',
-  'breathing_problem': 'Trouble breathing',
-  'seizure_or_collapse': 'Seizure or collapse',
-  'maternal': 'Pregnancy or childbirth',
-  'sick_child': 'Sick child',
-  'snakebite_or_poison': 'Snakebite or poisoning',
-  'other_medical': 'Other medical problem',
-  'boda_boda': 'Boda boda (motorcycle)',
-  'matatu_or_bus': 'Matatu or bus',
-  'private_vehicle': 'Private vehicle',
-  'pedestrian_hit': 'Pedestrian hit',
-  'truck_or_heavy': 'Truck or heavy vehicle',
-  'building_fire': 'Building fire',
-  'bush_or_vegetation_fire': 'Bush or vegetation fire',
-  'building_collapse': 'Building collapse',
-  'flood_or_water_rescue': 'Flood or water rescue',
-  'armed_robbery': 'Armed robbery',
-  'assault': 'Assault',
-  'mob_violence': 'Mob violence',
-  'looting_or_riot': 'Looting or riot',
-  'domestic_violence': 'Violence at home',
-  'sexual_violence': 'Sexual violence',
-  'other_security': 'Other security problem',
-  'kidnapping': 'Kidnapping',
-  'missing_child': 'Missing child',
-  'mental_health_crisis': 'Mental health crisis',
-  'emotional_distress': 'Feeling very distressed',
-  'wildlife_attack': 'Wildlife attack',
-  'fall_or_injury': 'Fall or injury',
-  'burns': 'Burns',
-  'unclear': 'Not sure / something else',
-};
-
-String _subtypeLabel(String id) => _subtypeLabels[id] ?? id.replaceAll('_', ' ');
 
 String _valueLabel(TriageQuestion q, String value) =>
     q.labels[value] ?? (value == 'Unknown' ? 'Not sure' : value);
@@ -63,10 +28,14 @@ class TriageQuestionSheet extends StatefulWidget {
     super.key,
     required this.category,
     required this.startWithDescribe,
+    this.initialAnswers = const {},
+    this.initialSubtype,
   });
 
   final String category;
   final bool startWithDescribe;
+  final Map<String, String> initialAnswers;
+  final String? initialSubtype;
 
   @override
   State<TriageQuestionSheet> createState() => _TriageQuestionSheetState();
@@ -74,8 +43,8 @@ class TriageQuestionSheet extends StatefulWidget {
 
 class _TriageQuestionSheetState extends State<TriageQuestionSheet> {
   late String _category = widget.category;
-  final Map<String, String> _answers = {};
-  String? _subtype;
+  late final Map<String, String> _answers = Map.of(widget.initialAnswers);
+  late String? _subtype = widget.initialSubtype;
   String? _suggestedSubtype;
   bool _distressChecked = false;
   String _text = '';
@@ -108,7 +77,8 @@ class _TriageQuestionSheetState extends State<TriageQuestionSheet> {
 
   void _prune() {
     final asked = _askedQuestions().toSet();
-    _answers.removeWhere((id, _) => !asked.contains(id));
+    // Do not prune initial answers that were passed into the sheet.
+    _answers.removeWhere((id, _) => !asked.contains(id) && !widget.initialAnswers.containsKey(id));
   }
 
   bool get _canShareText =>
@@ -117,7 +87,7 @@ class _TriageQuestionSheetState extends State<TriageQuestionSheet> {
   List<_Step> _steps() {
     final steps = <_Step>[
       if (widget.startWithDescribe) const _Step(_Kind.describe),
-      const _Step(_Kind.subtype),
+      if (_subtype == null) const _Step(_Kind.subtype),
     ];
     if (_subtype == 'emotional_distress' || _distressChecked) {
       steps.add(const _Step(_Kind.safety));
@@ -128,7 +98,9 @@ class _TriageQuestionSheetState extends State<TriageQuestionSheet> {
       return steps;
     }
     for (final id in _askedQuestions()) {
-      steps.add(_Step(_Kind.question, id));
+      if (!widget.initialAnswers.containsKey(id)) {
+        steps.add(_Step(_Kind.question, id));
+      }
     }
     if (!widget.startWithDescribe && _canShareText) {
       steps.add(const _Step(_Kind.details));
@@ -260,7 +232,7 @@ class _TriageQuestionSheetState extends State<TriageQuestionSheet> {
                   ),
                   Expanded(
                     child: Text(
-                      onResult ? 'Done' : 'Quick details',
+                      onResult ? 'Done' : 'More details',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
@@ -329,7 +301,7 @@ class _TriageQuestionSheetState extends State<TriageQuestionSheet> {
           subtitle: _category,
           options: [
             for (final id in kCategorySubtypes[_category] ?? const <String>[])
-              (value: id, label: _subtypeLabel(id)),
+              (value: id, label: subtypeLabel(id)),
           ],
           selected: _subtype,
           badgeValue: _suggestedSubtype,
