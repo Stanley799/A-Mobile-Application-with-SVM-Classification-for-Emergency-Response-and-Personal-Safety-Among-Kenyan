@@ -28,8 +28,13 @@ import triage_core as t
 # Verb morphology (Swahili verbs are built as SUBJECT + TENSE + OBJECT + ROOT, e.g. a-na-ni-piga)
 # ----------------------------------------------------------------------------------------------
 _SUBJ = r"(?:ni|u|a|tu|m|wa|i|zi|li|ya|ki|vi|ku|pa)"      # who does it (I, you, he/she, we, you-pl, they, things)
-_TENSE = r"(?:na|me|li|ta|ka|ki|si)"                        # present, perfect, past, future, narrative ...
-_PRE = rf"(?:ku|hu|na|{_SUBJ}{_TENSE})"                     # 'na' alone = contracted ni+na ("nataka"); 'hu' = habitual; 'ku' = infinitive
+_TENSE = r"(?:nge|na|me|li|ta|ka|ki|si)"                        # present, perfect, past, future, narrative ...
+_REL = r"(?:ye|yo|o|lo|cho|vyo|zo|ko|po|mo)?"               # relative marker: aliyepotea (who got lost), waliotekwa (who were taken)
+_NEG = r"(?:ha|si|hatu|ham|hawa|hai|hazi|hali|haya|haki|havi|haku|hapa)(?:ja|ku|ta|ki)"   # negative: hajarudi (has not returned), hakurudi
+_PRE = rf"(?:ku|hu|na|{_SUBJ}{_TENSE}{_REL}|{_NEG})"        # 'na' alone = contracted ni+na ("nataka"); 'hu' = habitual; 'ku' = infinitive
+_PRE_1 = rf"(?:na|(?:ni|tu){_TENSE}{_REL})"                 # first person only: nimepotea (I am lost), tumevamiwa (we were attacked)
+_PRE_3 = rf"(?:(?:a|wa){_TENSE}{_REL}|{_NEG})"              # he/she/they: amepotea, wametekwa, hajarudi
+_PRE_I = rf"(?:(?:i|li|ya|zi|u|ki|vi|pa|ku){_TENSE}{_REL})" # a THING is the subject: imepinduka (it overturned), inaungua (it is burning)
 _OBJ_PERSON = r"(?:ni|tu|ku|m|mw|wa)"                       # me, us, you, him/her, them
 _OBJ_ME_US = r"(?:ni|tu)"                                   # victim is the speaker (or the speaker's group)
 _VERB_KINDS = {                                             # prefix -> object-marker pattern
@@ -38,8 +43,12 @@ _VERB_KINDS = {                                             # prefix -> object-m
     "vo": _OBJ_ME_US,                                       # object marker 'me/us' is required (done TO me)
     "vx": rf"{_OBJ_PERSON}",                                # ANY person object marker is required (done TO someone); blocks 'piga pasi' (iron)
     "vr": "ji",                                             # reflexive marker 'ji' is required (done to oneself)
+    "v1": "",                                               # subject must be I/we (nimepotea); no object marker
+    "v3": rf"(?:{_OBJ_PERSON})?",                           # subject must be he/she/they (amemchukua); optional object marker
+    "vi": rf"(?:{_OBJ_PERSON})?",                           # subject must be a thing (imepinduka, inaungua, imemgonga); optional object marker
 }
-_KIND_RE = re.compile(r"^(v0|vo|vr|vx|v):(.*)$")
+_KIND_PRE = {"v1": _PRE_1, "v3": _PRE_3, "vi": _PRE_I}      # kinds with their own subject pattern (all others use _PRE)
+_KIND_RE = re.compile(r"^(v0|vo|vr|vx|v1|v3|vi|v):(.*)$")
 FLAG_ORDER = ("self_harm", "sexual_violence", "domestic_violence")     # safety flags win in this order
 FLAG_TARGET = {"self_harm": ("Other / General", "mental_health_crisis", "High"),
                "sexual_violence": ("Security Threat", "sexual_violence", "Medium"),
@@ -61,6 +70,14 @@ def normalize_text(s):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9' ]+", " ", s)).strip()
 
 
+def canonical_text(s):
+    """Undo how people really type under stress. Applied AFTER normalize_text, for matching only (never shown):
+       - a run of 3+ identical letters becomes one ("moooto" -> "moto", "helppp" -> "help"); real words never have 3 in a row
+       - SMS short forms of 'ni-' verbs: "nmeibiwa" -> "nimeibiwa", "nlipigwa" -> "nilipigwa", "ntakufa" -> "nitakufa"."""
+    s = re.sub(r"(.)\1{2,}", r"\1", s)
+    return re.sub(r"\bn([mltk])(?=[aeiou])", r"ni\1", s)
+
+
 # ----------------------------------------------------------------------------------------------
 # Term: one searchable item (plain word/phrase or verb pattern)
 # ----------------------------------------------------------------------------------------------
@@ -77,7 +94,7 @@ class Term:
             tokens = normalize_text(m.group(2)).split()
             if not tokens or not re.fullmatch(r"[a-z']+", tokens[0]):
                 raise ValueError(f"verb pattern needs a root made of letters: {raw!r}")
-            body = rf"{_PRE}{_VERB_KINDS[self.kind]}{re.escape(tokens[0])}"
+            body = rf"{_KIND_PRE.get(self.kind, _PRE)}{_VERB_KINDS[self.kind]}{re.escape(tokens[0])}"
             rest = "".join(r"\s+" + re.escape(tok) for tok in tokens[1:])
             self.key = self.kind + ":" + " ".join(tokens)
             self.plain = None
@@ -214,7 +231,8 @@ def load_raw(include_proposed=None):
     """Raw merged lexicon (base English + the owner's file [+ proposed terms for testing])."""
     base = _read_json(os.path.join(t.ROOT, "schema", "lexicon.json"), required=True)
     raw = merge_raw(base, None)
-    raw = merge_raw(raw, _read_json(os.path.join(t.ROOT, "schema", "lexicon_user.json"), required=False))
+    raw = merge_raw(raw, _read_json(os.path.join(t.ROOT, "schema", "lexicon_ke.json"), required=False))   # Kenya base: Swahili, Sheng and extra English (assistant-written)
+    raw = merge_raw(raw, _read_json(os.path.join(t.ROOT, "schema", "lexicon_user.json"), required=False))  # the owner's own additions
     if include_proposed is None:
         include_proposed = os.environ.get("TRIAGE_INCLUDE_PROPOSED") == "1"
     if include_proposed:
@@ -382,21 +400,27 @@ def lexicon_flags(s):
 
 
 def lexicon_votes(s):
-    """Return (strong_votes, weak_categories, matched). Hits inside a longer hit of another category are dropped first."""
+    """Return (strong_votes {cat: n}, weak_hits {cat: n}, matched). Hits inside a longer hit of another category are dropped first."""
     all_hits = []
     for c, v in LEX["cats"].items():
         all_hits += _hits(v["strong"], v["strong_pairs"], s, c, "strong")
         all_hits += _hits(v["weak"], v["weak_pairs"], s, c, "weak")
     kept = _drop_inside_longer(all_hits)
     strong = {c: 0 for c in LEX["cats"]}
-    weak = set()
+    weak = {}                                                   # category -> number of weak hits (ranks the suggestion chips)
     matched = []
     for h in kept:
         if h[3] == "strong":
             strong[h[2]] += 1
         else:
-            weak.add(h[2])
+            weak[h[2]] = weak.get(h[2], 0) + 1
         matched.append({"label": h[2], "term": h[4], "tier": h[3]})
+    if strong.get("Medical Emergency", 0) and any(strong.get(c, 0) for c in INCIDENT_CATEGORIES):
+        weak["Medical Emergency"] = weak.get("Medical Emergency", 0) + strong["Medical Emergency"]     # still shown as a chip
+        strong["Medical Emergency"] = 0
+    if strong.get("Other / General", 0) and any(strong.get(c, 0) for c in LEX["cats"] if c != "Other / General"):
+        weak["Other / General"] = weak.get("Other / General", 0) + strong["Other / General"]             # 'Other' is the fallback: any specific category wins
+        strong["Other / General"] = 0
     return strong, weak, matched
 
 
@@ -450,12 +474,22 @@ def _empty_result(**kw):
     return r
 
 
-def triage_text(text, use_lexicon=True, use_classifier=True):
+USE_CLASSIFIER_DEFAULT = os.environ.get("TRIAGE_USE_CLASSIFIER") == "1"
+# The TF-IDF classifier is OFF by default. Measured on data/text_eval_sw.csv it was WRONG on 11% of Swahili/Sheng messages
+# (it was trained mostly on English and guesses "Medical" for almost any Swahili sentence); the lexicon alone was wrong on 0%.
+# The phone and the server therefore run the SAME rule engine, so they can never disagree. TRIAGE_USE_CLASSIFIER=1 re-enables it for experiments.
+INCIDENT_CATEGORIES = ("Road Accident", "Fire & Rescue", "Security Threat", "Abduction")
+MAX_CHIPS = 3                                                   # suggestion chips shown besides the main suggestion
+
+
+def triage_text(text, use_lexicon=True, use_classifier=None):
     """Suggest category/subtype/flags for one message. Never raises; the resident always confirms."""
+    if use_classifier is None:
+        use_classifier = USE_CLASSIFIER_DEFAULT
     try:
         if not isinstance(text, str) or not text.strip():
             return _empty_result(method="empty")
-        s = _mask_idioms(normalize_text(text[:MAX_TEXT_CHARS]))
+        s = _mask_idioms(canonical_text(normalize_text(text[:MAX_TEXT_CHARS])))
         flags, possible, fmatched = lexicon_flags(snap_flag_typos(s)) if use_lexicon else ([], [], [])
         for fl in FLAG_ORDER:                                    # safety flags win, in this order
             if fl in flags:
@@ -466,7 +500,7 @@ def triage_text(text, use_lexicon=True, use_classifier=True):
         if use_lexicon:
             strong, weak_cats, cmatched = lexicon_votes(s)
         else:
-            strong, weak_cats, cmatched = {c: 0 for c in t.CATEGORIES}, set(), []
+            strong, weak_cats, cmatched = {c: 0 for c in t.CATEGORIES}, {}, []
         top_v = max(strong.values()) if strong else 0
         lex_top = [c for c, v in strong.items() if v == top_v and v > 0]
         probs = classifier_probs(s) if use_classifier else {}
@@ -485,8 +519,12 @@ def triage_text(text, use_lexicon=True, use_classifier=True):
             cat, method, conf = clf_top, "lexicon_weak+classifier", "medium"
         elif not weak_cats and clf_top and clf_conf >= 0.55:
             cat, method, conf = clf_top, "classifier", "medium"
-        alts = [c for c in (sorted(lex_top, key=lambda c: -probs.get(c, 0)) + sorted(weak_cats, key=lambda c: -probs.get(c, 0)) + ranked) if c != cat]
-        alts = list(dict.fromkeys(alts))[:2]
+        order = {c: i for i, c in enumerate(LEX["cats"])}
+        evidence = [c for c in LEX["cats"] if strong.get(c, 0) > 0 or weak_cats.get(c, 0) > 0]
+        evidence.sort(key=lambda c: (-strong.get(c, 0), -weak_cats.get(c, 0), -probs.get(c, 0.0), order[c]))
+        alts = [c for c in evidence if c != cat]
+        alts += [c for c in ranked if c != cat and c not in alts]                    # classifier chips only if it is switched on
+        alts = alts[:MAX_CHIPS]
         sub, sub_conf = subtype_for(cat, s) if cat else (None, "low")
         # A weak flag is only worth a question when we do not already understand the message.
         # Exception: a possible self-harm signal is ALWAYS kept (cost of missing it is too high).

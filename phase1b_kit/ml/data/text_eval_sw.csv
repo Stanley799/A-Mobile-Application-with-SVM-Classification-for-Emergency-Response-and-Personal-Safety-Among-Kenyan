@@ -1,0 +1,244 @@
+text,language,expected_category,expected_flag,split
+mtu ameanguka na hapumui,sw,Medical Emergency,,dev
+mama yangu amezimia na hajitambui,sw,Medical Emergency,,holdout
+mtoto wangu ana homa kali na anatetemeka,sw,Medical Emergency,,dev
+baba ameshikwa na kifafa,sw,Medical Emergency,,holdout
+mke wangu anaumwa uchungu wa uzazi hana usafiri,sw,Medical Emergency,,dev
+amegongwa na nyoka mguuni,sw,Medical Emergency,,holdout
+mgonjwa amepoteza fahamu,sw,Medical Emergency,,dev
+mzee ameanguka bafuni na anavuja damu,sw,Medical Emergency,,holdout
+mtoto amemeza sumu,sw,Medical Emergency,,dev
+anatokwa na damu nyingi baada ya kujifungua,sw,Medical Emergency,,holdout
+ana maumivu makali ya kifua na anatoka jasho,sw,Medical Emergency,,dev
+mwanangu amekwama na chakula kooni hawezi kupumua,sw,Medical Emergency,,holdout
+dada yangu ana pumu na hawezi kupumua,sw,Medical Emergency,,dev
+mama amepata kiharusi mdomo umepinda,sw,Medical Emergency,,holdout
+kijana ametapika damu,sw,Medical Emergency,,dev
+mtoto mchanga hapumui vizuri,sw,Medical Emergency,,holdout
+mwanamke mjamzito anatokwa na damu,sw,Medical Emergency,,dev
+amepigwa na shoti ya umeme hasogei,sw,Medical Emergency,,holdout
+mgonjwa wa kisukari amepoteza fahamu,sw,Medical Emergency,,dev
+bibi ameanguka na hawezi kuongea,sw,Medical Emergency,,holdout
+msee ameanguka kwa ground hapumui,sheng,Medical Emergency,,dev
+jamaa ameshikwa na fits,sheng,Medical Emergency,,holdout
+mathe ameumia vibaya anatoka damu nyingi,sheng,Medical Emergency,,dev
+mtoi anahot sana na anashake,sheng,Medical Emergency,,holdout
+buda wangu amezimia hajaamka,sheng,Medical Emergency,,dev
+dem wangu anajifungua na hakuna gari,sheng,Medical Emergency,,holdout
+jamaa amezimia tu ghafla,sheng,Medical Emergency,,dev
+nko na mgonjwa mahututi tafadhali ambulance,sheng,Medical Emergency,,holdout
+my mum amezimia and she's not breathing,mixed,Medical Emergency,,dev
+mtoto wangu ameanguka and he is not responding,mixed,Medical Emergency,,holdout
+ambulance tafadhali mgonjwa anapumua kwa shida,mixed,Medical Emergency,,dev
+baba ana chest pain kali sana,mixed,Medical Emergency,,holdout
+ameng'atwa na nyoka please help,mixed,Medical Emergency,,dev
+amekunywa sumu ya panya,mixed,Medical Emergency,,holdout
+anavuja damu bila kukoma,mixed,Medical Emergency,,dev
+amekosa pumzi ghafla,mixed,Medical Emergency,,holdout
+mgonjwa hasogei wala haongei,mixed,Medical Emergency,,dev
+mtoto amemeza betri,mixed,Medical Emergency,,holdout
+kuna mtu amelala chini hajibu,mixed,Medical Emergency,,dev
+mama anazimia kila mara na amepauka,mixed,Medical Emergency,,holdout
+gari imegongana na basi barabarani,sw,Road Accident,,dev
+ajali mbaya imetokea barabara ya Thika,sw,Road Accident,,holdout
+matatu imepinduka watu wamejeruhiwa,sw,Road Accident,,dev
+pikipiki imemgonga mtoto,sw,Road Accident,,holdout
+lori limepinduka barabarani,sw,Road Accident,,dev
+mwendesha bodaboda amegongwa na gari,sw,Road Accident,,holdout
+kuna ajali watu wamenasa ndani ya gari,sw,Road Accident,,dev
+basi limeanguka mtoni,sw,Road Accident,,holdout
+gari limeacha njia likagonga mti,sw,Road Accident,,dev
+mtu amegongwa na gari dereva akakimbia,sw,Road Accident,,holdout
+ajali ya barabarani karibu na daraja,sw,Road Accident,,dev
+magari mawili yamegongana uso kwa uso,sw,Road Accident,,holdout
+trela imepinduka na watu wamenaswa,sw,Road Accident,,dev
+mwendesha baiskeli amegongwa na gari,sw,Road Accident,,holdout
+gari limeteleza likazama kwenye mtaro,sw,Road Accident,,dev
+mathree imepinduka kwa highway,sheng,Road Accident,,holdout
+nduthi imegonga mtu watu wako chini,sheng,Road Accident,,dev
+kuna accident mbaya Mombasa road,sheng,Road Accident,,holdout
+boda amegongwa na gari na amelala barabarani,sheng,Road Accident,,dev
+gari imegonga pole na dereva ako ndani hatoki,sheng,Road Accident,,holdout
+msee amegongwa na mat akatoroka,sheng,Road Accident,,dev
+mat imeshika ajali watu wengi wameumia,sheng,Road Accident,,holdout
+tumepata ajali na mtu ameumia,sheng,Road Accident,,dev
+there has been an ajali along Naivasha road,mixed,Road Accident,,holdout
+boda boda crash rider hasogei,mixed,Road Accident,,dev
+gari imeroll mara kadhaa passengers wameumia,mixed,Road Accident,,holdout
+ajali tafadhali tuma ambulance,mixed,Road Accident,,dev
+lorry imegonga gari ndogo watu wamenasa,mixed,Road Accident,,holdout
+tuk tuk imepinduka,mixed,Road Accident,,dev
+watu wawili wamegongwa na gari wamelala barabarani,mixed,Road Accident,,holdout
+mtoto amegongwa na gari akivuka barabara,mixed,Road Accident,,dev
+dereva amepoteza mwelekeo gari imepinduka,mixed,Road Accident,,holdout
+nimeshuhudia ajali kule Thika Road,mixed,Road Accident,,dev
+matatu na lori vimegongana,mixed,Road Accident,,holdout
+basi la shule limepata ajali,mixed,Road Accident,,dev
+nyumba inaungua,sw,Fire & Rescue,,holdout
+kuna moto mkubwa sokoni,sw,Fire & Rescue,,dev
+moto umeanza jikoni unasambaa haraka,sw,Fire & Rescue,,holdout
+jengo limeporomoka watu wamenaswa,sw,Fire & Rescue,,dev
+mafuriko yametuzingira hatuwezi kutoka,sw,Fire & Rescue,,holdout
+mtoto anazama mtoni,sw,Fire & Rescue,,dev
+kuna moshi mwingi unatoka kwa jirani,sw,Fire & Rescue,,holdout
+mtungi wa gesi unawaka,sw,Fire & Rescue,,dev
+duka la jirani linaungua,sw,Fire & Rescue,,holdout
+moto wa msituni unakaribia nyumba zetu,sw,Fire & Rescue,,dev
+ukuta umeanguka na mtu amefunikwa,sw,Fire & Rescue,,holdout
+mtu ameanguka kisimani,sw,Fire & Rescue,,dev
+shule inaungua wanafunzi wamo ndani,sw,Fire & Rescue,,holdout
+maji yamejaa nyumbani hatuwezi kutoka,sw,Fire & Rescue,,dev
+lifti imekwama na watu wamo ndani,sw,Fire & Rescue,,holdout
+nyumba ya jirani imeshika moto,sw,Fire & Rescue,,dev
+kumetokea mlipuko wa mtungi wa gesi,sw,Fire & Rescue,,holdout
+kuna moto kwa mtaa unaenea,sheng,Fire & Rescue,,dev
+plot inaungua watu wako ndani,sheng,Fire & Rescue,,holdout
+kuna moto Gikomba,sheng,Fire & Rescue,,dev
+mtoi amenaswa kwa moto,sheng,Fire & Rescue,,holdout
+moto umeshika kwa kibanda,sheng,Fire & Rescue,,dev
+maji ya mafuriko yameingia kwa nyumba,sheng,Fire & Rescue,,holdout
+house iko on fire tafadhali tuma zima moto,mixed,Fire & Rescue,,dev
+fire imeanza kwa kitchen,mixed,Fire & Rescue,,holdout
+building imeanguka na watu wamenaswa,mixed,Fire & Rescue,,dev
+flood imechukua gari na watu,mixed,Fire & Rescue,,holdout
+kuna moshi mwingi kwa block yetu,mixed,Fire & Rescue,,dev
+tumekwama kwa lift,mixed,Fire & Rescue,,holdout
+mtu amenaswa kwa kifusi,mixed,Fire & Rescue,,dev
+moto unaenea kwa mabanda ya jirani,mixed,Fire & Rescue,,holdout
+kuna ajali ya moto kwenye kiwanda,mixed,Fire & Rescue,,dev
+mtoto amekwama kwenye mtaro,mixed,Fire & Rescue,,holdout
+mto umefurika na watu wako juu ya paa,mixed,Fire & Rescue,,dev
+maporomoko ya ardhi yamefunika nyumba,mixed,Fire & Rescue,,holdout
+wezi wameingia nyumbani kwangu,sw,Security Threat,,dev
+majambazi wana bunduki wako getini,sw,Security Threat,,holdout
+nimevamiwa na watu wenye mapanga,sw,Security Threat,,dev
+kuna mtu amechomwa kisu,sw,Security Threat,,holdout
+nimeibiwa simu na vijana wawili,sw,Security Threat,,dev
+kuna ghasia watu wanaporwa maduka,sw,Security Threat,,holdout
+umati unampiga mwizi,sw,Security Threat,,dev
+nasikia milio ya risasi karibu,sw,Security Threat,,holdout
+mtu amepigwa risasi,sw,Security Threat,,dev
+kuna mtu ananifuata kwa nyuma,sw,Security Threat,,holdout
+watu wasiojulikana wanajaribu kuvunja mlango,sw,Security Threat,,dev
+wanaume wenye silaha wameingia mtaani,sw,Security Threat,,holdout
+nimeporwa mkoba na pesa,sw,Security Threat,,dev
+mwizi ameingia ndani ya nyumba,sw,Security Threat,,holdout
+kuna ugomvi mkubwa na kisu kimetolewa,sw,Security Threat,,dev
+kundi la vijana linawashambulia wasafiri,sw,Security Threat,,holdout
+tumevamiwa usiku na wanaume watano,sw,Security Threat,,dev
+mbogi imenivamia na wameniibia simu,sheng,Security Threat,,holdout
+wamenitishia na kisu wanataka pesa,sheng,Security Threat,,dev
+kuna jamaa ako na bunduki kwa bar,sheng,Security Threat,,holdout
+nimechomwa kisu na msee,sheng,Security Threat,,dev
+wahuni wamevamia plot yetu,sheng,Security Threat,,holdout
+kuna mob justice wanataka kuchoma jamaa,sheng,Security Threat,,dev
+tumeibiwa hapa stage na wahuni,sheng,Security Threat,,holdout
+kuna robbers wamevunja duka,mixed,Security Threat,,dev
+somebody is following me nyuma yangu,mixed,Security Threat,,holdout
+mtu ameweka kisu shingoni mwangu,mixed,Security Threat,,dev
+kuna fujo mjini watu wanapigana,mixed,Security Threat,,holdout
+nimeshambuliwa na mob,mixed,Security Threat,,dev
+gunshots zinasikika karibu na estate,mixed,Security Threat,,holdout
+someone is following me,mixed,Security Threat,,dev
+wezi wanavunja geti,mixed,Security Threat,,holdout
+kuna mtu ana panga anatishia watu,mixed,Security Threat,,dev
+wameingia kwa nyumba wamenitisha,mixed,Security Threat,,holdout
+nilipigwa na wahuni nikaibiwa,mixed,Security Threat,,dev
+kuna mtu ananifuatilia kwa gari,mixed,Security Threat,,holdout
+mtoto wangu ametekwa nyara,sw,Abduction,,dev
+mwanangu amepotea tangu asubuhi,sw,Abduction,,holdout
+wanaume wamemlazimisha dada yangu kuingia kwenye gari,sw,Abduction,,dev
+mume wangu ametekwa na watu wasiojulikana,sw,Abduction,,holdout
+watekaji nyara wanataka pesa,sw,Abduction,,dev
+msichana amechukuliwa kwa nguvu kituoni,sw,Abduction,,holdout
+mtoto amechukuliwa na mgeni shuleni,sw,Abduction,,dev
+mtoto hajarudi kutoka shuleni na mtu mgeni alionekana naye,sw,Abduction,,holdout
+binti yangu ametoweka,sw,Abduction,,dev
+wamemburuta mwanamke ndani ya gari,sw,Abduction,,holdout
+mtoto mchanga ameibwa hospitalini,sw,Abduction,,dev
+kaka yangu amechukuliwa na watu wasiojulikana hajulikani aliko,sw,Abduction,,holdout
+nimeona mtoto akibebwa na mtu mgeni anakimbia,sw,Abduction,,dev
+mtoto wetu amepotea sokoni,sw,Abduction,,holdout
+watekaji wanadai fidia,sw,Abduction,,dev
+mtoi wangu amepotea hatumpati,sheng,Abduction,,holdout
+wamemnyakua dem wakaondoka na gari,sheng,Abduction,,dev
+jamaa wamemchukua msee kwa nguvu kwa gari,sheng,Abduction,,holdout
+mtoi ametekwa kwa school,sheng,Abduction,,dev
+mathe ametoweka tangu jana,sheng,Abduction,,holdout
+my child is missing mtoto hajaonekana,mixed,Abduction,,dev
+kidnappers wamempeleka dada yangu,mixed,Abduction,,holdout
+mtu amemchukua mtoto wangu forcefully,mixed,Abduction,,dev
+mtoto amepotea na hatujui aliko,mixed,Abduction,,holdout
+wametuambia watamuua kama hatutatuma pesa,mixed,Abduction,,dev
+mwanafunzi ametekwa akitoka shule,mixed,Abduction,,holdout
+amechukuliwa na watu kwenye gari nyeupe,mixed,Abduction,,dev
+my brother ametekwa,mixed,Abduction,,holdout
+msichana amelazimishwa kuingia kwenye gari,mixed,Abduction,,dev
+mtoto wa jirani ametoweka,mixed,Abduction,,holdout
+nimepotea njia na simu yangu haina chaji,sw,Other / General,,dev
+gari langu limeharibika barabarani usiku,sw,Other / General,,holdout
+fisi ameingia kwenye boma,sw,Other / General,,dev
+tembo anaharibu shamba letu,sw,Other / General,,holdout
+nimeanguka na mguu unaniuma,sw,Other / General,,dev
+nimeungua mkono na maji ya moto,sw,Other / General,,holdout
+nina wasiwasi mwingi na siwezi kulala,sw,Other / General,,dev
+nimekwama kwenye matope na gari,sw,Other / General,,holdout
+mbwa ananikimbiza,sw,Other / General,,dev
+nimepoteza pochi yangu na hati,sw,Other / General,,holdout
+kuna nyuki wengi wamefika,sw,Other / General,,dev
+mti umeanguka barabarani unazuia gari,sw,Other / General,,holdout
+nimekwama kwa highway gari imezima,sheng,Other / General,,dev
+nimepotea hapa mtaa sijui niko wapi,sheng,Other / General,,holdout
+nimepoteza simu kwa matatu,sheng,Other / General,,dev
+I'm stranded na gari imeharibika,mixed,Other / General,,holdout
+kuna fisi karibu na nyumba,mixed,Other / General,,dev
+nimeumia mguu while hiking,mixed,Other / General,,holdout
+stress nyingi sijui nifanye nini,mixed,Other / General,,dev
+kuna mnyama pori ameingia mtaani,mixed,Other / General,,holdout
+nimefungiwa nje ya nyumba,mixed,Other / General,,dev
+msaada nimepotea msituni,mixed,Other / General,,holdout
+gari imekwama kwa mto,mixed,Other / General,,dev
+nataka kujiua,sw,Other / General,self_harm,holdout
+sitaki kuishi tena,sw,Other / General,self_harm,dev
+nimechoka na maisha nataka kufa,sw,Other / General,self_harm,holdout
+nafikiria kujiua usiku wa leo,sw,Other / General,self_harm,dev
+ndugu yangu anasema atajiua,sw,Other / General,self_harm,holdout
+nataka kujitoa uhai,sw,Other / General,self_harm,dev
+afadhali nife,sw,Other / General,self_harm,holdout
+mwanangu amesema atajinyonga,sw,Other / General,self_harm,dev
+napanga kujiua,sw,Other / General,self_harm,holdout
+amejaribu kujiua jana,sw,Other / General,self_harm,dev
+bora nife tu sina kitu tena,sheng,Other / General,self_harm,holdout
+nimechoka na hii maisha nataka kujimaliza,sheng,Other / General,self_harm,dev
+nimebakwa,sw,Security Threat,sexual_violence,holdout
+binti yangu amebakwa,sw,Security Threat,sexual_violence,dev
+mke wangu amenajisiwa,sw,Security Threat,sexual_violence,holdout
+mtoto amenajisiwa na jirani,sw,Security Threat,sexual_violence,dev
+alinilazimisha kufanya ngono,sw,Security Threat,sexual_violence,holdout
+amenibaka jana usiku,sw,Security Threat,sexual_violence,dev
+msichana amebakwa na wanaume watatu,sw,Security Threat,sexual_violence,holdout
+nimedhalilishwa kingono na bosi wangu,sw,Security Threat,sexual_violence,dev
+wamembaka dada yangu,sw,Security Threat,sexual_violence,holdout
+mtu amejaribu kunibaka,sw,Security Threat,sexual_violence,dev
+mume wangu ananipiga kila siku,sw,Security Threat,domestic_violence,holdout
+mume wangu amenipiga na kunitoa nyumbani,sw,Security Threat,domestic_violence,dev
+mpenzi wangu ananipiga,sw,Security Threat,domestic_violence,holdout
+baba yangu anampiga mama,sw,Security Threat,domestic_violence,dev
+amenichapa mume wangu,sw,Security Threat,domestic_violence,holdout
+ukatili wa nyumbani unaendelea kwetu,sw,Security Threat,domestic_violence,dev
+mke wake anampiga kila siku,sw,Security Threat,domestic_violence,holdout
+mume wangu anatishia kuniua na ananipiga,sw,Security Threat,domestic_violence,dev
+hakuna wasiwasi,sw,,,holdout
+nimepiga simu,sw,,,dev
+habari yako,sw,,,holdout
+naomba maji ya moto,sw,,,dev
+nimepiga picha ya mtoto,sw,,,holdout
+mambo vipi,sw,,,dev
+asante sana,sw,,,holdout
+basi tutaonana kesho,sw,,,dev
+niko sawa,sw,,,holdout
+msaada,sw,,,dev
+kuna shida,sw,,,holdout
+nahitaji msaada tafadhali,sw,,,dev
+tafadhali nisaidie,sw,,,holdout
+nimeishiwa na pesa,sw,,,dev

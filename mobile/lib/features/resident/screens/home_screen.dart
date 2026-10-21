@@ -432,6 +432,41 @@ class _ResidentDashboard extends StatelessWidget {
 
   Future<void> _confirmEmergency(BuildContext context, String category) async {
     final confirmCat = category == 'SOS' ? 'Other / General' : category;
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final actualCategory = category == 'SOS' ? 'Other / General' : category;
+
+    final id = newIncidentId(category: actualCategory);
+    final ref = FirebaseFirestore.instance.collection('incidents').doc(id);
+
+    // 1. Instant 0ms Creation in background
+    final initialData = <String, Object?>{
+      'userId': userId,
+      'category': actualCategory,
+      'status': 'Active',
+      'location': null,
+      'priority': 'High',
+      'prioritySource': 'safe_fallback',
+      'needsHumanReview': true,
+      'triageStatus': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    final createFuture = ref.set(initialData);
+
+    // 2. Fetch location in background and merge if arrives
+    unawaited(
+      _optionalCurrentLocationQuick().then((loc) {
+        if (loc != null) {
+          ref.update({
+            'location': loc,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }).catchError((_) {});
+        }
+      }),
+    );
+
+    // 3. Show 5-second diagnostic confirmation sheet
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       useSafeArea: true,
@@ -441,34 +476,28 @@ class _ResidentDashboard extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (context) => SosConfirmationSheet(category: confirmCat),
+      builder: (context) => SosConfirmationSheet(
+        category: confirmCat,
+        incidentRef: ref,
+      ),
     );
+
+    if (confirmed == false) {
+      unawaited(
+        ref.update({
+          'status': 'Cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }).catchError((e) {
+          debugPrint('Cancel incident error: $e');
+        }),
+      );
+      return;
+    }
+
     if (confirmed != true || !context.mounted) return;
 
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    final location = await _optionalCurrentLocationQuick();
-
-    final actualCategory = category == 'SOS' ? 'Other / General' : category;
-    final id = newIncidentId(category: category == 'SOS' ? 'Other / General' : category);
-    final ref = FirebaseFirestore.instance.collection('incidents').doc(id);
-
-    final data = <String, Object?>{
-      'userId': userId,
-      'category': actualCategory,
-      'status': 'Active',
-      'location': location,
-      'priority': 'High',
-      'prioritySource': 'safe_fallback',
-      'needsHumanReview': true,
-      'triageStatus': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    final createFuture = ref.set(data);
-
-    if (!context.mounted) return;
-
+    // 4. Proceed seamlessly to AlertStatusSheet with the SAME createFuture
     unawaited(
       showModalBottomSheet<void>(
         context: context,
@@ -485,9 +514,9 @@ class _ResidentDashboard extends StatelessWidget {
           child: AlertStatusSheet(
             incidentRef: ref,
             createFuture: createFuture,
-            retryCreate: () => ref.set(data),
+            retryCreate: () => ref.set(initialData),
             category: category,
-            locationShared: location != null,
+            locationShared: true,
           ),
         ),
       ),
@@ -512,9 +541,9 @@ class _ResidentDashboard extends StatelessWidget {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 3),
+          timeLimit: Duration(seconds: 2),
         ),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 2));
       return GeoPoint(position.latitude, position.longitude);
     } catch (_) {
       return null;

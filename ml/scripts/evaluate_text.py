@@ -23,6 +23,6 @@ def run(label, **kw):
         else: wrong += 1; fails.append(("WRONG", r["text"], exp, out["category"]))
     print(f"{label:22s} messages {n} | decided {decided} | correct {right} | wrong {wrong} | correctly unclear {unclear_ok} | flags found {fl_tp}/{fl_tp+fl_fn}, false flags {fl_fp}")
     return fails
-run("lexicon only", use_classifier=False); run("classifier only", use_lexicon=False)
-fails = run("combined (used)")
+run("lexicon only", use_classifier=False); run("classifier only", use_lexicon=False, use_classifier=True)
+fails = run("engine as shipped")
 for f in fails: print("   ", f)

@@ -20,6 +20,7 @@ class ActivityRecord {
     this.priority,
     required this.statusLabel,
     required this.statusTone,
+    required this.triageStatus,
     this.category,
   });
 
@@ -31,6 +32,7 @@ class ActivityRecord {
   final String? priority;
   final String statusLabel;
   final StatusTone statusTone;
+  final String triageStatus;
   final String? category;
 
   factory ActivityRecord.fromIncident(String id, Map<String, dynamic> data) {
@@ -89,6 +91,7 @@ class ActivityRecord {
     }
 
     final priority = data['priority'] as String?;
+    final triageStatus = data['triageStatus'] as String? ?? 'pending';
 
     return ActivityRecord(
       id: id,
@@ -99,6 +102,7 @@ class ActivityRecord {
       priority: priority,
       statusLabel: statusLabel,
       statusTone: tone,
+      triageStatus: triageStatus,
       category: cat,
     );
   }
@@ -159,6 +163,7 @@ class ActivityRecord {
       priority: null,
       statusLabel: statusLabel,
       statusTone: tone,
+      triageStatus: 'complete',
       category: null,
     );
   }
@@ -212,28 +217,34 @@ class ActivityCard extends StatelessWidget {
         break;
     }
 
-    final showPriority = record.isAlert &&
-        record.priority != null &&
-        record.statusTone != StatusTone.support;
+    final showPriority = record.isAlert && record.statusTone != StatusTone.support;
+    final isComplete = record.triageStatus == 'complete';
 
     Color priorityBg = AppColors.neutralLight;
     Color priorityFg = AppColors.neutral;
+    String priorityLabel = record.priority ?? 'High';
 
     if (showPriority) {
-      switch (record.priority) {
-        case 'High':
-          priorityBg = AppColors.sosLight;
-          priorityFg = AppColors.sosDeep;
-          break;
-        case 'Medium':
-          priorityBg = AppColors.warningLight;
-          priorityFg = AppColors.warningText;
-          break;
-        case 'Low':
-        default:
-          priorityBg = AppColors.neutralLight;
-          priorityFg = AppColors.neutral;
-          break;
+      if (!isComplete) {
+        priorityBg = AppColors.neutralLight;
+        priorityFg = AppColors.neutral;
+        priorityLabel = 'Pending assessment / Inasubiri tathmini';
+      } else {
+        switch (record.priority) {
+          case 'High':
+            priorityBg = AppColors.sosLight;
+            priorityFg = AppColors.sosDeep;
+            break;
+          case 'Medium':
+            priorityBg = AppColors.warningLight;
+            priorityFg = AppColors.warningText;
+            break;
+          case 'Low':
+          default:
+            priorityBg = AppColors.neutralLight;
+            priorityFg = AppColors.neutral;
+            break;
+        }
       }
     }
 
@@ -314,7 +325,7 @@ class ActivityCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
                   child: Text(
-                    record.priority!,
+                    priorityLabel,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,

@@ -1,0 +1,489 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Admin access comes from a server-assigned claim, never a client-editable profile field.
+    function isSystemAdmin() {
+      return isSignedIn() && request.auth.token.role == "SystemAdmin";
+    }
+
+    function validPhoneNumber(phoneNumber) {
+      return phoneNumber is string && phoneNumber.matches('^\\+[1-9]\\d{1,14}$');
+    }
+
+    function validPreferredLanguage(language) {
+      return language in ["en", "sw"];
+    }
+
+    function validPublicRole(role) {
+      return role in ["Resident", "Responder"];
+    }
+
+    function validAccountStatus(status) {
+      return status in ["Active", "PendingVerification", "Suspended"];
+    }
+
+    function validResponderType(orgType) {
+      return orgType in [
+        "Ambulance",
+        "Fire",
+        "Police",
+        "Hospital",
+        "Community",
+        "Maritime",
+        "Other"
+      ];
+    }
+
+    function validResponderVerificationStatus(status) {
+      return status in ["Pending", "Verified", "Rejected", "Suspended"];
+    }
+
+    function validAvailabilityStatus(status) {
+      return status in ["Available", "Busy", "Offline"];
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Trusted contacts and safety check-ins (unchanged)
+    // ------------------------------------------------------------------------------------------
+    function validTrustedContactData() {
+      return request.resource.data.keys().hasOnly([
+          "userId",
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "userId",
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && validPhoneNumber(request.resource.data.phoneNumber)
+        && request.resource.data.relationship in ["Sister", "Brother", "Friend", "Parent", "Spouse", "Other"]
+        && request.resource.data.isActive is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validSafetyCheckinCreate() {
+      return request.resource.data.keys().hasOnly([
+          "userId",
+          "startTime",
+          "expiryTime",
+          "status",
+          "durationMinutes",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "userId",
+          "startTime",
+          "expiryTime",
+          "status",
+          "durationMinutes",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.startTime is timestamp
+        && request.resource.data.expiryTime is timestamp
+        && request.resource.data.status == "Active"
+        && request.resource.data.durationMinutes is int
+        && request.resource.data.durationMinutes in [15, 30, 45, 60]
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Incidents (emergency alerts)
+    //
+    // Life cycle written by the resident's phone:
+    //   1. CREATE  at the end of the 5-second countdown: always the fail-safe (High, pending review).
+    //   2. UPDATE  "quick": the 3 quick answers (and the category if it was changed). Priority stays High.
+    //   3. UPDATE  "complete": all details; the priority may now be refined by the decision table.
+    //   4. UPDATE  "cancel": the resident reports it was a mistake or they are safe.
+    // Everything else (dispatch plan, reference, responders) is written by Cloud Functions, which bypass these rules.
+    // Responders never read this collection. They read their own briefing in /offers instead.
+    // ------------------------------------------------------------------------------------------
+    function validIncidentCategory(category) {
+      return category in [
+        "Medical Emergency",
+        "Road Accident",
+        "Fire & Rescue",
+        "Security Threat",
+        "Abduction",
+        "Other / General"
+      ];
+    }
+
+    function validIncidentCreate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          "userId", "category", "status", "location", "createdAt", "updatedAt",
+          "priority", "prioritySource", "needsHumanReview", "triageStatus"
+        ])
+        && d.keys().hasAll([
+          "userId", "category", "status", "location", "createdAt", "updatedAt",
+          "priority", "prioritySource", "needsHumanReview", "triageStatus"
+        ])
+        && validIncidentCategory(d.category)
+        && d.status == "Active"
+        && (d.location == null || d.location is latlng)
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp
+        && d.priority == "High"
+        && d.prioritySource == "safe_fallback"
+        && d.needsHumanReview == true
+        && d.triageStatus == "pending";
+    }
+
+    function incidentChange() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Step 2: quick answers only. May repeat (the phone saves after every answer). The priority cannot change here (it is not an allowed key).
+    function validIncidentQuickUpdate() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly(["category", "subtype", "triage", "triageStatus", "updatedAt"])
+        && resource.data.get("triageStatus", "") in ["pending", "quick"]
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.triageStatus == "quick"
+        && validIncidentCategory(d.category)
+        && (d.get("subtype", "") == null || d.get("subtype", "") is string)
+        && d.triage is map
+        && d.updatedAt is timestamp;
+    }
+
+    // Step 3: full details. Allowed from "pending" (the resident skipped the quick step) or from "quick".
+    function validIncidentCompleteUpdate() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly([
+          "category", "subtype", "priority", "prioritySource", "needsHumanReview",
+          "triageStatus", "triage", "description", "flags", "status", "updatedAt"
+        ])
+        && resource.data.get("triageStatus", "") in ["pending", "quick"]
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.triageStatus == "complete"
+        && validIncidentCategory(d.category)
+        && d.priority in ["Low", "Medium", "High"]
+        && d.prioritySource is string
+        && d.prioritySource.size() <= 40
+        && d.needsHumanReview is bool
+        && d.triage is map
+        && d.status in ["Active", "SupportOnly"]
+        && (d.get("subtype", "") == null || d.get("subtype", "") is string)
+        && (d.get("description", "") is string && d.get("description", "").size() <= 280)
+        && (d.get("flags", []) is list && d.get("flags", []).size() <= 10)
+        && d.updatedAt is timestamp;
+    }
+
+    // Step 2b: a GPS fix that arrived AFTER the alert was saved. Only the location (and updatedAt) may change.
+    function validIncidentLocationUpdate() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly(["location", "updatedAt"])
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.location is latlng
+        && d.updatedAt is timestamp;
+    }
+
+    // Step 4: the resident closes their own alert. Nothing else may change.
+    function validIncidentCancel() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly(["status", "cancelledAt", "updatedAt"])
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.status == "Cancelled"
+        && d.cancelledAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Users and responders (unchanged except: responders may also report "lastSeenAt" so that
+    // dispatch can ignore responders whose location is out of date)
+    // ------------------------------------------------------------------------------------------
+    function validUsersCreateKeys() {
+      return request.resource.data.keys().hasOnly([
+        "userId",
+        "firstName",
+        "lastName",
+        "dateOfBirth",
+        "gender",
+        "phoneNumber",
+        "email",
+        "role",
+        "preferredLanguage",
+        "accountStatus",
+        "consentCrossBorderTransfer",
+        "createdAt",
+        "updatedAt",
+        "lastLoginAt"
+      ]);
+    }
+
+    function validUsersUpdateKeys() {
+      return request.resource.data.keys().hasOnly([
+        "userId",
+        "firstName",
+        "lastName",
+        "dateOfBirth",
+        "gender",
+        "phoneNumber",
+        "email",
+        "role",
+        "preferredLanguage",
+        "accountStatus",
+        "consentCrossBorderTransfer",
+        "createdAt",
+        "updatedAt",
+        "lastLoginAt"
+      ]);
+    }
+
+    function validUsersData(userId) {
+      return request.resource.data.userId == userId
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.dateOfBirth is timestamp
+        && request.resource.data.gender is string
+        && validPhoneNumber(request.resource.data.phoneNumber)
+        && request.resource.data.email is string
+        && validPublicRole(request.resource.data.role)
+        && validPreferredLanguage(request.resource.data.preferredLanguage)
+        && validAccountStatus(request.resource.data.accountStatus)
+        && request.resource.data.consentCrossBorderTransfer is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.lastLoginAt is timestamp;
+    }
+
+    function validRespondersCreateKeys() {
+      return request.resource.data.keys().hasOnly([
+        "responderId",
+        "organizationName",
+        "organizationType",
+        "registrationNumber",
+        "verificationStatus",
+        "verificationNotes",
+        "verifiedBy",
+        "verifiedAt",
+        "availabilityStatus",
+        "currentLatitude",
+        "currentLongitude",
+        "serviceArea",
+        "createdAt",
+        "updatedAt"
+      ]);
+    }
+
+    function validRespondersData(responderId) {
+      return request.resource.data.responderId == responderId
+        && request.resource.data.organizationName is string
+        && validResponderType(request.resource.data.organizationType)
+        && request.resource.data.registrationNumber is string
+        && validResponderVerificationStatus(request.resource.data.verificationStatus)
+        && (request.resource.data.verificationNotes == null || request.resource.data.verificationNotes is string)
+        && (request.resource.data.verifiedBy == null || request.resource.data.verifiedBy is string)
+        && (request.resource.data.verifiedAt == null || request.resource.data.verifiedAt is timestamp)
+        && validAvailabilityStatus(request.resource.data.availabilityStatus)
+        && (request.resource.data.currentLatitude == null || request.resource.data.currentLatitude is number)
+        && (request.resource.data.currentLongitude == null || request.resource.data.currentLongitude is number)
+        && request.resource.data.serviceArea is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Offers: what a responder is asked to do. Written by the dispatch Cloud Function (a minimal
+    // briefing, never the resident's full record). The responder may only move the offer forward.
+    // ------------------------------------------------------------------------------------------
+    function validOfferMove(from, to) {
+      return (from == "offered" && to in ["accepted", "declined"])
+        || (from == "accepted" && to in ["enroute", "arrived", "completed"])
+        || (from == "enroute" && to in ["arrived", "completed"])
+        || (from == "arrived" && to == "completed");
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Collections
+    // ------------------------------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isSystemAdmin();
+
+      allow create: if isOwner(userId)
+        && !exists(/databases/$(database)/documents/users/$(userId))
+        && validUsersCreateKeys()
+        && validUsersData(userId)
+        && (
+          (request.resource.data.role == "Resident" && request.resource.data.accountStatus == "Active")
+          ||
+          (request.resource.data.role == "Responder" && request.resource.data.accountStatus == "PendingVerification")
+        );
+
+      // Owners may edit profile fields, but cannot change their identity, role, or creation time.
+      allow update: if (isOwner(userId) || isSystemAdmin())
+        && validUsersUpdateKeys()
+        && validUsersData(userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
+    match /responders/{responderId} {
+      allow read: if isSignedIn();
+
+      allow create: if isOwner(responderId)
+        && !exists(/databases/$(database)/documents/responders/$(responderId))
+        && validRespondersCreateKeys()
+        && validRespondersData(responderId)
+        && request.resource.data.registrationNumber.size() >= 5
+        && request.resource.data.registrationNumber.size() <= 30
+        && request.resource.data.verificationStatus == "Pending"
+        && request.resource.data.verificationNotes == null
+        && request.resource.data.verifiedBy == null
+        && request.resource.data.verifiedAt == null
+        && request.resource.data.availabilityStatus == "Offline";
+
+      // Owners can change availability, location and the "last seen" time; only admins can change verification fields.
+      allow update: if (
+          isOwner(responderId)
+          && request.resource.data.registrationNumber == resource.data.registrationNumber
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "availabilityStatus",
+            "currentLatitude",
+            "currentLongitude",
+            "lastSeenAt"
+          ])
+          && request.resource.data.availabilityStatus in ["Available", "Busy", "Offline"]
+          && (request.resource.data.currentLatitude == null || request.resource.data.currentLatitude is number)
+          && (request.resource.data.currentLongitude == null || request.resource.data.currentLongitude is number)
+          && (request.resource.data.get("lastSeenAt", request.time) == null || request.resource.data.get("lastSeenAt", request.time) is timestamp)
+        ) || (
+          isSystemAdmin()
+          && request.resource.data.registrationNumber == resource.data.registrationNumber
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "verificationStatus",
+            "verificationNotes",
+            "verifiedBy",
+            "verifiedAt"
+          ])
+          && request.resource.data.verificationStatus in ["Pending", "Verified", "Rejected", "Suspended"]
+          && (request.resource.data.verificationNotes == null || request.resource.data.verificationNotes is string)
+          && (request.resource.data.verifiedBy == null || request.resource.data.verifiedBy is string)
+          && (request.resource.data.verifiedAt == null || request.resource.data.verifiedAt is timestamp)
+        );
+
+      allow delete: if false;
+    }
+
+    match /trustedContacts/{contactId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      // No per-user contact-count limit is enforced by these rules.
+      allow create: if isOwner(request.resource.data.userId)
+        && validTrustedContactData()
+        && request.resource.data.isActive == true;
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "updatedAt"
+        ])
+        && validTrustedContactData();
+
+      // Deactivate contacts instead of deleting their records.
+      allow delete: if false;
+    }
+
+    match /safetyCheckins/{checkinId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validSafetyCheckinCreate();
+
+      // Clients can close a check-in but cannot change its owner or timing fields.
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "updatedAt"
+        ])
+        && request.resource.data.status in ["CheckedIn", "Cancelled", "Expired"]
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /incidents/{incidentId} {
+      // A resident sees only their own alerts. Administrators see all of them.
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validIncidentCreate();
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && (
+          validIncidentQuickUpdate()
+          || validIncidentCompleteUpdate()
+          || validIncidentCancel()
+          || validIncidentLocationUpdate()
+        );
+
+      allow delete: if false;
+    }
+
+    match /offers/{offerId} {
+      // A responder reads only the offers addressed to them. Administrators read all.
+      allow read: if isSignedIn()
+        && (resource.data.responderId == request.auth.uid || isSystemAdmin());
+
+      // Offers are created and removed only by the dispatch Cloud Function.
+      allow create, delete: if false;
+
+      allow update: if isSignedIn()
+        && resource.data.responderId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt"])
+        && validOfferMove(resource.data.status, request.resource.data.status)
+        && (resource.data.status != "offered" || request.time < resource.data.expiresAt);
+    }
+
+    // Training messages are written only by the save_text_feedback_fn Cloud Function.
+    match /text_feedback/{feedbackId} {
+      allow read, write: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isSystemAdmin();
+      // Cloud Functions use the Admin SDK; clients must not forge audit history.
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,191 @@
+text,language,expected_category,expected_flag,split
+tafadhali tuma ambulance mgonjwa wangu hali yake ni mbaya sana,sw,Medical Emergency,,blind
+bibi yangu ameanguka ghafla na hawezi kusimama wala kuongea,sw,Medical Emergency,,blind
+mtoto wangu wa miaka miwili amekuwa mgonjwa sana na anatapika kila wakati,sw,Medical Emergency,,blind
+mume wangu analalamika maumivu makali kifuani na jasho jingi,sw,Medical Emergency,,blind
+kuna mama hapa anajifungua na hakuna daktari,sw,Medical Emergency,,blind
+mwanangu amemeza dawa nyingi za mama,sw,Medical Emergency,,blind
+kijana huyu amekufa ganzi upande wa kushoto na hawezi kuongea vizuri,sw,Medical Emergency,,blind
+ana homa kali na anatetemeka mwili mzima,sw,Medical Emergency,,blind
+mwanamke amezimia sokoni watu wamemzunguka,sw,Medical Emergency,,blind
+mzee amepatwa na kiharusi nyumbani,sw,Medical Emergency,,blind
+mtoto anakohoa bila kukoma na ngozi imebadilika rangi,sw,Medical Emergency,,blind
+amepata mshtuko wa moyo ofisini,sw,Medical Emergency,,blind
+ana kisukari na sasa hajitambui,sw,Medical Emergency,,blind
+dada ameshikwa na uchungu na maji yamepasuka,sw,Medical Emergency,,blind
+mgonjwa ametoka damu nyingi mdomoni,sw,Medical Emergency,,blind
+buda ameshuka tu ghafla hapumui poa,sheng,Medical Emergency,,blind
+msee ameanguka na anatoka povu mdomoni,sheng,Medical Emergency,,blind
+mathe anaumwa vibaya sana tunahitaji gari ya hospitali,sheng,Medical Emergency,,blind
+dem ameumia vibaya na ako na damu kila mahali,sheng,Medical Emergency,,blind
+jamaa ameshikwa na kitu kama fits anashake tu,sheng,Medical Emergency,,blind
+mtoi ako na joto kali na ameloose fahamu,sheng,Medical Emergency,,blind
+my grandmother amezimia since morning and she is not waking up,mixed,Medical Emergency,,blind
+please help kuna mtu amelala hapa chini hajibu,mixed,Medical Emergency,,blind
+patient ana difficulty breathing na ako kwa nyumba,mixed,Medical Emergency,,blind
+he is bleeding heavily na hatujui tufanye nini,mixed,Medical Emergency,,blind
+mama yangu has had a stroke tafadhali ambulance,mixed,Medical Emergency,,blind
+mtoto ameanguka kutoka kwa mti na hasogei,mixed,Medical Emergency,,blind
+nimemeza kitu na siwezi kupumua vizuri,mixed,Medical Emergency,,blind
+she is in labour na hospitali iko mbali,mixed,Medical Emergency,,blind
+amepigwa na nyoka kwa mguu,mixed,Medical Emergency,,blind
+kuna mgonjwa mahututi hapa tafadhali haraka,mixed,Medical Emergency,,blind
+kumetokea ajali kubwa barabara kuu watu wengi wameumia,sw,Road Accident,,blind
+basi limegongana na lori karibu na kituo cha mafuta,sw,Road Accident,,blind
+mwendesha pikipiki amegongwa na gari na amelala chini,sw,Road Accident,,blind
+gari dogo limeingia mtaroni na dereva amenaswa ndani,sw,Road Accident,,blind
+kuna ajali mbaya sana kwenye daraja la Nyali,sw,Road Accident,,blind
+lori limemgonga mtembea kwa miguu akifa papo hapo,sw,Road Accident,,blind
+magari matatu yamegongana mbele ya soko,sw,Road Accident,,blind
+mtoto amegongwa na pikipiki akivuka barabara,sw,Road Accident,,blind
+gari limepinduka mara tatu na abiria wamejeruhiwa,sw,Road Accident,,blind
+kumekuwa na ajali ya basi la shule wanafunzi wamejeruhiwa,sw,Road Accident,,blind
+trekta imepinduka shambani na dereva yuko chini yake,sw,Road Accident,,blind
+mat imegonga lori kwa highway watu wameumia,sheng,Road Accident,,blind
+boda amegongwa na gari akaruka mbali,sheng,Road Accident,,blind
+kuna ajali kwa Thika Road msee yuko chini,sheng,Road Accident,,blind
+nduthi imeanguka na rider hasogei,sheng,Road Accident,,blind
+gari imeroll na watu wako ndani,sheng,Road Accident,,blind
+there is a bad accident along Mombasa road tafadhali tuma msaada,mixed,Road Accident,,blind
+a matatu has overturned na watu wengi wako ndani,mixed,Road Accident,,blind
+gari imegonga pedestrian and driver has run away,mixed,Road Accident,,blind
+bodaboda rider hit by a lorry amelala barabarani,mixed,Road Accident,,blind
+ajali imetokea near the roundabout watu wamejeruhiwa,mixed,Road Accident,,blind
+gari yetu imeanguka mtaroni,mixed,Road Accident,,blind
+pikipiki imegongana na gari uso kwa uso,mixed,Road Accident,,blind
+nyumba yetu inawaka moto tafadhali msaada,sw,Fire & Rescue,,blind
+kuna moshi mwingi unatoka kwenye ghorofa ya tatu,sw,Fire & Rescue,,blind
+soko linaungua na watu wanakimbia,sw,Fire & Rescue,,blind
+jiko la gesi limelipuka jikoni,sw,Fire & Rescue,,blind
+mafuriko yamebeba nyumba nyingi tuko juu ya paa,sw,Fire & Rescue,,blind
+mtoto ameanguka kwenye kisima,sw,Fire & Rescue,,blind
+ukuta wa nyumba umeanguka na watu wamefunikwa,sw,Fire & Rescue,,blind
+kuna watu wamenasa kwenye lifti ya jengo,sw,Fire & Rescue,,blind
+moto umeanza kwenye bweni la wanafunzi,sw,Fire & Rescue,,blind
+mto umejaa na maji yanaingia nyumbani kwetu,sw,Fire & Rescue,,blind
+jengo la ghorofa limeporomoka katikati ya mji,sw,Fire & Rescue,,blind
+mtu anazama ziwani tafadhali msaada,sw,Fire & Rescue,,blind
+moto wa nyika unaelekea kwenye makazi,sw,Fire & Rescue,,blind
+kuna harufu kali ya gesi nyumbani na moshi,sw,Fire & Rescue,,blind
+plot yetu inawaka moto watu wanatoka,sheng,Fire & Rescue,,blind
+kuna moto mkubwa kwa mtaa wa Mathare,sheng,Fire & Rescue,,blind
+maji imejaa kwa nyumba hatuwezi toka,sheng,Fire & Rescue,,blind
+mtoi ameanguka kwa shimo na amekwama,sheng,Fire & Rescue,,blind
+our house is on fire tafadhali tuma zimamoto,mixed,Fire & Rescue,,blind
+building imeporomoka na kuna watu ndani,mixed,Fire & Rescue,,blind
+flood water imejaa kila mahali tunahitaji rescue,mixed,Fire & Rescue,,blind
+kuna fire kwa market na kila mtu anakimbia,mixed,Fire & Rescue,,blind
+someone has fallen into a well na hatuwezi kumtoa,mixed,Fire & Rescue,,blind
+moto umeshika kwa duka la jirani,mixed,Fire & Rescue,,blind
+tumekwama kwa lift for two hours,mixed,Fire & Rescue,,blind
+kuna wezi wamevunja mlango wa nyuma wanaingia sasa,sw,Security Threat,,blind
+majambazi wenye silaha wanaiba kwenye benki,sw,Security Threat,,blind
+nimeshambuliwa na kundi la vijana usiku,sw,Security Threat,,blind
+mtu mmoja amepigwa risasi mtaani kwetu,sw,Security Threat,,blind
+wanaume wawili wamenivamia na kuniibia pochi,sw,Security Threat,,blind
+kuna mtu mwenye kisu anawatishia wateja,sw,Security Threat,,blind
+nasikia milio ya bunduki karibu na nyumbani kwangu,sw,Security Threat,,blind
+umati umemkamata mwizi na unataka kumchoma moto,sw,Security Threat,,blind
+kuna ghasia kubwa mjini maduka yanaporwa,sw,Security Threat,,blind
+watu wasiojulikana wamevunja duka letu,sw,Security Threat,,blind
+jirani yangu amechomwa kisu na wahuni,sw,Security Threat,,blind
+nimetishiwa na watu wenye panga,sw,Security Threat,,blind
+kuna mtu ananifuata kila ninapotembea na naogopa,sw,Security Threat,,blind
+wameiba gari langu mchana kweupe,sw,Security Threat,,blind
+kundi la wahuni linapiga watu stendi,sw,Security Threat,,blind
+wasee wawili wameniibia simu kwa stage,sheng,Security Threat,,blind
+kuna jamaa ana kisu anatisha watu kwa bar,sheng,Security Threat,,blind
+wahuni wamevamia mtaa wetu usiku,sheng,Security Threat,,blind
+mob inataka kuchoma msee mmoja,sheng,Security Threat,,blind
+nimenyang'anywa mkoba na boda,sheng,Security Threat,,blind
+kuna gang imenivamia na kunipiga,sheng,Security Threat,,blind
+kuna armed robbers wanavunja shop,mixed,Security Threat,,blind
+someone has stabbed my neighbour tafadhali tuma polisi,mixed,Security Threat,,blind
+a mob is beating a thief,mixed,Security Threat,,blind
+I am being followed na mtu ana kisu,mixed,Security Threat,,blind
+kuna shooting kwa estate yetu,mixed,Security Threat,,blind
+wezi wameingia compound,mixed,Security Threat,,blind
+kuna riot kule town,mixed,Security Threat,,blind
+nilishambuliwa na goons,mixed,Security Threat,,blind
+mwanangu hajarudi kutoka shule na tunaogopa ametekwa,sw,Abduction,,blind
+watu wasiojulikana wamempakia msichana kwenye gari wakaondoka,sw,Abduction,,blind
+dada yangu ametekwa na hatujui yuko wapi,sw,Abduction,,blind
+mtoto wetu wa miaka mitano ametoweka sokoni,sw,Abduction,,blind
+wanaume wamemlazimisha mwanamke kuingia kwenye gari jeupe,sw,Abduction,,blind
+mtoto amechukuliwa na mtu asiyemjua nje ya shule,sw,Abduction,,blind
+watekaji wamepiga simu wanadai pesa,sw,Abduction,,blind
+mume wangu amekamatwa na watu wasiojulikana tangu jana,sw,Abduction,,blind
+kijana wangu hajulikani alipo tangu usiku,sw,Abduction,,blind
+msichana ametoweka akitoka kazini,sw,Abduction,,blind
+tumepoteza mtoto kwenye mkutano mkubwa hatumpati,sw,Abduction,,blind
+mtoi wetu ametoweka na hatujui aliko,sheng,Abduction,,blind
+wamemfunga dem macho wakamtupa kwa gari,sheng,Abduction,,blind
+msee wangu ametekwa na watu fulani,sheng,Abduction,,blind
+my daughter has been kidnapped na wanataka ransom,mixed,Abduction,,blind
+mtoto wa jirani is missing since yesterday,mixed,Abduction,,blind
+a girl was dragged into a car outside the stage,mixed,Abduction,,blind
+he was abducted by unknown men,mixed,Abduction,,blind
+kuna mtu amemchukua baby from hospital,mixed,Abduction,,blind
+mwanangu amepotea sijui aliko please help,mixed,Abduction,,blind
+two men bundled my friend into a vehicle,mixed,Abduction,,blind
+nimepotea msituni na simu yangu imezima,sw,Other / General,,blind
+fisi wanazunguka boma letu usiku,sw,Other / General,,blind
+ndovu wameingia shambani na wanaharibu mazao,sw,Other / General,,blind
+gari yangu imeharibika porini usiku,sw,Other / General,,blind
+nimeungua mguu na maji yanayochemka,sw,Other / General,,blind
+mbwa mkali ananifukuza,sw,Other / General,,blind
+nimeteleza bafuni na mguu unauma sana,sw,Other / General,,blind
+nina wasiwasi mkubwa moyo wangu unadunda,sw,Other / General,,blind
+nimekwama kwenye matope na gari langu,sw,Other / General,,blind
+nyuki wengi wanazunguka nyumba yetu,sw,Other / General,,blind
+nimefungiwa nje ya nyumba usiku wa manane,sw,Other / General,,blind
+simba ametoka kwenye mbuga na yuko karibu na shule,sw,Other / General,,blind
+nimekwama porini na gari imezima,sheng,Other / General,,blind
+nimepotea kwa mtaa mgeni na simu ina chaji ndogo,sheng,Other / General,,blind
+fisi imeingia kwa boma,sheng,Other / General,,blind
+nimeumia kidogo kwa mguu nikidondoka,sheng,Other / General,,blind
+I am lost in the forest tafadhali nisaidie,mixed,Other / General,,blind
+a hyena has entered our compound,mixed,Other / General,,blind
+my car broke down na ni usiku,mixed,Other / General,,blind
+I slipped and hurt my ankle,mixed,Other / General,,blind
+nina stress sana na siwezi kulala,mixed,Other / General,,blind
+nimechoka na kila kitu sijui nifanye nini,mixed,Other / General,,blind
+kuna wild animal karibu na nyumba,mixed,Other / General,,blind
+sioni sababu ya kuendelea kuishi,sw,Other / General,self_harm,blind
+nimeamua kujitoa uhai leo,sw,Other / General,self_harm,blind
+afadhali nife kuliko kuendelea hivi,sw,Other / General,self_harm,blind
+nafikiria kujitia kitanzi,sw,Other / General,self_harm,blind
+nimechoka sana nataka kujiua,sw,Other / General,self_harm,blind
+mtoto wangu anasema anataka kufa,sw,Other / General,self_harm,blind
+nimepanga jinsi ya kujiua,sw,Other / General,self_harm,blind
+kaka yangu ametishia kujiua,sw,Other / General,self_harm,blind
+anasema hataki kuishi tena,sw,Other / General,self_harm,blind
+nimeshindwa na maisha bora nife,sw,Other / General,self_harm,blind
+mwanamke amebakwa na watu watatu usiku,sw,Security Threat,sexual_violence,blind
+nimenajisiwa na jirani yangu,sw,Security Threat,sexual_violence,blind
+binti yangu amebakwa shuleni,sw,Security Threat,sexual_violence,blind
+mtoto wa miaka kumi amenajisiwa,sw,Security Threat,sexual_violence,blind
+alinilazimisha kulala naye kwa nguvu,sw,Security Threat,sexual_violence,blind
+dada yangu ameshambuliwa kingono,sw,Security Threat,sexual_violence,blind
+nilibakwa jana na sijui nifanye nini,sw,Security Threat,sexual_violence,blind
+mume wangu amenipiga tena usiku wa jana,sw,Security Threat,domestic_violence,blind
+mke wangu anamchapa mtoto kila siku na kunipiga mimi,sw,Security Threat,domestic_violence,blind
+baba yangu anampiga mama kila akilewa,sw,Security Threat,domestic_violence,blind
+mpenzi wangu ananitishia na kunipiga,sw,Security Threat,domestic_violence,blind
+ananipiga kila siku mume wangu na sina pa kwenda,sw,Security Threat,domestic_violence,blind
+nimepigwa na mume wangu na kutolewa nje ya nyumba,sw,Security Threat,domestic_violence,blind
+habari za asubuhi,sw,,,blind
+naomba usaidizi wa kutumia app hii,sw,,,blind
+nimefika salama nyumbani,sw,,,blind
+ahsante kwa msaada wenu,sw,,,blind
+nataka kuuliza bei ya nauli,sw,,,blind
+mambo,sw,,,blind
+naomba nipigie baadaye,sw,,,blind
+hii app inafanya kazi vizuri,sw,,,blind
+niko kwenye mkutano sasa,sw,,,blind
+tutaonana kesho asubuhi,sw,,,blind
+nimepiga picha ya ajali iliyotokea jana,sw,,,blind
+nimesikia habari za moto kwenye redio,sw,,,blind
+kesho nitaenda hospitali kumuona mgonjwa,sw,,,blind
+naomba chai ya moto,sw,,,blind
+nimenunua gari jipya,sw,,,blind
