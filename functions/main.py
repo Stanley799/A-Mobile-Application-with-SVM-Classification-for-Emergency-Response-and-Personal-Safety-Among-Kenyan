@@ -18,8 +18,9 @@ from firebase_functions import firestore_fn, https_fn, options, scheduler_fn
 import dispatch  # noqa: F401  (path set-up)
 from dispatch import admin_accounts as acct, config as C, core, notify, store
 
+from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
 initialize_app()
-OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20)
+OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
 _db = None
 
 

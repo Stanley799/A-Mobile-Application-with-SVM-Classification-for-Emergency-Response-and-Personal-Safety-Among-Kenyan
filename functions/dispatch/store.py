@@ -189,6 +189,11 @@ def reconcile_incident(db, incident_id, now, notify=None):
     res = core.reconcile(inc, available_responders(db), offers, now, table())
     apply_actions(db, res["actions"], notify)
     write_dispatch(db, incident_id, inc.get("dispatch"), res["dispatch"])
+    try:                                    # help options for the resident map; must never stop dispatch
+        from . import options_store
+        options_store.refresh(db, incident_id, inc, res["dispatch"], now)
+    except Exception as e:  # noqa: BLE001
+        print(f"[options] {incident_id}: {type(e).__name__}: {e}")
     return res
 
 

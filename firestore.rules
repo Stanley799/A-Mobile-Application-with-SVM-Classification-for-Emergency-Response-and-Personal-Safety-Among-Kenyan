@@ -484,6 +484,40 @@ service cloud.firestore {
         && (resource.data.status != "offered" || request.time < resource.data.expiresAt);
     }
 
+    // ---- Phase 3A: directory, help options, live tracking ----
+    // Directory of listed places: any signed-in user can read; only administrators (and the import script, which bypasses rules) can write.
+    match /facilities/{facilityId} {
+      allow read: if isSignedIn();
+      allow write: if isSystemAdmin();
+    }
+
+    // The 1-3 help cards for one alert: only the alert's owner and administrators can read them; only Cloud Functions write them.
+    match /incidents/{incidentId}/options/{optionId} {
+      allow read: if isSignedIn()
+        && (isSystemAdmin() || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Route cache: Cloud Functions only.
+    match /incidents/{incidentId}/routes/{responderId} {
+      allow read, write: if false;
+    }
+
+    // Live position of a unit that HOLDS this job. The resident of this alert, that unit and administrators can read it. Only that unit can write it,
+    // and only while its own offer for this alert is accepted / en route / arrived. Functions delete it when the job ends.
+    match /incidents/{incidentId}/tracks/{responderId} {
+      allow read: if isSignedIn()
+        && (isSystemAdmin() || responderId == request.auth.uid
+            || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid);
+      allow create, update: if isSignedIn() && responderId == request.auth.uid
+        && get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"]
+        && request.resource.data.keys().hasOnly(["lat", "lng", "heading", "speed", "accuracy", "at"])
+        && request.resource.data.lat is number && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.at is timestamp;
+      allow delete: if false;
+    }
+
     // Push tokens: a signed-in user stores ONLY their own device token. The dispatch function reads it with the Admin SDK.
     match /deviceTokens/{userId} {
       allow read: if isOwner(userId);

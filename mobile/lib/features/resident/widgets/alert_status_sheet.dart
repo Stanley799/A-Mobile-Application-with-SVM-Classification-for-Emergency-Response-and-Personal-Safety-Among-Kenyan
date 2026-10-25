@@ -15,6 +15,7 @@ import '../../../core/triage/triage_schema.dart';
 import '../../../core/utils/incident_id.dart';
 import 'category_style.dart';
 import 'dispatch_card.dart';
+import '../map/help_map_entry.dart';
 import 'hotline_card.dart';
 import 'other_free_text_sheet.dart';
 import 'triage_question_sheet.dart';
@@ -439,6 +440,8 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                       onAddDetails: _detailsCompleted ? null : _openMoreDetailsSheet,
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                  HelpMapEntry(incidentId: widget.incidentRef.id),
                   const SizedBox(height: AppSpacing.md),
                 ],
                 if (kDispatchEnabled) ...[

@@ -12,6 +12,7 @@ import 'duty_heartbeat.dart';
 import 'incoming_alert_screen.dart';
 import 'responder_repository.dart';
 import 'responder_theme.dart';
+import 'track_publisher.dart';
 
 /// Put this where the app opens the home screen for a user whose role is "Responder".
 class ResponderGate extends StatelessWidget {
@@ -94,6 +95,7 @@ class _ResponderShellState extends State<ResponderShell> with WidgetsBindingObse
     _sub = widget.repo.watchOffers().listen((list) {
       if (!mounted) return;
       setState(() => _offers = list);
+      TrackPublisher.instance.sync(list); // live location only while a job is held
       for (final o in list) {
         if (o.isOpen && o.secondsLeft() > 0 && _shown.add(o.id)) {
           SystemSound.play(SystemSoundType.alert);
