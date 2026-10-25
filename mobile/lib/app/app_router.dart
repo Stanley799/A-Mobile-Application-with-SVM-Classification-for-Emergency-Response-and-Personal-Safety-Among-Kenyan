@@ -1,9 +1,11 @@
 import 'package:go_router/go_router.dart';
 
+import '../features/admin/admin_shell.dart';
 import '../features/auth/models/auth_models.dart';
 import '../features/auth/screens/create_account_screen.dart';
 import '../features/auth/screens/sign_in_screen.dart';
 import '../features/resident/screens/home_screen.dart';
+import '../features/responder/responder_shell.dart';
 import '../features/home/screens/placeholder_screens.dart';
 import 'auth_state_controller.dart';
 
@@ -28,16 +30,16 @@ GoRouter buildRouter(AuthStateController authState) {
         return '/sign-in';
       }
 
+      if (authState.isSystemAdmin) {
+        return location == '/admin-dashboard' ? null : '/admin-dashboard';
+      }
+
       final profile = authState.profile;
       if (profile == null) {
         return '/loading';
       }
 
       final role = profile.role;
-      if (role == UserRole.systemAdmin) {
-        return location == '/admin-dashboard' ? null : '/admin-dashboard';
-      }
-
       if (role == UserRole.resident) {
         return location == '/home' ? null : '/home';
       }
@@ -77,7 +79,7 @@ GoRouter buildRouter(AuthStateController authState) {
       ),
       GoRoute(
         path: '/responder-home',
-        builder: (context, state) => const ResponderHomeScreen(),
+        builder: (context, state) => const ResponderGate(),
       ),
       GoRoute(
         path: '/pending-verification',
@@ -96,7 +98,7 @@ GoRouter buildRouter(AuthStateController authState) {
       ),
       GoRoute(
         path: '/admin-dashboard',
-        builder: (context, state) => const AdminDashboardPlaceholderScreen(),
+        builder: (context, state) => const AdminShell(),
       ),
     ],
   );

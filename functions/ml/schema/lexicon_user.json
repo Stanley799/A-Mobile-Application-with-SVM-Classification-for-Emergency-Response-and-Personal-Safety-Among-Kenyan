@@ -1,0 +1,620 @@
+{
+ "_version": 2,
+ "_instructions": "YOU own this file. Keep every term lowercase. Strong = can decide alone; weak = only supports or triggers a question. One strong term belongs to ONE category. Run `py scripts\\check_lexicon.py` after every edit. Read docs/lexicon_review.csv: every term has a status and the ones marked native_check=yes need a Swahili/Sheng speaker.",
+ "_syntax": {
+  "plain": "'moto' = the exact word or phrase (whole words only).",
+  "v:ROOT": "verb, any tense, optional object marker.  v:rape matches kumrape, anarape.",
+  "v0:ROOT": "verb with NO object marker; also passives.  v0:pigwa matches amepigwa, kupigwa.",
+  "vo:ROOT": "object marker 'me/us' REQUIRED.  vo:piga matches ananipiga, hunipiga, kunipiga.",
+  "vx:ROOT": "ANY person object marker required.  vx:piga matches anampiga but NOT 'anapiga pasi'.",
+  "vr:ROOT": "reflexive 'ji' REQUIRED (done to oneself).  vr:ua matches kujiua, anajiua.",
+  "pair": "{'pair': {'who': [...], 'act': [...], 'window': 8}}  both clues must be within 'window' words.",
+  "weak": "weak terms can never decide alone; they only support or trigger a question to the resident."
+ },
+ "ignore_phrases": [
+  "hakuna wasiwasi",
+  "usiwe na wasiwasi",
+  "hakuna matata",
+  "v:piga simu",
+  "v:piga picha",
+  "v:piga kelele",
+  "v0:pigwa picha"
+ ],
+ "flags": {
+  "self_harm": {
+   "strong": [
+    "vr:ua",
+    "vr:angamiza",
+    "vr:angamia",
+    "v0:taka kufa",
+    "v0:tamani kufa",
+    "maliza maisha yake",
+    "maliza maisha yangu",
+    "v0:maliza maisha yangu",
+    "vr:nyonga",
+    "vr:dhuru",
+    "vr:toa uhai",
+    "sitaki kuishi",
+    "hataki kuishi",
+    "afadhali nife",
+    "afadhali afe"
+   ],
+   "weak": [
+    "v0:maliza maisha yao",
+    "v0:jitoa uhai",
+    "nimechoka na maisha",
+    "sina matumaini",
+    "v0:kata tamaa"
+   ]
+  },
+  "sexual_violence": {
+   "strong": [
+    "rape",
+    "v:rape",
+    "v0:rapiwa",
+    "v:baka",
+    "v0:bakwa",
+    "unajisi",
+    "v:najisi",
+    "v0:najisiwa",
+    "unyanyasaji wa kijinsia",
+    {
+     "pair": {
+      "who": [
+       "v0:dhalilishwa",
+       "v:dhalilisha",
+       "v0:nyanyaswa",
+       "v:nyanyasa",
+       "v0:jilazimisha",
+       "v:lazimisha",
+       "v0:lazimishwa"
+      ],
+      "act": [
+       "kingono",
+       "ngono",
+       "kijinsia"
+      ],
+      "window": 6
+     }
+    },
+    "ubakaji",
+    "mbakaji",
+    "wabakaji",
+    "unyanyasaji wa kingono",
+    "v0:lazimishwa kufanya ngono"
+   ],
+   "weak": [
+    "v0:dhalilishwa",
+    "v:dhalilisha",
+    "v0:nyanyaswa",
+    "v:nyanyasa",
+    "unyanyasaji",
+    "uwaki"
+   ]
+  },
+  "domestic_violence": {
+   "strong": [
+    "ukatili wa nyumbani",
+    "vurugu nyumbani",
+    "v:piga mke",
+    {
+     "pair": {
+      "who": [
+       "mume wangu",
+       "mke wangu",
+       "mpenzi wangu",
+       "mchumba wangu",
+       "baba yangu",
+       "mama yangu",
+       "mumewe",
+       "mkewe",
+       "mume wake",
+       "mke wake",
+       "mpenzi wake",
+       "mchumba wake"
+      ],
+      "act": [
+       "vx:piga",
+       "v0:chapwa",
+       "vx:chapa",
+       "vx:gonga",
+       "v0:pigwa"
+      ],
+      "window": 8
+     }
+    },
+    "unyanyasaji wa nyumbani",
+    "vurugu za nyumbani"
+   ],
+   "weak": [
+    "vo:piga",
+    "unyanyasaji",
+    "v0:nyanyaswa",
+    "uwaki"
+   ]
+  }
+ },
+ "categories": {
+  "Medical Emergency": {
+   "terms": [
+    "amekosa fahamu",
+    "hapumui",
+    "hawezi kupumua",
+    "ameshindwa kupumua",
+    "mshtuko wa moyo",
+    "maumivu ya kifua",
+    "kifafa",
+    "kutetemeka kwa nguvu",
+    "mitetemo ya mwili",
+    "kuzimia",
+    "kutokwa na damu",
+    "uchungu wa uzazi",
+    "uchungu wa kuzaa",
+    "mikazo ya uzazi",
+    "kuharibika kwa mimba",
+    "nyoka",
+    "kung'atwa na nyoka",
+    "sumu",
+    "iliyotiwa sumu",
+    "mzio wa chakula",
+    "mzio wa dawa",
+    "mwenye mzio",
+    "chakula imekwama kwa koo",
+    "kiharusi",
+    "kisukari",
+    "pumu",
+    "mgonjwa",
+    "homa",
+    "hawezi akapumua",
+    "v0:jifungua",
+    "chakula kimekwama kooni"
+   ],
+   "weak_terms": [
+    "damu",
+    "mja mzito",
+    "mikono inatetemeka",
+    "v0:umwa",
+    "mjamzito"
+   ],
+   "subtypes": {
+    "maternal": [
+     "uchungu wa uzazi",
+     "uchungu wa kuzaa",
+     "mikazo ya uzazi",
+     "kuharibika kwa mimba",
+     "mja mzito",
+     "v0:jifungua",
+     "mjamzito"
+    ],
+    "snakebite_or_poison": [
+     "nyoka",
+     "sumu",
+     "iliyotiwa sumu"
+    ],
+    "cardiac": [
+     "mshtuko wa moyo",
+     "maumivu ya kifua"
+    ],
+    "seizure_or_collapse": [
+     "kifafa",
+     "kutetemeka kwa nguvu",
+     "mitetemo ya mwili",
+     "kuzimia"
+    ],
+    "breathing_problem": [
+     "hapumui",
+     "hawezi kupumua",
+     "hawezi akapumua",
+     "ameshindwa kupumua",
+     "pumu"
+    ]
+   }
+  },
+  "Road Accident": {
+   "terms": [
+    "ajali",
+    "mgongano",
+    "v:gongana",
+    "v0:gongwa"
+   ],
+   "weak_terms": [
+    "matatu",
+    "boda boda",
+    "bodaboda",
+    "pikipiki",
+    "v0:pinduka"
+   ],
+   "subtypes": {
+    "boda_boda": [
+     "boda boda",
+     "bodaboda",
+     "pikipiki",
+     "piki piki"
+    ],
+    "matatu_or_bus": [
+     "matatu",
+     {
+      "pair": {
+       "who": [
+        "basi",
+        "mabasi"
+       ],
+       "act": [
+        "ajali",
+        "v0:pinduka",
+        "v:gongana",
+        "v0:gongwa"
+       ],
+       "window": 6
+      }
+     }
+    ],
+    "pedestrian_hit": [
+     "v0:kanyagwa",
+     "mpita njia"
+    ],
+    "truck_or_heavy": [
+     "lori",
+     "malori",
+     "traki"
+    ]
+   }
+  },
+  "Fire & Rescue": {
+   "terms": [
+    "moto",
+    "moshi",
+    "ndimi za moto",
+    "kuporomoka kwa jengo",
+    "jengo limeporomoka",
+    "mafuriko",
+    "imefurika",
+    "v0:zama",
+    "imeangukia wafanyakazi",
+    "ajali ya moto",
+    "v0:ungua"
+   ],
+   "weak_terms": [
+    "inachomeka",
+    "chomeka",
+    "amekwama",
+    "kifusi"
+   ],
+   "subtypes": {
+    "building_fire": [
+     "moto",
+     "ndimi za moto",
+     "ajali ya moto",
+     "v0:ungua"
+    ],
+    "building_collapse": [
+     "kuporomoka kwa jengo",
+     "jengo limeporomoka"
+    ],
+    "flood_or_water_rescue": [
+     "mafuriko",
+     "imefurika",
+     "v0:zama"
+    ]
+   },
+   "subtype_weak": {
+    "building_fire": [
+     "inachomeka",
+     "chomeka"
+    ]
+   }
+  },
+  "Security Threat": {
+   "terms": [
+    "ujambazi",
+    "jambazi",
+    "wajambazi",
+    "wezi",
+    "mwizi",
+    "v0:ibiwa",
+    "bunduki",
+    "mlio wa risasi",
+    "risasi",
+    "v:piga risasi",
+    "kisu",
+    "v0:dungwa",
+    "panga",
+    "v0:shambuliwa",
+    "v:shambulia",
+    "shambulio",
+    "uporaji",
+    "waporaji",
+    "ghasia",
+    "wahuni",
+    "kundi la wahalifu",
+    "vo:ua",
+    "v:ua mtu",
+    "mob justice",
+    "v:iba"
+   ],
+   "weak_terms": [
+    "kundi la watu",
+    "v0:pigwa",
+    "vo:piga",
+    "umati",
+    "uhalifu"
+   ],
+   "subtypes": {
+    "armed_robbery": [
+     "ujambazi",
+     "jambazi",
+     "wajambazi",
+     "bunduki",
+     "mlio wa risasi",
+     "risasi",
+     "kisu",
+     "panga",
+     "genge la wezi",
+     "kundi la wezi",
+     "kundi la wahalifu"
+    ],
+    "looting_or_riot": [
+     "uporaji",
+     "waporaji",
+     "ghasia"
+    ],
+    "assault": [
+     "v0:shambuliwa",
+     "v:shambulia",
+     "shambulio",
+     "v0:dungwa",
+     "v0:pigwa"
+    ],
+    "mob_violence": [
+     "mob justice",
+     "umati"
+    ]
+   },
+   "subtype_weak": {
+    "mob_violence": [
+     "kundi la watu"
+    ]
+   }
+  },
+  "Abduction": {
+   "terms": [
+    "v0:tekwa nyara",
+    "v:teka nyara",
+    "utekaji nyara",
+    "v0:chukuliwa kwa nguvu",
+    "v0:lazimishwa kuingia kwenye gari",
+    "v0:vutwa ndani",
+    "v0:nyakuliwa na kuondoshwa kwa gari",
+    "v0:chukuliwa kinyume na matakwa yake",
+    "v0:chukuliwa bila hiari",
+    "mtoto amepotea",
+    "mtoto aliyepotea",
+    "mtoi amepotea"
+   ],
+   "subtypes": {
+    "kidnapping": [
+     "v0:tekwa nyara",
+     "v:teka nyara",
+     "utekaji nyara",
+     "v0:chukuliwa kwa nguvu",
+     "v0:lazimishwa kuingia kwenye gari",
+     "v0:vutwa ndani",
+     "v0:nyakuliwa na kuondoshwa kwa gari",
+     "v0:chukuliwa kinyume na matakwa yake",
+     "v0:chukuliwa bila hiari"
+    ],
+    "missing_child": [
+     "mtoto aliyepotea",
+     "mtoto amepotea",
+     "mtoi amepotea"
+    ]
+   },
+   "weak_terms": []
+  },
+  "Other / General": {
+   "terms": [
+    "fisi",
+    "simba",
+    "tembo",
+    "ndovu",
+    "nyati",
+    "mamba",
+    "kuchomwa kwa maji ya moto",
+    "v0:huzunika",
+    "akona huzuni",
+    "ako na huzuni",
+    "msongo wa mawazo",
+    "sonona",
+    "mfadhaiko",
+    "v0:vunjika moyo"
+   ],
+   "weak_terms": [
+    "v0:anguka",
+    "v0:choma",
+    "v0:chomwa",
+    "maji ya moto",
+    "v0:achwa",
+    "huzuni",
+    "wasiwasi",
+    "hofu",
+    "kisaikolojia",
+    "upweke",
+    "vx:acha"
+   ],
+   "subtypes": {
+    "wildlife_attack": [
+     "fisi",
+     "simba",
+     "tembo",
+     "ndovu",
+     "nyati",
+     "mamba"
+    ],
+    "burns": [
+     "kuchomwa kwa maji ya moto"
+    ],
+    "emotional_distress": [
+     "v0:huzunika",
+     "akona huzuni",
+     "ako na huzuni",
+     "msongo wa mawazo",
+     "sonona",
+     "mfadhaiko",
+     "v0:vunjika moyo"
+    ]
+   },
+   "subtype_weak": {
+    "fall_or_injury": [
+     "v0:anguka"
+    ],
+    "burns": [
+     "v0:choma",
+     "v0:chomwa",
+     "maji ya moto"
+    ],
+    "emotional_distress": [
+     "huzuni",
+     "wasiwasi",
+     "hofu",
+     "kisaikolojia",
+     "upweke",
+     "vx:acha"
+    ],
+    "wildlife_attack": []
+   }
+  }
+ },
+ "themes": {
+  "relationship": [
+   "v0:achana",
+   "talaka",
+   "vx:acha",
+   "mpenzi"
+  ],
+  "academic": [
+   "mtihani",
+   "ada",
+   "matokeo"
+  ],
+  "financial": [
+   "deni",
+   "madeni",
+   "mkopo",
+   "kodi",
+   "v0:futwa kazi",
+   "ukosefu wa kazi"
+  ],
+  "family": [
+   "wazazi",
+   "familia"
+  ],
+  "grief": [
+   "msiba",
+   "mazishi",
+   "kifo"
+  ],
+  "postpartum": [
+   "baada ya kujifungua",
+   "mtoto mchanga"
+  ],
+  "substance": [
+   "pombe",
+   "v0:lewa",
+   "ulevi",
+   "dawa za kulevya"
+  ],
+  "bullying": [
+   "v0:onewa",
+   "vx:onea"
+  ]
+ },
+ "common_words": [],
+ "tests": [
+  {
+   "text": "nimeumwa na nyoka",
+   "category": "Medical Emergency",
+   "subtype": "snakebite_or_poison"
+  },
+  {
+   "text": "nyoka imenuma mtoto",
+   "category": "Medical Emergency",
+   "subtype": "snakebite_or_poison"
+  },
+  {
+   "text": "kuna mtu ameumwa na nyoka",
+   "category": "Medical Emergency",
+   "subtype": "snakebite_or_poison"
+  },
+  {
+   "text": "nataka kujiua",
+   "flag": "self_harm"
+  },
+  {
+   "text": "anajaribu kujiua",
+   "flag": "self_harm"
+  },
+  {
+   "text": "anataka kuniua",
+   "category": "Security Threat",
+   "no_flag": true
+  },
+  {
+   "text": "mume wangu ananipiga",
+   "flag": "domestic_violence"
+  },
+  {
+   "text": "mume wangu hunipiga kila usiku",
+   "flag": "domestic_violence"
+  },
+  {
+   "text": "wezi wananipiga",
+   "category": "Security Threat",
+   "no_flag": true
+  },
+  {
+   "text": "mke wangu anapiga simu",
+   "no_flag": true
+  },
+  {
+   "text": "alibakwa jana",
+   "flag": "sexual_violence"
+  },
+  {
+   "text": "alidhalilishwa kingono",
+   "flag": "sexual_violence"
+  },
+  {
+   "text": "alidhalilishwa kazini",
+   "no_flag": true
+  },
+  {
+   "text": "ajali ya basi",
+   "category": "Road Accident",
+   "subtype": "matatu_or_bus"
+  },
+  {
+   "text": "basi nimefika",
+   "category": null,
+   "no_flag": true
+  },
+  {
+   "text": "hakuna wasiwasi",
+   "category": null,
+   "no_flag": true
+  },
+  {
+   "text": "mtoto amepotea sokoni",
+   "category": "Abduction",
+   "subtype": "missing_child"
+  },
+  {
+   "text": "kuchomwa kwa maji ya moto",
+   "category": "Other / General",
+   "subtype": "burns"
+  },
+  {
+   "text": "amekosa fahamu baada ya ajali",
+   "category": "Road Accident"
+  }
+ ]
+}

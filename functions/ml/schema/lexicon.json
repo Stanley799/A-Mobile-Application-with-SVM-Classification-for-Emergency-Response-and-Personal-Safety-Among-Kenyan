@@ -1,0 +1,604 @@
+{
+ "_version": 2,
+ "note": "ENGLISH ONLY, written by the assistant. Swahili and Sheng live in schema/lexicon_user.json (yours). TIERS: 'terms'/'strong' can decide alone; 'weak_terms'/'weak' only support or trigger a question. A strong term must belong to ONE category (run scripts/check_lexicon.py). Syntax guide: docs/text_triage_architecture.md",
+ "flags": {
+  "self_harm": {
+   "strong": [
+    "kill myself",
+    "killing myself",
+    "suicide",
+    "suicidal",
+    "end my life",
+    "want to die",
+    "wanna die",
+    "take my own life",
+    "kill himself",
+    "kill herself",
+    "killing himself",
+    "killing herself",
+    "end his life",
+    "end her life",
+    "take his own life",
+    "take her own life",
+    "wants to die",
+    "no reason to live",
+    "better off dead",
+    "dont want to live",
+    "do not want to live",
+    "don't want to live"
+   ],
+   "weak": [
+    "hopeless",
+    "cant go on",
+    "can't go on",
+    "wants to kill"
+   ]
+  },
+  "sexual_violence": {
+   "strong": [
+    "rape",
+    "raped",
+    "raping",
+    "sexually assaulted",
+    "sexual assault",
+    "molested",
+    "defiled",
+    "defilement",
+    "forced himself",
+    "forced herself"
+   ],
+   "weak": [
+    "harassed",
+    "abused",
+    "sexually harassed"
+   ]
+  },
+  "domestic_violence": {
+   "strong": [
+    "domestic violence",
+    "domestic abuse",
+    "wife beating",
+    "beating my husband",
+    "beating my wife",
+    "beating her husband",
+    "beating his wife",
+    "beaten by my boyfriend",
+    "beaten by my partner",
+    "beaten by my wife",
+    "beaten by my husband",
+    "beaten by his partner",
+    "beaten by her partner",
+    "beaten by her boyfriend",
+    "beaten by his wife",
+    "beaten by her husband",
+    {
+     "pair": {
+      "who": [
+       "my husband",
+       "my wife",
+       "my boyfriend",
+       "my girlfriend",
+       "my partner",
+       "my father",
+       "my mother",
+       "my dad",
+       "my mum",
+       "my stepfather"
+      ],
+      "act": [
+       "beats",
+       "hits",
+       "beating",
+       "hitting",
+       "beat me",
+       "hit me",
+       "slaps",
+       "slapping",
+       "abuses",
+       "abusing"
+      ],
+      "window": 6
+     }
+    }
+   ],
+   "weak": [
+    "beating me",
+    "he beats me",
+    "she beats me",
+    "hits me"
+   ]
+  }
+ },
+ "ignore_phrases": [
+  "no worries",
+  "dont worry",
+  "do not worry",
+  "don't worry",
+  "suicide bomber",
+  "suicide bombers",
+  "suicide bombing",
+  "suicide bombings",
+  "suicide bomb",
+  "suicide attack",
+  "suicide attacks",
+  "suicide cadres",
+  "suicide squad",
+  "suicide vest",
+  "suicide mission",
+  "don't want to die",
+  "do not want to die",
+  "dont want to die",
+  "didn't want to die",
+  "did not want to die",
+  "doesn't want to die",
+  "does not want to die",
+  "we don't want to die",
+  "not want to die",
+  "suicide attackers",
+  "suicide attacker",
+  "suicide blast",
+  "suicide blasts",
+  "suicide bombs",
+  "suicide cadre",
+  "suicide car bomb"
+ ],
+ "common_words": [
+  "basi",
+  "sana",
+  "tu",
+  "na",
+  "ya",
+  "wa",
+  "la",
+  "kwa",
+  "ni",
+  "si",
+  "pia",
+  "sasa",
+  "kila",
+  "hapa",
+  "pale",
+  "kuna",
+  "sawa",
+  "ndio",
+  "hapana",
+  "tafadhali",
+  "asante",
+  "the",
+  "and",
+  "help",
+  "please"
+ ],
+ "themes": {
+  "relationship": [
+   "breakup",
+   "broke up",
+   "heartbroken",
+   "heartbreak",
+   "cheated",
+   "dumped",
+   "divorce",
+   "separated",
+   "left me"
+  ],
+  "academic": [
+   "exam",
+   "exams",
+   "results",
+   "failed",
+   "retake",
+   "fees",
+   "university",
+   "school"
+  ],
+  "financial": [
+   "debt",
+   "debts",
+   "loan",
+   "loans",
+   "rent",
+   "fired",
+   "jobless",
+   "unemployed",
+   "evicted",
+   "broke",
+   "betting"
+  ],
+  "family": [
+   "my parents",
+   "my mother",
+   "my father",
+   "family",
+   "fight with"
+  ],
+  "grief": [
+   "died",
+   "death",
+   "funeral",
+   "passed away",
+   "bereaved",
+   "lost my"
+  ],
+  "postpartum": [
+   "postpartum",
+   "after birth",
+   "new baby",
+   "after delivery"
+  ],
+  "substance": [
+   "alcohol",
+   "drunk",
+   "drinking",
+   "drugs"
+  ],
+  "bullying": [
+   "bullied",
+   "bullying",
+   "teased"
+  ]
+ },
+ "categories": {
+  "Medical Emergency": {
+   "terms": [
+    "unconscious",
+    "not breathing",
+    "cannot breathe",
+    "can't breathe",
+    "difficulty breathing",
+    "heart attack",
+    "chest pain",
+    "seizure",
+    "convulsing",
+    "convulsions",
+    "epileptic",
+    "epilepsy",
+    "collapsed",
+    "fainted",
+    "labour",
+    "labor",
+    "contractions",
+    "miscarriage",
+    "water broke",
+    "water has broken",
+    "snake",
+    "snakebite",
+    "poison",
+    "poisoned",
+    "allergic",
+    "choking",
+    "stroke",
+    "diabetic",
+    "asthma",
+    "sick",
+    "fever"
+   ],
+   "weak_terms": [
+    "blood",
+    "bleeding",
+    "pregnant",
+    "fits",
+    "injured",
+    "injury",
+    "injuries",
+    "wounded",
+    "hospital",
+    "doctor",
+    "doctors",
+    "nurse",
+    "medicine",
+    "medical",
+    "ambulance",
+    "vomiting",
+    "pain"
+   ],
+   "subtypes": {
+    "maternal": [
+     "pregnant",
+     "labour",
+     "labor",
+     "contractions",
+     "miscarriage",
+     "water broke",
+     "water has broken"
+    ],
+    "snakebite_or_poison": [
+     "snake",
+     "snakebite",
+     "poison",
+     "poisoned"
+    ],
+    "cardiac": [
+     "heart attack",
+     "chest pain"
+    ],
+    "seizure_or_collapse": [
+     "seizure",
+     "convulsing",
+     "convulsions",
+     "fits",
+     "epileptic",
+     "epilepsy",
+     "collapsed",
+     "fainted"
+    ],
+    "breathing_problem": [
+     "cannot breathe",
+     "can't breathe",
+     "difficulty breathing",
+     "choking",
+     "asthma"
+    ]
+   }
+  },
+  "Road Accident": {
+   "terms": [
+    "accident",
+    "crash",
+    "crashed",
+    "collided",
+    "collision",
+    "knocked down",
+    "hit by a car",
+    "hit by a lorry",
+    "hit by a truck",
+    "hit by a bus",
+    "hit by a motorbike",
+    "run over",
+    "overturned"
+   ],
+   "weak_terms": [
+    "rolled",
+    "matatu",
+    "boda boda",
+    "bodaboda",
+    "motorbike"
+   ],
+   "subtypes": {
+    "boda_boda": [
+     "boda boda",
+     "bodaboda",
+     "motorbike"
+    ],
+    "matatu_or_bus": [
+     "matatu",
+     "bus"
+    ],
+    "pedestrian_hit": [
+     "knocked down",
+     "hit by a car",
+     "pedestrian",
+     "run over"
+    ],
+    "truck_or_heavy": [
+     "truck",
+     "lorry",
+     "trailer"
+    ]
+   }
+  },
+  "Fire & Rescue": {
+   "terms": [
+    "fire",
+    "burning",
+    "on fire",
+    "smoke",
+    "flames",
+    "building collapsed",
+    "collapsed building",
+    "flood",
+    "flooded",
+    "drowning",
+    "drowned",
+    "caved in",
+    "fell on workers",
+    "fallen on workers"
+   ],
+   "weak_terms": [
+    "trapped",
+    "buried"
+   ],
+   "subtypes": {
+    "building_fire": [
+     "fire",
+     "burning",
+     "on fire",
+     "flames"
+    ],
+    "building_collapse": [
+     "building collapsed",
+     "collapsed building"
+    ],
+    "flood_or_water_rescue": [
+     "flood",
+     "flooded",
+     "drowning",
+     "drowned"
+    ]
+   }
+  },
+  "Security Threat": {
+   "terms": [
+    "robbery",
+    "robbers",
+    "robbed",
+    "thieves",
+    "thief",
+    "gun",
+    "gunshot",
+    "knife",
+    "stabbed",
+    "panga",
+    "attacked",
+    "attackers",
+    "mob",
+    "looting",
+    "looters",
+    "riot",
+    "goons",
+    "burglars",
+    "burglar",
+    "carjacking",
+    "gunfire",
+    "shooting",
+    "shots fired",
+    "armed men",
+    "armed robbers"
+   ],
+   "weak_terms": [
+    "shot",
+    "gang"
+   ],
+   "subtypes": {
+    "armed_robbery": [
+     "robbery",
+     "robbers",
+     "robbed",
+     "gun",
+     "panga",
+     "armed men",
+     "armed robbers"
+    ],
+    "mob_violence": [
+     "mob",
+     "mob justice",
+     "goons",
+     "gang"
+    ],
+    "looting_or_riot": [
+     "looting",
+     "looters",
+     "riot"
+    ],
+    "assault": [
+     "attacked",
+     "attackers",
+     "stabbed",
+     "beaten"
+    ]
+   }
+  },
+  "Abduction": {
+   "terms": [
+    "kidnapped",
+    "kidnap",
+    "abducted",
+    "abduct",
+    "abduction",
+    "taken by force",
+    "forced into a car",
+    "grabbed and drove off",
+    "taken against her will",
+    "taken against his will",
+    "missing child",
+    "child is missing",
+    "lost child"
+   ],
+   "weak_terms": [
+    "dragged into"
+   ],
+   "subtypes": {
+    "kidnapping": [
+     "kidnapped",
+     "kidnap",
+     "abducted",
+     "abduct",
+     "abduction"
+    ],
+    "missing_child": [
+     "missing child",
+     "child is missing",
+     "lost child"
+    ]
+   }
+  },
+  "Other / General": {
+   "terms": [
+    "hyena",
+    "lion",
+    "elephant",
+    "buffalo",
+    "crocodile",
+    "hippo",
+    "fell",
+    "fallen",
+    "scalded",
+    "burnt",
+    "boiling water",
+    "stranded",
+    "heartbroken",
+    "heartbreak",
+    "broken heart",
+    "breakup",
+    "broke up with me",
+    "depressed",
+    "depression",
+    "anxiety",
+    "anxious",
+    "panic attack",
+    "stressed",
+    "overwhelmed",
+    "grieving",
+    "lonely",
+    "can't cope"
+   ],
+   "weak_terms": [
+    "fall",
+    "burn",
+    "burns",
+    "mental",
+    "panic",
+    "sad",
+    "worried",
+    "stress"
+   ],
+   "subtypes": {
+    "wildlife_attack": [
+     "hyena",
+     "lion",
+     "elephant",
+     "buffalo",
+     "crocodile",
+     "hippo"
+    ],
+    "fall_or_injury": [
+     "fell",
+     "fall",
+     "fallen"
+    ],
+    "burns": [
+     "burn",
+     "burns",
+     "burnt",
+     "scalded",
+     "boiling water"
+    ],
+    "emotional_distress": [
+     "heartbroken",
+     "heartbreak",
+     "broken heart",
+     "breakup",
+     "broke up with me",
+     "depressed",
+     "depression",
+     "anxiety",
+     "anxious",
+     "panic attack",
+     "stressed",
+     "overwhelmed",
+     "grieving",
+     "lonely",
+     "can't cope"
+    ]
+   },
+   "subtype_weak": {
+    "emotional_distress": [
+     "mental",
+     "panic",
+     "sad",
+     "worried",
+     "stress"
+    ]
+   }
+  }
+ }
+}

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/feature_flags.dart';
+import '../../../core/models/dispatch_models.dart';
 import '../../../core/models/triage_outcome.dart';
 import '../../../core/services/triage_text_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -13,6 +14,7 @@ import '../../../core/triage/subtype_labels.dart';
 import '../../../core/triage/triage_schema.dart';
 import '../../../core/utils/incident_id.dart';
 import 'category_style.dart';
+import 'dispatch_card.dart';
 import 'hotline_card.dart';
 import 'other_free_text_sheet.dart';
 import 'triage_question_sheet.dart';
@@ -429,6 +431,16 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
               children: [
                 _buildStatusCard(refStr),
                 const SizedBox(height: AppSpacing.md),
+                if (kDispatchEnabled && _phase == AlertPhase.recorded) ...[
+                  StreamBuilder<DispatchInfo>(
+                    stream: watchDispatch(widget.incidentRef.id),
+                    builder: (c, s) => DispatchCard(
+                      info: s.data ?? DispatchInfo.empty,
+                      onAddDetails: _detailsCompleted ? null : _openMoreDetailsSheet,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 if (kDispatchEnabled) ...[
                   _buildTimelineCard(),
                   const SizedBox(height: AppSpacing.md),
@@ -438,34 +450,35 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             ),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            boxShadow: AppShadows.navigation,
-          ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              height: 56,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.sos,
-                  foregroundColor: AppColors.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
+        if (!(kDispatchEnabled && _phase == AlertPhase.recorded))
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              boxShadow: AppShadows.navigation,
+            ),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 56,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.sos,
+                    foregroundColor: AppColors.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
                   ),
-                ),
-                onPressed: () => _callHotline('922'),
-                icon: const Icon(Icons.phone_in_talk),
-                label: const Text(
-                  'Call 922 now',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  onPressed: () => _callHotline('922'),
+                  icon: const Icon(Icons.phone_in_talk),
+                  label: const Text(
+                    'Call 922 now',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

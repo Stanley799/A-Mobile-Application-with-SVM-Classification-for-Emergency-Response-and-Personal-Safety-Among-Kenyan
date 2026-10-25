@@ -197,6 +197,15 @@ service cloud.firestore {
         && d.updatedAt is timestamp;
     }
 
+    // Step 2b: a GPS fix that arrived AFTER the alert was saved. Only the location (and updatedAt) may change.
+    function validIncidentLocationUpdate() {
+      let d = request.resource.data;
+      return incidentChange().hasOnly(["location", "updatedAt"])
+        && resource.data.status in ["Active", "SupportOnly"]
+        && d.location is latlng
+        && d.updatedAt is timestamp;
+    }
+
     // Step 4: the resident closes their own alert. Nothing else may change.
     function validIncidentCancel() {
       let d = request.resource.data;
@@ -302,6 +311,12 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    // What an administrator may tick for a responder (see functions/dispatch/config.py ALL_CAPABILITIES).
+    function validCapabilities(c) {
+      return c is list && c.size() <= 7
+        && c.hasOnly(["medical_transport", "fire_suppression", "extrication", "law_enforcement", "maternal_care", "gbv_care", "antivenom"]);
+    }
+
     // ------------------------------------------------------------------------------------------
     // Offers: what a responder is asked to do. Written by the dispatch Cloud Function (a minimal
     // briefing, never the resident's full record). The responder may only move the offer forward.
@@ -341,7 +356,8 @@ service cloud.firestore {
     }
 
     match /responders/{responderId} {
-      allow read: if isSignedIn();
+      // Live locations are private: only the responder and administrators can read a responder record.
+      allow read: if isOwner(responderId) || isSystemAdmin();
 
       allow create: if isOwner(responderId)
         && !exists(/databases/$(database)/documents/responders/$(responderId))
@@ -376,8 +392,10 @@ service cloud.firestore {
             "verificationStatus",
             "verificationNotes",
             "verifiedBy",
-            "verifiedAt"
+            "verifiedAt",
+            "capabilities"
           ])
+          && validCapabilities(request.resource.data.get("capabilities", []))
           && request.resource.data.verificationStatus in ["Pending", "Verified", "Rejected", "Suspended"]
           && (request.resource.data.verificationNotes == null || request.resource.data.verificationNotes is string)
           && (request.resource.data.verifiedBy == null || request.resource.data.verifiedBy is string)
@@ -445,6 +463,7 @@ service cloud.firestore {
           validIncidentQuickUpdate()
           || validIncidentCompleteUpdate()
           || validIncidentCancel()
+          || validIncidentLocationUpdate()
         );
 
       allow delete: if false;
@@ -463,6 +482,17 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt"])
         && validOfferMove(resource.data.status, request.resource.data.status)
         && (resource.data.status != "offered" || request.time < resource.data.expiresAt);
+    }
+
+    // Push tokens: a signed-in user stores ONLY their own device token. The dispatch function reads it with the Admin SDK.
+    match /deviceTokens/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(["token", "platform", "updatedAt"])
+        && request.resource.data.token is string && request.resource.data.token.size() > 20 && request.resource.data.token.size() < 400
+        && request.resource.data.platform in ["android", "ios", "web"]
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if isOwner(userId);
     }
 
     // Training messages are written only by the save_text_feedback_fn Cloud Function.

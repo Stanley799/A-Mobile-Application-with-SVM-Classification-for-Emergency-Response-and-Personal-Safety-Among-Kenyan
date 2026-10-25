@@ -26,11 +26,13 @@ class AuthStateController extends ChangeNotifier {
   User? _firebaseUser;
   AppUserProfile? _profile;
   ResponderProfile? _responderProfile;
+  bool _isSystemAdmin = false;
   bool _loading = true;
 
   User? get firebaseUser => _firebaseUser;
   AppUserProfile? get profile => _profile;
   ResponderProfile? get responderProfile => _responderProfile;
+  bool get isSystemAdmin => _isSystemAdmin;
   bool get isLoading => _loading;
 
   Future<void> _onAuthChanged(User? user) async {
@@ -39,18 +41,23 @@ class AuthStateController extends ChangeNotifier {
     // Clear the previous account's role data before asynchronous profile reads.
     _profile = null;
     _responderProfile = null;
+    _isSystemAdmin = false;
     notifyListeners();
 
     if (user != null) {
       try {
+        final tokenResult = await user.getIdTokenResult(true);
+        _isSystemAdmin = tokenResult.claims?['role'] == 'SystemAdmin';
+
         _profile = await authRepository.getUserProfile(user.uid);
         if (_profile?.role.firestoreValue == 'Responder') {
           _responderProfile = await authRepository.getResponderProfile(user.uid);
         }
-        if (_profile != null) {
+        if (_profile != null && !_isSystemAdmin) {
           await permissionService.requestForRole(_profile!.role);
         }
       } on FirebaseException {
+        _isSystemAdmin = false;
         _profile = null;
         _responderProfile = null;
       }
