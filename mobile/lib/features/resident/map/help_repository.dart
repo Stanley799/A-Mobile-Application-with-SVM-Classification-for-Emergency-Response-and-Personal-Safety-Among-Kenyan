@@ -4,6 +4,16 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import 'help_models.dart';
 
+class IncidentInfo {
+  const IncidentInfo({this.latitude, this.longitude, this.category, this.subtype, this.status});
+  final double? latitude;
+  final double? longitude;
+  final String? category;
+  final String? subtype;
+  final String? status;
+  bool get hasLocation => latitude != null && longitude != null;
+}
+
 class HelpRepository {
   HelpRepository({FirebaseFirestore? db, FirebaseFunctions? functions})
       : _db = db ?? FirebaseFirestore.instance,
@@ -38,12 +48,28 @@ class HelpRepository {
         return out;
       }).handleError((_) {});
 
-  /// The resident's own location for this alert, as written when the alert was sent.
-  Stream<({double lat, double lng})?> watchIncidentLocation(String incidentId) => _incident(incidentId).snapshots().map((s) {
-        final loc = s.data()?['location'];
-        if (loc is GeoPoint) return (lat: loc.latitude, lng: loc.longitude);
-        return null;
+  /// Where the alert is, and what kind of emergency it is.
+  Stream<IncidentInfo> watchIncident(String incidentId) => _incident(incidentId).snapshots().map((s) {
+        final d = s.data();
+        final loc = d?['location'];
+        return IncidentInfo(
+          latitude: loc is GeoPoint ? loc.latitude : null,
+          longitude: loc is GeoPoint ? loc.longitude : null,
+          category: d?['category']?.toString(),
+          subtype: d?['subtype']?.toString(),
+          status: d?['status']?.toString(),
+        );
       }).handleError((_) {});
+
+  /// Saves a late or corrected location. firestore.rules allow ONLY location + updatedAt, and only while the alert is active.
+  Future<bool> saveLocation(String incidentId, double lat, double lng) async {
+    try {
+      await _incident(incidentId).update({'location': GeoPoint(lat, lng), 'updatedAt': FieldValue.serverTimestamp()});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Throws a FirebaseFunctionsException whose message is safe to show.
   Future<void> requestUnit(String incidentId, String responderId) => _fn.httpsCallable('resident_request_unit').call<dynamic>({'incidentId': incidentId, 'responderId': responderId});
@@ -51,6 +77,35 @@ class HelpRepository {
   Future<RouteInfo?> route(String incidentId, String responderId) async {
     try {
       final r = await _fn.httpsCallable('incident_route').call<dynamic>({'incidentId': incidentId, 'responderId': responderId});
+      final m = Map<String, dynamic>.from(r.data as Map);
+      if (m['ok'] != true) return null;
+      return RouteInfo(
+        points: decodePolyline((m['polyline'] ?? '').toString()),
+        etaSeconds: (m['etaS'] as num?)?.toDouble() ?? 0,
+        distanceMeters: (m['distanceM'] as num?)?.toInt() ?? 0,
+        estimate: m['estimate'] == true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Street label for "You are at ...". null when the server key is not set or Google has nothing.
+  Future<String?> geocode(double lat, double lng) async {
+    try {
+      final r = await _fn.httpsCallable('help_geocode').call<dynamic>({'lat': lat, 'lng': lng});
+      final m = Map<String, dynamic>.from(r.data as Map);
+      final label = (m['label'] ?? '').toString();
+      return m['ok'] == true && label.isNotEmpty ? label : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Route from the resident to a place, drawn inside the app. Falls back to a straight-line estimate on the server.
+  Future<RouteInfo?> directions(double fromLat, double fromLng, double toLat, double toLng) async {
+    try {
+      final r = await _fn.httpsCallable('help_directions').call<dynamic>({'fromLat': fromLat, 'fromLng': fromLng, 'toLat': toLat, 'toLng': toLng});
       final m = Map<String, dynamic>.from(r.data as Map);
       if (m['ok'] != true) return null;
       return RouteInfo(

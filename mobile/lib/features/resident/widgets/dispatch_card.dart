@@ -89,7 +89,7 @@ class DispatchCard extends StatelessWidget {
             FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E), minimumSize: const Size(64, 44), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: onAddDetails, child: const Text('Add')),
           ]),
         ),
-      if (info.showCallBlock)
+      if (info.showCallBlock && info.state != 'unfilled' && info.state != 'no_location')
         Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(14),

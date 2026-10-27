@@ -6,6 +6,7 @@ responder : {id, name, type, phone, lat, lng, status('available'..), capabilitie
 offer     : {id, responderId, role, status, createdAt, expiresAt, wave, covers[], priority, location{lat,lng}, flags[], summary}
 """
 from . import config as C
+from . import labels
 import triage_core as t
 import dispatch_logic as dl
 
@@ -175,7 +176,7 @@ def reconcile(incident, responders, offers, now, table):
     after = view + [c["offer"] for c in creates]
     state = _state(required, after)
     esc = bool(unfilled) or far
-    reason = ("No suitable responder is available for: " + ", ".join(unfilled) + ". Call 922 or 999.") if unfilled else ("The nearest responder is far away. Call 922 or 999 as well." if far else "")
+    reason = labels.unfilled_reason(unfilled) if unfilled else ("The nearest responder is far away. Call 922 or 999 as well." if far else "")
     units = [{"role": o.get("role"), "responderId": o["responderId"], "status": o["status"], "distanceKm": o.get("distanceKm")}
              for o in after if o["status"] in ("offered", "accepted", "enroute", "arrived", "completed")]
     if unfilled and state in ("dispatching", "partially_assigned") and not any(o["status"] == "offered" for o in after):

@@ -19,6 +19,7 @@ import dispatch  # noqa: F401  (path set-up)
 from dispatch import admin_accounts as acct, config as C, core, notify, store
 
 from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
+from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
 initialize_app()
 OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
 _db = None

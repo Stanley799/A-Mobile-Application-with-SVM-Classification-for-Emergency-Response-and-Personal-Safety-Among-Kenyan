@@ -5,6 +5,7 @@ Option kinds:  live    = a registered responder (can accept, can be tracked once
 Weights (tunable in WEIGHTS, to be reviewed with an EMS practitioner):  score = .55 ETA + .20 fit + .15 reliability + .10 verified."""
 from . import config as C
 from . import core
+from . import lookup
 
 WEIGHTS = {"eta": 0.55, "fit": 0.20, "reliability": 0.15, "verified": 0.10}
 ETA_CAP_MIN = 45.0           # an ETA of this or more scores 0
@@ -65,6 +66,33 @@ def _why(parts):
     return [p for p in parts if p]
 
 
+def _serves(c, role):
+    if c["kind"] == "live":
+        return role in (c.get("caps") or [])
+    return c.get("orgType") in TYPES_FOR_ROLE.get(role, ())
+
+
+def _diversify(cands, required, n):
+    """Best candidate for each needed role first (so a road accident gets help for the injured AND police, not three hospitals), then fill by score.
+    Never more than 2 of the same kind. cands must already be sorted best first."""
+    top = []
+    for role in required:
+        pick = next((c for c in cands if c not in top and _serves(c, role)), None)
+        if pick is not None and len(top) < n:
+            top.append(pick)
+    for c in cands:
+        if len(top) >= n:
+            break
+        if c not in top and sum(1 for t in top if t.get("orgType") == c.get("orgType")) < 2:
+            top.append(c)
+    for c in cands:                                                   # still short (e.g. only one kind exists): allow repeats
+        if len(top) >= n:
+            break
+        if c not in top:
+            top.append(c)
+    return top
+
+
 def build(inc, priority, avail, assigned, offers, facilities, state, now, minutes=None):
     """inc: incident view (lat/lng/category/subtype). avail: responder views that are Available. assigned: responder views that hold an accepted job.
     offers: this incident's offers. facilities: directory docs (dicts with id). minutes: optional {refId: (minutes, 'road')} from the routing service.
@@ -112,6 +140,9 @@ def build(inc, priority, avail, assigned, offers, facilities, state, now, minute
     # ---- directory places and call-only entries
     gbv = inc.get("subtype") in ("sexual_violence", "domestic_violence") or "gbv_care" in (required + preferred)
     types = _types(required, preferred + (["gbv_care"] if gbv else []))
+    for t in lookup.wanted_types(inc.get("category"), inc.get("subtype")):   # every category always has suitable kinds, even with no roles ("Other")
+        if t not in types:
+            types.append(t)
     if not held_ids or len(held_ids) < 3:
         for f in facilities:
             if f.get("status", "active") != "active" or f.get("type") not in types and f.get("type") != "helpline":
@@ -136,13 +167,13 @@ def build(inc, priority, avail, assigned, offers, facilities, state, now, minute
             eta = minutes.get(f["id"], (estimate_minutes(km, PLACE_KMH), "estimate"))
             cands.append({"kind": "place", "refId": f["id"], "name": f.get("name", ""), "orgType": f.get("type"), "lat": f["lat"], "lng": f["lng"], "distanceKm": round(km, 2),
                           "etaMin": eta[0], "etaSource": eta[1], "status": "directions", "phone": (f.get("phones") or [""])[0], "phones": f.get("phones") or [],
-                          "is24h": f.get("is24h"), "address": f.get("address", ""), "verified": verified, "caps": [],
+                          "is24h": f.get("is24h"), "address": f.get("address", ""), "verified": verified, "caps": [], "source": f.get("source") or "directory",
                           "score": _score(eta[0], fit, 0.5, verified),
-                          "why": _why(["Open 24 hours" if f.get("is24h") else "Call to confirm it is open", "" if verified else "Phone not yet verified"])})
+                          "why": _why(["Open 24 hours" if f.get("is24h") else "Call to confirm it is open", "Found on Google Maps" if f.get("source") == "google" else ("" if verified else "Phone not yet verified")])})
 
     # ---- choose at most 3
     cands.sort(key=lambda c: (-c["score"], c["etaMin"] if c["etaMin"] is not None else 999, c["refId"]))
-    top = cands[:3]
+    top = _diversify(cands, required, 3)
     lives = [c for c in cands if c["kind"] == "live"]
     if lives and not any(c["kind"] == "live" for c in top):
         top = top[:2] + [lives[0]]                                    # a unit that can actually come always gets a slot

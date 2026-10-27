@@ -28,12 +28,14 @@ class FreeTextStep extends StatefulWidget {
     required this.initialText,
     required this.initialConsent,
     required this.onContinue,
+    this.canSkip = false,
   });
 
   final bool suggestMode;
   final String initialText;
   final bool initialConsent;
   final ValueChanged<FreeTextResult> onContinue;
+  final bool canSkip;
 
   @override
   State<FreeTextStep> createState() => _FreeTextStepState();
@@ -135,7 +137,9 @@ class _FreeTextStepState extends State<FreeTextStep> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
               onPressed: () => widget.onContinue(
                 FreeTextResult(
                   text: _text,
@@ -185,7 +189,9 @@ class _FreeTextStepState extends State<FreeTextStep> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
               onPressed: _text.isEmpty ? null : _analyze,
               child: const Text('Continue'),
             ),
@@ -197,15 +203,27 @@ class _FreeTextStepState extends State<FreeTextStep> {
               child: const Text('Or choose a type yourself'),
             ),
           ),
+          if (widget.canSkip)
+            Center(
+              child: TextButton(
+                onPressed: () => widget.onContinue(
+                  const FreeTextResult(text: '', consent: false),
+                ),
+                child: const Text('Skip description'),
+              ),
+            ),
         ],
-        if (_loading) ...[
-          const Center(child: CircularProgressIndicator()),
-        ],
+        if (_loading) ...[const Center(child: CircularProgressIndicator())],
         if (suggestion != null) ...[
-          if (suggestion.mentionsSelfHarm || (suggestion.flags.contains('self_harm'))) ...[
+          if (suggestion.mentionsSelfHarm ||
+              (suggestion.flags.contains('self_harm'))) ...[
             const Text(
               'You are not alone. Support is available now.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.sos),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.sos,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             for (final h in hotlinesFor('emotional_distress')) ...[
@@ -222,7 +240,9 @@ class _FreeTextStepState extends State<FreeTextStep> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
                 onPressed: () => _confirmSelection(suggestion.category!),
                 child: const Text("Yes, that's right"),
               ),
@@ -263,12 +283,20 @@ class _FreeTextStepState extends State<FreeTextStep> {
                 children: [
                   Text(
                     'We could not understand what happened from your words. Please add a few more details (what you see, who is hurt) or choose the type yourself below. If someone\'s life is in danger, call 999 or 112 now.',
-                    style: TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                      height: 1.4,
+                    ),
                   ),
                   SizedBox(height: AppSpacing.sm),
                   Text(
                     'Hatukuelewa kilichotokea kutokana na maneno yako. Tafadhali ongeza maelezo kidogo (unachoona, nani ameumia) au chagua aina mwenyewe hapa chini. Ikiwa maisha ya mtu yako hatarini, piga 999 au 112 sasa.',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),

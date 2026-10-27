@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -11,7 +10,9 @@ import '../../../core/utils/incident_id.dart';
 import '../widgets/activity_record.dart';
 import '../widgets/alert_status_sheet.dart';
 import '../widgets/category_chip.dart';
+import '../widgets/live_location_pill.dart';
 import '../widgets/sos_button.dart';
+import '../widgets/sos_halo.dart';
 import '../widgets/status_card.dart';
 import 'activity_history_screen.dart';
 import 'safety_checkin_screen.dart';
@@ -248,8 +249,11 @@ class _ResidentDashboard extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: userDocument,
       builder: (context, snapshot) {
-        final firstName =
-            snapshot.data?.data()?['firstName'] as String? ?? 'there';
+        final firstName = snapshot.data?.data()?['firstName'] as String? ?? '';
+        final displayName = firstName.trim();
+        final greetingText = displayName.isEmpty
+            ? _greeting()
+            : '${_greeting()}, $displayName 👋';
         return CustomScrollView(
           slivers: [
             SliverPadding(
@@ -263,7 +267,7 @@ class _ResidentDashboard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${_greeting()}, $firstName 👋',
+                            greetingText,
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 4),
@@ -281,7 +285,7 @@ class _ResidentDashboard extends StatelessWidget {
                         radius: 22,
                         backgroundColor: AppColors.brandLight,
                         child: Text(
-                          _initials(firstName),
+                          _initials(displayName),
                           style: const TextStyle(
                             color: AppColors.brand,
                             fontSize: 16,
@@ -297,60 +301,19 @@ class _ResidentDashboard extends StatelessWidget {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 16,
-                      color: AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text(
-                        'Location shared when alert is sent',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: const BoxDecoration(
-                        color: AppColors.successLight,
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(AppRadius.full),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.circle, size: 7, color: AppColors.success),
-                          SizedBox(width: 5),
-                          Text(
-                            'Ready',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.success,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                child: LiveLocationPill(),
               ),
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
               sliver: SliverToBoxAdapter(
                 child: Center(
-                  child: SosButton(
-                    onPressed: () =>
-                        _confirmEmergency(context, 'SOS'),
+                  child: SosHalo(
+                    size: 200,
+                    child: SosButton(
+                      onPressed: () =>
+                          _confirmEmergency(context, 'SOS'),
+                    ),
                   ),
                 ),
               ),
@@ -438,7 +401,9 @@ class _ResidentDashboard extends StatelessWidget {
     final id = newIncidentId(category: actualCategory);
     final ref = FirebaseFirestore.instance.collection('incidents').doc(id);
 
-    // 1. Instant 0ms Creation in background
+    // 1. Fetch location robustly (Web + Mobile) in parallel with sheet
+    final locationFuture = _getCurrentLocationRobust();
+
     final initialData = <String, Object?>{
       'userId': userId,
       'category': actualCategory,
@@ -454,9 +419,9 @@ class _ResidentDashboard extends StatelessWidget {
 
     final createFuture = ref.set(initialData);
 
-    // 2. Fetch location in background and merge if arrives
+    // Update location as soon as it resolves
     unawaited(
-      _optionalCurrentLocationQuick().then((loc) {
+      locationFuture.then((loc) {
         if (loc != null) {
           ref.update({
             'location': loc,
@@ -466,7 +431,7 @@ class _ResidentDashboard extends StatelessWidget {
       }),
     );
 
-    // 3. Show 5-second diagnostic confirmation sheet
+    // 2. Show 5-second diagnostic confirmation sheet
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       useSafeArea: true,
@@ -497,7 +462,9 @@ class _ResidentDashboard extends StatelessWidget {
 
     if (confirmed != true || !context.mounted) return;
 
-    // 4. Proceed seamlessly to AlertStatusSheet with the SAME createFuture
+    final location = await locationFuture;
+
+    // 3. Proceed seamlessly to AlertStatusSheet with the SAME createFuture
     unawaited(
       showModalBottomSheet<void>(
         context: context,
@@ -516,20 +483,15 @@ class _ResidentDashboard extends StatelessWidget {
             createFuture: createFuture,
             retryCreate: () => ref.set(initialData),
             category: category,
-            locationShared: true,
+            locationShared: location != null,
           ),
         ),
       ),
     );
   }
 
-  Future<GeoPoint?> _optionalCurrentLocationQuick() async {
-    if (kIsWeb) return null;
+  Future<GeoPoint?> _getCurrentLocationRobust() async {
     try {
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null) {
-        return GeoPoint(lastKnown.latitude, lastKnown.longitude);
-      }
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -541,11 +503,17 @@ class _ResidentDashboard extends StatelessWidget {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 2),
+          timeLimit: Duration(seconds: 5),
         ),
-      ).timeout(const Duration(seconds: 2));
+      ).timeout(const Duration(seconds: 6));
       return GeoPoint(position.latitude, position.longitude);
     } catch (_) {
+      try {
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          return GeoPoint(lastKnown.latitude, lastKnown.longitude);
+        }
+      } catch (_) {}
       return null;
     }
   }

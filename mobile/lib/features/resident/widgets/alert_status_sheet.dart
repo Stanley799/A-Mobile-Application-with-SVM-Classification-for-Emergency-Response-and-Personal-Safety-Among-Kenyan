@@ -8,11 +8,13 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/feature_flags.dart';
 import '../../../core/models/dispatch_models.dart';
 import '../../../core/models/triage_outcome.dart';
+import '../../../core/services/priority_classifier.dart';
 import '../../../core/services/triage_text_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/triage/subtype_labels.dart';
 import '../../../core/triage/triage_schema.dart';
 import '../../../core/utils/incident_id.dart';
+import '../status/alert_status_body.dart';
 import 'category_style.dart';
 import 'dispatch_card.dart';
 import '../map/help_map_entry.dart';
@@ -35,7 +37,7 @@ AlertPhase alertPhase({
   return AlertPhase.sending;
 }
 
-enum _Stage { chooseCategory, chooseOtherType, safety, quick, done }
+enum _Stage { chooseCategory, chooseOtherType, safety, describe, quick, done }
 
 class AlertStatusSheet extends StatefulWidget {
   const AlertStatusSheet({
@@ -77,6 +79,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   bool _isFreeTextMode = false;
   String _typedText = '';
   bool _textConsent = false;
+  List<String> _textFlags = const [];
   bool _detailsCompleted = false;
   bool _supportMode = false;
 
@@ -92,7 +95,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
       _stage = _Stage.chooseCategory;
       _isFreeTextMode = true;
     } else {
-      _stage = _Stage.quick;
+      _stage = _Stage.describe;
     }
 
     _stopwatch.start();
@@ -100,36 +103,41 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
       if (mounted) setState(() {});
     });
 
-    widget.createFuture.then((_) {
-      if (mounted) {
-        setState(() {
-          _createDone = true;
-          _recordedAt ??= DateTime.now();
+    widget.createFuture
+        .then((_) {
+          if (mounted) {
+            setState(() {
+              _createDone = true;
+              _recordedAt ??= DateTime.now();
+            });
+          }
+        })
+        .catchError((err) {
+          debugPrint('Create incident error: $err');
+          if (mounted) {
+            setState(() {
+              _createFailed = true;
+            });
+          }
         });
-      }
-    }).catchError((err) {
-      debugPrint('Create incident error: $err');
-      if (mounted) {
-        setState(() {
-          _createFailed = true;
-        });
-      }
-    });
 
     _docSub = widget.incidentRef
         .snapshots(includeMetadataChanges: true)
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() {
-        _docSeen = snap.exists;
-        _hasPendingWrites = snap.metadata.hasPendingWrites;
-        if (snap.exists && !snap.metadata.hasPendingWrites) {
-          _recordedAt ??= DateTime.now();
-        }
-      });
-    }, onError: (err) {
-      debugPrint('Incident doc snapshot error: $err');
-    });
+        .listen(
+          (snap) {
+            if (!mounted) return;
+            setState(() {
+              _docSeen = snap.exists;
+              _hasPendingWrites = snap.metadata.hasPendingWrites;
+              if (snap.exists && !snap.metadata.hasPendingWrites) {
+                _recordedAt ??= DateTime.now();
+              }
+            });
+          },
+          onError: (err) {
+            debugPrint('Incident doc snapshot error: $err');
+          },
+        );
   }
 
   @override
@@ -141,20 +149,21 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   }
 
   AlertPhase get _phase => alertPhase(
-        createDone: _createDone,
-        createFailed: _createFailed,
-        hasPendingWrites: _hasPendingWrites,
-        docSeen: _docSeen,
-        secondsSinceStart: _stopwatch.elapsed.inSeconds,
-      );
+    createDone: _createDone,
+    createFailed: _createFailed,
+    hasPendingWrites: _hasPendingWrites,
+    docSeen: _docSeen,
+    secondsSinceStart: _stopwatch.elapsed.inSeconds,
+  );
 
   Future<void> _handleRetry() async {
     setState(() {
       _createFailed = false;
     });
     try {
-      final serverSnap = await widget.incidentRef
-          .get(const GetOptions(source: Source.server));
+      final serverSnap = await widget.incidentRef.get(
+        const GetOptions(source: Source.server),
+      );
       if (serverSnap.exists && mounted) {
         setState(() {
           _createDone = true;
@@ -223,9 +232,8 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
       launched = false;
     }
     if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please dial $number')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Please dial $number')));
     }
   }
 
@@ -241,20 +249,66 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     return list;
   }
 
+  bool get _canShareText =>
+      (kSubtypeRules[_subtype]?.shareFreeTextWithResponder ?? true) &&
+      !(_category == 'Other / General' && _subtype == null);
+
+  void _saveDescriptionFeedback() {
+    if (!_textConsent || _typedText.trim().isEmpty || !_canShareText) return;
+    unawaited(
+      TriageTextService().saveFeedback(
+        text: _typedText,
+        confirmedCategory: _category,
+        confirmedSubtype: _subtype,
+      ),
+    );
+  }
+
   void _onSelectCategoryTile(String cat) {
     if (cat == 'Other / General') {
       setState(() {
-        _stage = _Stage.chooseOtherType;
+        _category = cat;
+        _subtype = null;
+        _stage = _Stage.describe;
       });
     } else {
       setState(() {
         _category = cat;
+        _subtype = null;
         _answers.clear();
-        _stage = _Stage.quick;
+        _stage = _Stage.describe;
         _quickIndex = 0;
       });
-      _saveQuickProgress();
     }
+  }
+
+  void _onDescription(FreeTextResult result) {
+    final category = result.chosenCategory;
+    final suggestion = result.suggestion;
+    setState(() {
+      _typedText = result.text;
+      _textConsent = result.consent;
+      _textFlags = suggestion?.flags ?? const [];
+      if (category != null) {
+        _category = category;
+        _subtype =
+            suggestion?.category == category &&
+                (kCategorySubtypes[category] ?? const <String>[]).contains(
+                  suggestion?.subtype,
+                )
+            ? suggestion?.subtype
+            : null;
+      }
+      _answers.clear();
+      _quickIndex = 0;
+      _stage = _subtype == 'emotional_distress'
+          ? _Stage.safety
+          : _category == 'Other / General' && _subtype == null
+          ? _Stage.chooseOtherType
+          : _Stage.quick;
+    });
+    _saveDescriptionFeedback();
+    _saveQuickProgress();
   }
 
   void _onSelectOtherSubtype(String sub) {
@@ -270,6 +324,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         _quickIndex = 0;
       });
       _saveQuickProgress();
+      _saveDescriptionFeedback();
     }
   }
 
@@ -296,15 +351,49 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   }
 
   void _onQuickAnswer(String questionId, String val) {
+    final isLastAnswer = _quickIndex >= _quickQuestionIds.length - 1;
     setState(() {
       _answers[questionId] = val;
-      if (_quickIndex < _quickQuestionIds.length - 1) {
+      if (!isLastAnswer) {
         _quickIndex++;
       } else {
         _stage = _Stage.done;
       }
     });
-    _saveQuickProgress();
+    if (isLastAnswer) {
+      unawaited(_completeQuickTriage());
+    } else {
+      _saveQuickProgress();
+    }
+  }
+
+  Future<void> _completeQuickTriage() async {
+    await PriorityClassifier.instance.ensureLoaded();
+    if (!mounted) return;
+    final result = PriorityClassifier.instance.classify(
+      category: _category,
+      answers: _answers,
+      subtype: _subtype,
+    );
+    _saveCompleteOutcome(
+      TriageOutcome(
+        category: _category,
+        subtype: _subtype,
+        answers: Map<String, String>.of(_answers),
+        priority: result.priority,
+        confidence: result.confidence,
+        needsHumanReview: result.needsHumanReview,
+        source: result.source,
+        fallbackReason: result.fallbackReason,
+        description: _canShareText && _typedText.trim().isNotEmpty
+            ? _typedText.trim()
+            : null,
+        flags: _textFlags,
+        saveForTraining: false,
+        supportOnly: false,
+        schemaVersion: kTriageSchemaVersion,
+      ),
+    );
   }
 
   Future<void> _openMoreDetailsSheet() async {
@@ -430,58 +519,21 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildStatusCard(refStr),
-                const SizedBox(height: AppSpacing.md),
-                if (kDispatchEnabled && _phase == AlertPhase.recorded) ...[
-                  StreamBuilder<DispatchInfo>(
-                    stream: watchDispatch(widget.incidentRef.id),
-                    builder: (c, s) => DispatchCard(
-                      info: s.data ?? DispatchInfo.empty,
-                      onAddDetails: _detailsCompleted ? null : _openMoreDetailsSheet,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  HelpMapEntry(incidentId: widget.incidentRef.id),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-                if (kDispatchEnabled) ...[
-                  _buildTimelineCard(),
-                  const SizedBox(height: AppSpacing.md),
-                ],
                 _buildStageContent(),
+                const SizedBox(height: AppSpacing.lg),
+                AlertStatusBody(
+                  incidentId: widget.incidentRef.id,
+                  categoryLabel: _category,
+                  priorityLabel: 'High',
+                  reference: refStr,
+                  receivedAt: _recordedAt ?? DateTime.now(),
+                  detailsPending: !_detailsCompleted,
+                  onAddDetails: _openMoreDetailsSheet,
+                ),
               ],
             ),
           ),
         ),
-        if (!(kDispatchEnabled && _phase == AlertPhase.recorded))
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              boxShadow: AppShadows.navigation,
-            ),
-            child: SafeArea(
-              top: false,
-              child: SizedBox(
-                height: 56,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.sos,
-                    foregroundColor: AppColors.surface,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                    ),
-                  ),
-                  onPressed: () => _callHotline('922'),
-                  icon: const Icon(Icons.phone_in_talk),
-                  label: const Text(
-                    'Call 922 now',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -515,7 +567,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             color: AppColors.successLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.check_circle, color: AppColors.success, size: 24),
+          child: const Icon(
+            Icons.check_circle,
+            color: AppColors.success,
+            size: 24,
+          ),
         );
         title = 'Alert recorded';
         final timeStr = _recordedAt != null
@@ -531,7 +587,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             color: AppColors.warningLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.warning_amber, color: AppColors.warning, size: 24),
+          child: const Icon(
+            Icons.warning_amber,
+            color: AppColors.warning,
+            size: 24,
+          ),
         );
         title = 'Saved on this phone';
         subtitle = 'It will send as soon as you are online. Call 922 now.';
@@ -544,7 +604,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             color: AppColors.sosLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.error_outline, color: AppColors.sosDeep, size: 24),
+          child: const Icon(
+            Icons.error_outline,
+            color: AppColors.sosDeep,
+            size: 24,
+          ),
         );
         title = 'We could not record this alert';
         subtitle = 'Please call 922 now.';
@@ -687,7 +751,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
           SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              Icon(Icons.radio_button_checked, size: 18, color: AppColors.brand),
+              Icon(
+                Icons.radio_button_checked,
+                size: 18,
+                color: AppColors.brand,
+              ),
               SizedBox(width: AppSpacing.md),
               Text(
                 'Finding the nearest help',
@@ -698,7 +766,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
           SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              Icon(Icons.radio_button_checked, size: 18, color: AppColors.textTertiary),
+              Icon(
+                Icons.radio_button_checked,
+                size: 18,
+                color: AppColors.textTertiary,
+              ),
               SizedBox(width: AppSpacing.md),
               Text(
                 'A responder confirms',
@@ -719,6 +791,15 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         return _buildChooseOtherType();
       case _Stage.safety:
         return _buildSafetyQuestion();
+      case _Stage.describe:
+        return FreeTextStep(
+          key: const ValueKey('triage-description'),
+          suggestMode: true,
+          initialText: _typedText,
+          initialConsent: _textConsent,
+          canSkip: true,
+          onContinue: _onDescription,
+        );
       case _Stage.quick:
         return _buildQuickQuestions();
       case _Stage.done:
@@ -732,17 +813,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         suggestMode: true,
         initialText: _typedText,
         initialConsent: _textConsent,
-        onContinue: (res) {
-          setState(() {
-            _typedText = res.text;
-            _textConsent = res.consent;
-            if (res.chosenCategory != null) {
-              _onSelectCategoryTile(res.chosenCategory!);
-            } else {
-              _onSelectCategoryTile('Other / General');
-            }
-          });
-        },
+        onContinue: _onDescription,
       );
     }
 
@@ -752,7 +823,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
       'Fire & Rescue',
       'Security Threat',
       'Abduction',
-      'Something else',
+      'Other / General',
     ];
 
     return Container(
@@ -787,8 +858,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             ),
             itemBuilder: (context, index) {
               final cat = categories[index];
-              final realCat = cat == 'Something else' ? 'Other / General' : cat;
-              final style = categoryStyle(realCat);
+              final style = categoryStyle(cat);
 
               return Material(
                 color: style.background,
@@ -797,7 +867,9 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   onTap: () => _onSelectCategoryTile(cat),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
                     child: Row(
                       children: [
                         Container(
@@ -807,7 +879,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                             color: AppColors.surface.withValues(alpha: 0.6),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(style.icon, size: 18, color: style.foreground),
+                          child: Icon(
+                            style.icon,
+                            size: 18,
+                            color: style.foreground,
+                          ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
@@ -891,7 +967,8 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
 
   Widget _buildSafetyQuestion() {
     final rule = kSubtypeRules['emotional_distress'];
-    final prompt = rule?.safetyQuestion ?? 'Are you thinking of harming yourself?';
+    final prompt =
+        rule?.safetyQuestion ?? 'Are you thinking of harming yourself?';
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1041,7 +1118,9 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                   ),
                   side: const BorderSide(color: AppColors.divider),
                   alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
                 ),
                 onPressed: () => _onQuickAnswer(qId, val),
                 child: Text(
@@ -1099,7 +1178,10 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                 SizedBox(height: 4),
                 Text(
                   'Reach out anytime to speak with someone who can help.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -1159,12 +1241,18 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                     children: [
                       Text(
                         'Add more details',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Optional. Helps responders prepare. About 30 seconds.',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -1201,7 +1289,9 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
           ),
         const SizedBox(height: AppSpacing.md),
         OutlinedButton(
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
         ),

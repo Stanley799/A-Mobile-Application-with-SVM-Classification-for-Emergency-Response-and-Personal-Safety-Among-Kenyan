@@ -6,6 +6,7 @@ import '../../core/models/dispatch_models.dart';
 import 'incoming_alert_screen.dart' show openInMaps;
 import 'responder_repository.dart';
 import 'responder_theme.dart';
+import 'track_publisher.dart';
 
 class ActiveJobScreen extends StatefulWidget {
   const ActiveJobScreen({super.key, required this.offerId, required this.repo});
@@ -65,6 +66,18 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     final name = (o.residentFirstName ?? '').trim();
     final phone = o.residentPhone ?? '';
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ValueListenableBuilder<String?>(
+        valueListenable: TrackPublisher.instance.problem,
+        builder: (context, problem, _) {
+          if (problem == null || problem.isEmpty) return const SizedBox.shrink();
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: const Color(0xFFFFF4F4), borderRadius: BorderRadius.circular(10)),
+            child: Text(problem, style: const TextStyle(color: Color(0xFFB33A3A), fontSize: 13, fontWeight: FontWeight.w600)),
+          );
+        },
+      ),
       Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: RC.priority(o.priority), borderRadius: BorderRadius.circular(14)),

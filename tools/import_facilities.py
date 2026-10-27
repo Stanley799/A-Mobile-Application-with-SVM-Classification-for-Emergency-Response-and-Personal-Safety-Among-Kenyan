@@ -9,10 +9,18 @@ Run from C:\EmergencyResponseSystem\functions with the venv active, after `gclou
 Sources and licence: OpenStreetMap data is © OpenStreetMap contributors (ODbL). The app shows that credit on the map screen.
 Everything imported is UNVERIFIED until an administrator confirms the phone number. Re-running is safe: stable ids, and any place an
 administrator has verified or hidden is never overwritten. Nothing is deleted."""
-import argparse, csv, json, math, sys, urllib.parse, urllib.request
+import argparse, csv, json, math, sys, time, urllib.error, urllib.parse, urllib.request
 
 BBOX = (-1.45, 36.65, -1.15, 37.10)       # south, west, north, east: Nairobi County and nearby
 OVERPASS = "https://overpass-api.de/api/interpreter"
+MIRRORS = [OVERPASS, "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"]
+# Obvious OpenStreetMap tagging mistakes (a beauty clinic tagged as a hospital, a shop tagged as a police station). Heuristic: an administrator still verifies.
+BAD_WORDS = {
+    "hospital": ("aesthetic", "skin", "beauty", "salon", "spa ", "barber", "cosmetic", "pharmacy", "chemist", "veterinar", "vet "),
+    "clinic": ("aesthetic", "beauty", "salon", "spa ", "barber", "cosmetic", "pharmacy", "chemist", "veterinar", "vet "),
+    "police": ("entertainment", "enterprise", "limited", " ltd", "supplies", "hardware", " bar", "hotel", "restaurant", "salon", "shop", "stores", "academy", "school", "church", "sacco"),
+    "fire": ("entertainment", "enterprise", "limited", " ltd", "hotel", "restaurant", "salon", "shop"),
+}
 TYPE_OF = {("amenity", "hospital"): "hospital", ("amenity", "clinic"): "clinic", ("healthcare", "hospital"): "hospital", ("healthcare", "clinic"): "clinic",
            ("amenity", "doctors"): "clinic", ("amenity", "police"): "police", ("amenity", "fire_station"): "fire", ("emergency", "ambulance_station"): "ambulance_operator"}
 CSV_HEADERS = "id,name,type,lat,lng,phones,is24h,address,services,county   (type: hospital|clinic|police|fire|ambulance_operator|helpline|other; phones/services separated by ;)"
@@ -38,9 +46,22 @@ def overpass_query():
 
 
 def fetch_osm():
+    """Overpass is a free shared service and sometimes answers 429/504. Retries with waits and tries mirrors. Raises a readable error."""
     data = urllib.parse.urlencode({"data": overpass_query()}).encode()
-    with urllib.request.urlopen(urllib.request.Request(OVERPASS, data=data, headers={"User-Agent": "EmergencyResponseSystem-capstone/1.0"}), timeout=90) as r:  # noqa: S310
-        return json.loads(r.read().decode())
+    last = "no answer"
+    for attempt in range(3):
+        for ep in MIRRORS:
+            try:
+                req = urllib.request.Request(ep, data=data, headers={"User-Agent": "EmergencyResponseSystem-capstone/1.0 (student project)", "Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=100) as r:  # noqa: S310
+                    return json.loads(r.read().decode())
+            except urllib.error.HTTPError as e:
+                last = f"HTTP {e.code} from {ep.split('/')[2]}"
+            except Exception as e:  # noqa: BLE001
+                last = f"{type(e).__name__} from {ep.split('/')[2]}"
+            print(f"  OpenStreetMap server said: {last}. Trying again...")
+        time.sleep(15 * (attempt + 1))
+    raise RuntimeError(last)
 
 
 def _phones(tags):
@@ -57,6 +78,9 @@ def parse_osm(doc):
         lng = el.get("lon") if "lon" in el else (el.get("center") or {}).get("lon")
         name = tags.get("name") or tags.get("official_name")
         if not typ or lat is None or lng is None or not name:
+            continue
+        low = " " + name.lower() + " "
+        if any(w in low for w in BAD_WORDS.get(typ, ())):
             continue
         addr = ", ".join(x for x in (tags.get("addr:street"), tags.get("addr:suburb"), tags.get("addr:city")) if x)
         oh = (tags.get("opening_hours") or "").strip()
@@ -118,7 +142,7 @@ def main():
         try:
             doc = json.load(open(a.osm_file, encoding="utf-8")) if a.osm_file else fetch_osm()
         except Exception as e:  # noqa: BLE001
-            sys.exit(f"Could not get OpenStreetMap data ({type(e).__name__}). Download the file from https://overpass-turbo.eu yourself and use --osm-file, or use --csv.")
+            sys.exit(f"Could not get OpenStreetMap data ({e}). Wait a few minutes and run it again, or download the file from https://overpass-turbo.eu yourself and use --osm-file, or use --csv.")
         items += parse_osm(doc)
     if not a.csv:
         items += call_only()

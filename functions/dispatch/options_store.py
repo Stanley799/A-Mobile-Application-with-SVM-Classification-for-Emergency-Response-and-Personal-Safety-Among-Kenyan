@@ -6,7 +6,7 @@ import math
 from google.cloud.firestore import SERVER_TIMESTAMP
 
 from . import config as C
-from . import core, options, routes, store
+from . import core, lookup, options, routes, store
 
 ETA_REUSE_SECONDS = 90
 SUBCOLS = ("r1", "r2", "r3")
@@ -26,6 +26,34 @@ def facilities_near(db, lat, lng, radius_km):
         if f["id"] not in seen:
             seen.add(f["id"]); uniq.append(f)
     return uniq
+
+
+PLACES_TTL_S = 600
+NEAR_KM = 8.0
+
+
+def augment_with_google(db, iid, inc, facilities, wanted, now, key):
+    """If our directory has fewer than 2 places of a wanted kind within NEAR_KM, add Google's nearest ones (cached 10 min per incident)."""
+    if not key:
+        return facilities
+    lat, lng = inc["lat"], inc["lng"]
+    ref = db.collection("incidents").document(iid).collection("routes").document("places_cache")
+    snap = ref.get()
+    cache = snap.to_dict() if snap.exists else {}
+    fresh = cache and now - float(cache.get("at", 0)) < PLACES_TTL_S and abs(cache.get("lat", 0) - lat) < 0.002 and abs(cache.get("lng", 0) - lng) < 0.002
+    items = list(cache.get("items") or []) if fresh else None
+    if items is None:
+        items = []
+        for t in wanted[:3]:
+            have = [f for f in facilities if f.get("type") == t and f.get("lat") is not None and core.dl.haversine_km(lat, lng, f["lat"], f["lng"]) <= NEAR_KM]
+            if len(have) < 2:
+                items += lookup.places_nearby(key, lat, lng, t)
+        try:
+            ref.set({"at": now, "lat": lat, "lng": lng, "items": items})
+        except Exception as e:  # noqa: BLE001
+            print(f"[options] cache write failed: {type(e).__name__}")
+    known = {f["id"] for f in facilities}
+    return facilities + [i for i in items if i["id"] not in known]
 
 
 def _read_old(db, iid):
@@ -99,8 +127,10 @@ def refresh(db, iid, inc, dispatch, now, key=None):
             if s.exists:
                 assigned.append(store.responder_view(db, rid, s.to_dict()))
         facilities = facilities_near(db, inc["lat"], inc["lng"], core.R["max_radius_km"][pr])
+        k = key if key is not None else routes.key()
+        facilities = augment_with_google(db, iid, inc, facilities, lookup.wanted_types(inc.get("category"), inc.get("subtype")), now, k)
         old = _read_old(db, iid)
-        minutes = _eta_minutes(db, key if key is not None else routes.key(), inc, avail, assigned, facilities, now, old)
+        minutes = _eta_minutes(db, k, inc, avail, assigned, facilities, now, old)
         opts, meta = options.build(inc, pr, avail, assigned, offers, facilities, state, now, minutes)
         if dispatch.get("escalate922"):
             meta["showNumbers"] = True
