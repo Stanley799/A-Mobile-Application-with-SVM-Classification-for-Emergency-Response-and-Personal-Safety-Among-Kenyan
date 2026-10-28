@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'location_resolver.dart';
 import 'map_style.dart';
+import 'maps_available.dart';
 
 const _ink = Color(0xFF1A1A1A);
 const _mute = Color(0xFF5F5F5F);
@@ -121,31 +122,41 @@ class _ManualPinPageState extends State<ManualPinPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(backgroundColor: Colors.white, foregroundColor: _ink, elevation: 0, title: const Text('Where are you?', style: TextStyle(fontWeight: FontWeight.w800))),
-      body: Stack(children: [
-        GoogleMap(
-          initialCameraPosition: CameraPosition(target: widget.start, zoom: 15),
-          style: kEmergencyMapStyle,
-          onCameraMove: (p) => _center = p.target,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: true,
-          mapToolbarEnabled: false,
-        ),
-        const IgnorePointer(child: Center(child: Padding(padding: EdgeInsets.only(bottom: 36), child: Icon(Icons.location_pin, size: 48, color: _danger)))),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 24,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: const Text('Move the map until the red pin is exactly where you are.', style: TextStyle(fontSize: 14, color: _ink))),
-            const SizedBox(height: 10),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: _brand, minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              onPressed: () => Navigator.of(context).pop(_center),
-              child: const Text('Use this location', style: TextStyle(fontWeight: FontWeight.w800)),
+      body: hasGoogleMapsRuntime()
+          ? Stack(children: [
+              GoogleMap(
+                initialCameraPosition: CameraPosition(target: widget.start, zoom: 15),
+                style: kEmergencyMapStyle,
+                onCameraMove: (p) => _center = p.target,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: true,
+                mapToolbarEnabled: false,
+              ),
+              const IgnorePointer(child: Center(child: Padding(padding: EdgeInsets.only(bottom: 36), child: Icon(Icons.location_pin, size: 48, color: _danger)))),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 24,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: const Text('Move the map until the red pin is exactly where you are.', style: TextStyle(fontSize: 14, color: _ink))),
+                  const SizedBox(height: 10),
+                  FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: _brand, minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    onPressed: () => Navigator.of(context).pop(_center),
+                    child: const Text('Use this location', style: TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                ]),
+              ),
+            ])
+          : MapsUnavailableView(
+              title: 'Map unavailable',
+              message: 'The browser cannot load Google Maps because the Maps API key is missing. You can still continue by selecting a rough location manually.',
+              primaryAction: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: _brand, minimumSize: const Size.fromHeight(48)),
+                onPressed: () => Navigator.of(context).pop(widget.start),
+                child: const Text('Use a fallback location'),
+              ),
             ),
-          ]),
-        ),
-      ]),
     );
   }
 }

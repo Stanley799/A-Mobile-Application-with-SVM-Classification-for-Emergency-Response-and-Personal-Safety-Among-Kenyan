@@ -25,7 +25,15 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     try {
       await widget.repo.respond(widget.offerId, status);
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update. Check your connection and try again.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update. Check your connection and try again.',
+            ),
+          ),
+        );
+      }
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -35,8 +43,19 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Complete this job?'),
-        content: const Text('Only complete it when the person has been helped or handed over.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Not yet')), FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Complete'))],
+        content: const Text(
+          'Only complete it when the person has been helped or handed over.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Complete'),
+          ),
+        ],
       ),
     );
     if (yes == true) await _move('completed');
@@ -50,11 +69,27 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
         final o = snap.data;
         return Scaffold(
           backgroundColor: RC.bg,
-          appBar: AppBar(backgroundColor: RC.bg, foregroundColor: RC.text, elevation: 0, title: const Text('Active job')),
-          body: o == null
+          appBar: AppBar(
+            backgroundColor: RC.bg,
+            foregroundColor: RC.text,
+            elevation: 0,
+            title: const Text('Active job'),
+          ),
+          body: snap.hasError
+              ? const Center(
+                  child: Text(
+                    'Unable to load this response. Check your connection and try again.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: RC.soft),
+                  ),
+                )
+              : o == null
               ? const Center(child: CircularProgressIndicator())
               : SafeArea(
-                  child: ListView(padding: const EdgeInsets.fromLTRB(20, 4, 20, 20), children: [_body(o)]),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                    children: [_body(o)],
+                  ),
                 ),
         );
       },
@@ -62,71 +97,274 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
   }
 
   Widget _body(Offer o) {
-    final closed = o.status == 'withdrawn' || o.status == 'completed' || o.status == 'expired';
+    final closed =
+        o.status == 'withdrawn' ||
+        o.status == 'completed' ||
+        o.status == 'expired';
     final name = (o.residentFirstName ?? '').trim();
     final phone = o.residentPhone ?? '';
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ValueListenableBuilder<String?>(
-        valueListenable: TrackPublisher.instance.problem,
-        builder: (context, problem, _) {
-          if (problem == null || problem.isEmpty) return const SizedBox.shrink();
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFFFF4F4), borderRadius: BorderRadius.circular(10)),
-            child: Text(problem, style: const TextStyle(color: Color(0xFFB33A3A), fontSize: 13, fontWeight: FontWeight.w600)),
-          );
-        },
-      ),
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: RC.priority(o.priority), borderRadius: BorderRadius.circular(14)),
-        child: Text('${o.priority.toUpperCase()} PRIORITY · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}', style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
-      ),
-      const SizedBox(height: 16),
-      if (closed)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ValueListenableBuilder<String?>(
+          valueListenable: TrackPublisher.instance.problem,
+          builder: (context, problem, _) {
+            if (problem == null || problem.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4F4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                problem,
+                style: const TextStyle(
+                  color: Color(0xFFB33A3A),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            );
+          },
+        ),
         Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(16)),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: RC.priority(o.priority),
+            borderRadius: BorderRadius.circular(14),
+          ),
           child: Text(
-            o.status == 'completed'
-                ? 'Job completed. Thank you.'
-                : o.withdrawReason == 'incident_cancelled'
-                    ? 'The resident cancelled this alert. You can stand down.'
-                    : 'This job is no longer open.',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: RC.text),
+            '${o.priority.toUpperCase()} PRIORITY · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
           ),
         ),
-      Container(
-        margin: const EdgeInsets.only(top: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(18)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SectionLabel('CALLER'),
-          const SizedBox(height: 8),
-          Text(name.isEmpty ? 'Resident' : name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: RC.text)),
-          if (phone.isNotEmpty) Text(phone, style: const TextStyle(fontSize: 15, color: RC.soft)),
+        if (o.isActiveJob || o.status == 'completed') ...[
           const SizedBox(height: 12),
-          BigButton(label: phone.isEmpty ? 'Phone not available' : 'Call caller', height: 52, color: RC.accept, onPressed: phone.isEmpty ? null : () => launchUrl(Uri(scheme: 'tel', path: phone))),
-          const SizedBox(height: 10),
-          BigButton(label: 'Open location in Maps', filled: false, height: 52, onPressed: () => openInMaps(o.latitude, o.longitude)),
+          _progress(o.status),
+        ],
+        if (o.summary.isNotEmpty ||
+            (o.freeText.isNotEmpty && !o.confidential)) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: RC.card,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('INCIDENT BRIEF'),
+                if (o.summary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    o.summary,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: RC.text,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (o.freeText.isNotEmpty && !o.confidential) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    o.freeText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: RC.soft,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        if (closed)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: RC.card,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              o.status == 'completed'
+                  ? 'Job completed. Thank you.'
+                  : o.withdrawReason == 'incident_cancelled'
+                  ? 'The resident cancelled this alert. You can stand down.'
+                  : 'This job is no longer open.',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: RC.text,
+              ),
+            ),
+          ),
+        Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionLabel('CALLER'),
+              const SizedBox(height: 8),
+              Text(
+                name.isEmpty ? 'Resident' : name,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: RC.text,
+                ),
+              ),
+              if (phone.isNotEmpty)
+                Text(
+                  phone,
+                  style: const TextStyle(fontSize: 15, color: RC.soft),
+                ),
+              const SizedBox(height: 12),
+              BigButton(
+                label: phone.isEmpty ? 'Phone not available' : 'Call caller',
+                height: 52,
+                color: RC.accept,
+                onPressed: phone.isEmpty
+                    ? null
+                    : () => launchUrl(Uri(scheme: 'tel', path: phone)),
+              ),
+              const SizedBox(height: 10),
+              BigButton(
+                label: 'Open location in Maps',
+                filled: false,
+                height: 52,
+                onPressed: () => openInMaps(o.latitude, o.longitude),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${o.distanceKm.toStringAsFixed(1)} km from where you were, straight line',
+                style: const TextStyle(fontSize: 12, color: RC.muted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const SectionLabel('WHAT WE KNOW'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final f in o.flags) Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
+            Chip2(
+              o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people',
+              RC.infoChipBg,
+              RC.infoChipFg,
+            ),
+          ],
+        ),
+        if (o.needs.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const SectionLabel('RESPONSE CAPABILITIES'),
           const SizedBox(height: 8),
-          Text('${o.distanceKm.toStringAsFixed(1)} km from where you were, straight line', style: const TextStyle(fontSize: 12, color: RC.muted)),
-        ]),
-      ),
-      const SizedBox(height: 16),
-      const SectionLabel('WHAT WE KNOW'),
-      const SizedBox(height: 10),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        for (final f in o.flags) Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
-        Chip2(o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people', RC.infoChipBg, RC.infoChipFg),
-      ]),
-      const SizedBox(height: 24),
-      if (!closed) ...[
-        if (o.status == 'accepted') BigButton(label: "I'm on my way", onPressed: _busy ? null : () => _move('enroute')),
-        if (o.status == 'enroute') BigButton(label: 'I have arrived', onPressed: _busy ? null : () => _move('arrived')),
-        if (o.status == 'arrived') BigButton(label: 'Complete job', onPressed: _busy ? null : _confirmComplete),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final need in o.needs)
+                Chip2(roleLabel(need), RC.needBg, RC.needFg),
+            ],
+          ),
+        ],
+        const SizedBox(height: 24),
+        if (!closed) ...[
+          if (o.status == 'accepted')
+            BigButton(
+              label: "I'm on my way",
+              onPressed: _busy ? null : () => _move('enroute'),
+            ),
+          if (o.status == 'enroute')
+            BigButton(
+              label: 'I have arrived',
+              onPressed: _busy ? null : () => _move('arrived'),
+            ),
+          if (o.status == 'arrived')
+            BigButton(
+              label: 'Complete job',
+              onPressed: _busy ? null : _confirmComplete,
+            ),
+        ],
       ],
-    ]);
+    );
+  }
+
+  Widget _progress(String status) {
+    final current = switch (status) {
+      'accepted' => 0,
+      'enroute' => 1,
+      'arrived' => 2,
+      'completed' => 3,
+      _ => 0,
+    };
+    const steps = ['Accepted', 'En route', 'Arrived', 'Complete'];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('RESPONSE PROGRESS'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var index = 0; index < steps.length; index++) ...[
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: index <= current ? RC.accept : RC.line,
+                        ),
+                        child: index < current
+                            ? const Icon(
+                                Icons.check,
+                                size: 15,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        steps[index],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: index <= current ? RC.text : RC.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

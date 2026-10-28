@@ -1,47 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
+  <meta name="description" content="Emergency dispatch, responder operations, and personal safety system.">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="mobile">
+  <meta name="apple-mobile-web-app-title" content="Emergency Response System">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>mobile</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <title>Emergency Response System</title>
+  <meta name="theme-color" content="#0F766E">
   <link rel="manifest" href="manifest.json">
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDMEe43QvsD_f2W1yfBphggR8AmAhhCN6w&loading=async"></script>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <script>
+    window.GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || 'AIzaSyDMEe43QvsD_f2W1yfBphggR8AmAhhCN6w';
+    const mapsApiKey = window.GOOGLE_MAPS_API_KEY;
+    let flutterStarted = false;
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <script src="flutter_bootstrap.js" async></script>
+    function startFlutter() {
+      if (flutterStarted) return;
+      flutterStarted = true;
+      const flutterBootstrap = document.createElement('script');
+      flutterBootstrap.src = 'flutter_bootstrap.js';
+      flutterBootstrap.async = true;
+      document.body.appendChild(flutterBootstrap);
+    }
+
+    if (mapsApiKey) {
+      const mapsScript = document.createElement('script');
+      mapsScript.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(mapsApiKey) + '&loading=async&v=weekly';
+      mapsScript.async = true;
+      mapsScript.addEventListener('load', startFlutter, { once: true });
+      mapsScript.addEventListener('error', () => {
+        console.error('Google Maps failed to load. Check the key, API enablement, billing, and HTTP referrer restrictions.');
+        startFlutter();
+      }, { once: true });
+      document.head.appendChild(mapsScript);
+    } else {
+      console.warn('Google Maps API key is not configured.');
+      startFlutter();
+    }
+  </script>
 </body>
 </html>

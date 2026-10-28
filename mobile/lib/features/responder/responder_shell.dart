@@ -25,16 +25,26 @@ class ResponderGate extends StatelessWidget {
       stream: repo.watchMe(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(backgroundColor: RC.bg, body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: RC.bg,
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         final me = snap.data;
         if (me == null) {
-          return const _Message(title: 'Profile not found', body: 'Your responder profile has not been set up. Please contact the administrator.');
+          return const _Message(
+            title: 'Profile not found',
+            body: 'Your responder profile has not been set up. Please contact the administrator.',
+          );
         }
         if (me.verificationStatus != 'Verified') {
-          final rejected = me.verificationStatus == 'Rejected' || me.verificationStatus == 'Suspended';
+          final rejected =
+              me.verificationStatus == 'Rejected' ||
+              me.verificationStatus == 'Suspended';
           return _Message(
-            title: rejected ? 'Account ${me.verificationStatus.toLowerCase()}' : 'Waiting for verification',
+            title: rejected
+                ? 'Account ${me.verificationStatus.toLowerCase()}'
+                : 'Waiting for verification',
             body: rejected
                 ? 'Your responder account is ${me.verificationStatus.toLowerCase()}. Please contact the administrator.'
                 : 'An administrator is checking ${me.organizationName} (registration ${me.registrationNumber}). You will receive alerts once you are verified.',
@@ -56,13 +66,36 @@ class _Message extends StatelessWidget {
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: RC.text)),
-          const SizedBox(height: 12),
-          Text(body, style: const TextStyle(fontSize: 16, color: RC.soft, height: 1.45)),
-          const SizedBox(height: 24),
-          BigButton(label: 'Sign out', filled: false, height: 52, onPressed: () => FirebaseAuth.instance.signOut()),
-        ]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: RC.text,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              body,
+              style: const TextStyle(
+                fontSize: 16,
+                color: RC.soft,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 24),
+            BigButton(
+              label: 'Sign out',
+              filled: false,
+              height: 52,
+              onPressed: () => FirebaseAuth.instance.signOut(),
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -77,13 +110,15 @@ class ResponderShell extends StatefulWidget {
   State<ResponderShell> createState() => _ResponderShellState();
 }
 
-class _ResponderShellState extends State<ResponderShell> with WidgetsBindingObserver {
+class _ResponderShellState extends State<ResponderShell>
+    with WidgetsBindingObserver {
   int _tab = 0;
   late final DutyHeartbeat _beat = DutyHeartbeat(widget.repo);
   final Set<String> _shown = {};
   StreamSubscription<List<Offer>>? _sub;
   List<Offer> _offers = const [];
   bool _onDuty = false;
+  bool _availabilityBusy = false;
 
   @override
   void initState() {
@@ -91,25 +126,44 @@ class _ResponderShellState extends State<ResponderShell> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     PushService.init();
     _onDuty = widget.me.availabilityStatus != 'Offline';
-    if (_onDuty) _beat.start();
+    if (_onDuty) unawaited(_restoreDuty());
     _sub = widget.repo.watchOffers().listen((list) {
       if (!mounted) return;
       setState(() => _offers = list);
-      TrackPublisher.instance.sync(list); // live location only while a job is held
+      TrackPublisher.instance.sync(
+        list,
+      ); // live location only while a job is held
       for (final o in list) {
         if (o.isOpen && o.secondsLeft() > 0 && _shown.add(o.id)) {
           SystemSound.play(SystemSoundType.alert);
           HapticFeedback.heavyImpact();
-          Navigator.of(context).push(MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => IncomingAlertScreen(offer: o, repo: widget.repo)));
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              fullscreenDialog: true,
+              builder: (_) => IncomingAlertScreen(offer: o, repo: widget.repo),
+            ),
+          );
           break;
         }
       }
     });
   }
 
+  Future<void> _restoreDuty() async {
+    final ok = await _beat.start();
+    if (!ok) {
+      try {
+        await widget.repo.setAvailability('Offline');
+      } catch (_) {}
+      if (mounted) setState(() => _onDuty = false);
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _onDuty && !_beat.running) _beat.start();
+    if (state == AppLifecycleState.resumed && _onDuty && !_beat.running) {
+      _beat.start();
+    }
   }
 
   @override
@@ -117,19 +171,52 @@ class _ResponderShellState extends State<ResponderShell> with WidgetsBindingObse
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _beat.dispose();
+    TrackPublisher.instance.stop();
     super.dispose();
   }
 
   Future<void> _toggle(bool on) async {
-    if (on) {
-      final ok = await _beat.start();
-      if (!ok) return;
-      await widget.repo.setAvailability('Available');
-    } else {
-      _beat.stop();
-      await widget.repo.setAvailability('Offline');
+    if (_availabilityBusy) return;
+    setState(() => _availabilityBusy = true);
+    try {
+      if (on) {
+        final ok = await _beat.start();
+        if (!ok) return;
+        await widget.repo.setAvailability('Available');
+      } else {
+        await widget.repo.setAvailability('Offline');
+        _beat.stop();
+      }
+      if (mounted) setState(() => _onDuty = on);
+    } catch (_) {
+      if (on) _beat.stop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update duty status. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _availabilityBusy = false);
     }
-    if (mounted) setState(() => _onDuty = on);
+  }
+
+  Future<void> _signOut() async {
+    if (_offers.any((offer) => offer.isActiveJob)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Complete your active response before signing out.'),
+        ),
+      );
+      return;
+    }
+    _beat.stop();
+    try {
+      await widget.repo.setAvailability('Offline');
+    } catch (_) {}
+    TrackPublisher.instance.stop();
+    await FirebaseAuth.instance.signOut();
   }
 
   @override
@@ -143,91 +230,279 @@ class _ResponderShellState extends State<ResponderShell> with WidgetsBindingObse
         backgroundColor: RC.bg,
         foregroundColor: RC.text,
         elevation: 0,
-        title: Text(widget.me.organizationName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        actions: [IconButton(tooltip: 'Sign out', icon: const Icon(Icons.logout), onPressed: () async {
-          _beat.stop();
-          try { await widget.repo.setAvailability('Offline'); } catch (_) {}
-          await FirebaseAuth.instance.signOut();
-        })],
+        title: Text(
+          widget.me.organizationName,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Sign out',
+            icon: const Icon(Icons.logout),
+            onPressed: _signOut,
+          ),
+        ],
       ),
-      body: SafeArea(child: _tab == 0 ? _home(open, active) : _history(past)),
+      body: SafeArea(
+        child: switch (_tab) {
+          0 => _home(open, active),
+          1 => _activeJobs(active),
+          _ => _history(past),
+        },
+      ),
       bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(backgroundColor: RC.card, indicatorColor: RC.line, labelTextStyle: WidgetStateProperty.all(const TextStyle(color: RC.text, fontWeight: FontWeight.w600))),
-        child: NavigationBar(selectedIndex: _tab, onDestinationSelected: (i) => setState(() => _tab = i), destinations: const [
-          NavigationDestination(icon: Icon(Icons.notifications_active_outlined, color: RC.soft), label: 'Alerts'),
-          NavigationDestination(icon: Icon(Icons.history, color: RC.soft), label: 'History'),
-        ]),
+        data: NavigationBarThemeData(
+          backgroundColor: RC.card,
+          indicatorColor: RC.line,
+          labelTextStyle: WidgetStateProperty.all(
+            const TextStyle(color: RC.text, fontWeight: FontWeight.w600),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.notifications_active_outlined, color: RC.soft),
+              label: 'Offers',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.emergency_outlined, color: RC.soft),
+              label: 'Active',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.history, color: RC.soft),
+              label: 'History',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _home(List<Offer> open, List<Offer> active) {
-    return ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 20), children: [
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(18)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(_onDuty ? 'You are on duty' : 'You are off duty', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: RC.text))),
-            Switch(value: _onDuty, activeColor: RC.accept, onChanged: _toggle),
-          ]),
-          const SizedBox(height: 6),
-          Text(_onDuty ? 'Keep this app open. Your location is shared with dispatch every 30 seconds so the nearest unit is asked first.' : 'Switch on duty to receive alerts.', style: const TextStyle(fontSize: 13, color: RC.muted, height: 1.4)),
-          ValueListenableBuilder<String?>(
-            valueListenable: _beat.problem,
-            builder: (_, p, __) => p == null ? const SizedBox.shrink() : Padding(padding: const EdgeInsets.only(top: 8), child: Text(p, style: const TextStyle(fontSize: 13, color: Color(0xFFFFB4A9), fontWeight: FontWeight.w600))),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(18),
           ),
-        ]),
-      ),
-      const SizedBox(height: 16),
-      if (open.isNotEmpty) ...[
-        const SectionLabel('WAITING FOR YOUR ANSWER'),
-        const SizedBox(height: 8),
-        for (final o in open) _card(o, 'Answer now', () => Navigator.of(context).push(MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => IncomingAlertScreen(offer: o, repo: widget.repo)))),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      active.isNotEmpty
+                          ? 'Active response'
+                          : _onDuty
+                          ? 'You are on duty'
+                          : 'You are off duty',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: RC.text,
+                      ),
+                    ),
+                  ),
+                  if (_availabilityBusy)
+                    const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Switch(
+                      value: _onDuty,
+                      activeThumbColor: RC.accept,
+                      onChanged: active.isNotEmpty ? null : _toggle,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                active.isNotEmpty
+                    ? 'Finish the active response before going off duty.'
+                    : _onDuty
+                    ? 'Keep this app open. Your location is shared with dispatch every 30 seconds so the nearest unit is asked first.'
+                    : 'Switch on duty to receive alerts.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: RC.muted,
+                  height: 1.4,
+                ),
+              ),
+              ValueListenableBuilder<String?>(
+                valueListenable: _beat.problem,
+                builder: (_, p, _) => p == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          p,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFFFFB4A9),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (open.isNotEmpty) ...[
+          const SectionLabel('WAITING FOR YOUR ANSWER'),
+          const SizedBox(height: 8),
+          for (final o in open)
+            _card(
+              o,
+              'Answer now',
+              () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  fullscreenDialog: true,
+                  builder: (_) =>
+                      IncomingAlertScreen(offer: o, repo: widget.repo),
+                ),
+              ),
+            ),
+        ],
+        if (open.isEmpty && active.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Center(
+              child: Text(
+                'No alerts right now.',
+                style: TextStyle(fontSize: 16, color: RC.muted),
+              ),
+            ),
+          ),
       ],
-      if (active.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        const SectionLabel('YOUR ACTIVE JOBS'),
-        const SizedBox(height: 8),
-        for (final o in active) _card(o, 'Open', () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ActiveJobScreen(offerId: o.id, repo: widget.repo)))),
+    );
+  }
+
+  Widget _activeJobs(List<Offer> active) {
+    if (active.isEmpty) {
+      return const Center(
+        child: Text(
+          'No active responses.',
+          style: TextStyle(fontSize: 16, color: RC.muted),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      children: [
+        const SectionLabel('IN PROGRESS'),
+        const SizedBox(height: 12),
+        for (final offer in active)
+          _card(
+            offer,
+            'Open response',
+            () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    ActiveJobScreen(offerId: offer.id, repo: widget.repo),
+              ),
+            ),
+          ),
       ],
-      if (open.isEmpty && active.isEmpty)
-        const Padding(padding: EdgeInsets.only(top: 40), child: Center(child: Text('No alerts right now.', style: TextStyle(fontSize: 16, color: RC.muted)))),
-    ]);
+    );
   }
 
   Widget _card(Offer o, String action, VoidCallback onTap) => Container(
     margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(16), border: Border(left: BorderSide(color: RC.priority(o.priority), width: 5))),
-    child: Row(children: [
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(o.category, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: RC.text)),
-        const SizedBox(height: 2),
-        Text('${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km · ${_statusLabel(o.status)}', style: const TextStyle(fontSize: 13, color: RC.muted)),
-      ])),
-      FilledButton(style: FilledButton.styleFrom(backgroundColor: RC.accept, minimumSize: const Size(88, 44)), onPressed: onTap, child: Text(action)),
-    ]),
+    decoration: BoxDecoration(
+      color: RC.card,
+      borderRadius: BorderRadius.circular(16),
+      border: Border(
+        left: BorderSide(color: RC.priority(o.priority), width: 5),
+      ),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                o.category,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: RC.text,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km · ${_statusLabel(o.status)}',
+                style: const TextStyle(fontSize: 13, color: RC.muted),
+              ),
+            ],
+          ),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: RC.accept,
+            minimumSize: const Size(88, 44),
+          ),
+          onPressed: onTap,
+          child: Text(action),
+        ),
+      ],
+    ),
   );
 
   Widget _history(List<Offer> past) {
-    if (past.isEmpty) return const Center(child: Text('Nothing here yet.', style: TextStyle(color: RC.muted, fontSize: 16)));
+    if (past.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nothing here yet.',
+          style: TextStyle(color: RC.muted, fontSize: 16),
+        ),
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.all(20),
       itemCount: past.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) {
         final o = past[i];
         return Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(16)),
-          child: Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(o.category, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: RC.text)),
-              Text('${hhmm(o.createdAt)} · ${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km', style: const TextStyle(fontSize: 12, color: RC.muted)),
-            ])),
-            Chip2(_statusLabel(o.status), RC.infoChipBg, RC.infoChipFg),
-          ]),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      o.category,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: RC.text,
+                      ),
+                    ),
+                    Text(
+                      '${hhmm(o.createdAt)} · ${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km',
+                      style: const TextStyle(fontSize: 12, color: RC.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Chip2(_statusLabel(o.status), RC.infoChipBg, RC.infoChipFg),
+            ],
+          ),
         );
       },
     );

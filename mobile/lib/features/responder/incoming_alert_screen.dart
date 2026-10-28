@@ -11,13 +11,22 @@ import 'responder_theme.dart';
 
 Future<void> openInMaps(double? lat, double? lng) async {
   if (lat == null || lng == null) return;
-  await launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'), mode: LaunchMode.externalApplication);
+  await launchUrl(
+    Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'),
+    mode: LaunchMode.externalApplication,
+  );
 }
 
-String hhmm(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+String hhmm(DateTime? t) => t == null
+    ? ''
+    : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 class IncomingAlertScreen extends StatefulWidget {
-  const IncomingAlertScreen({super.key, required this.offer, required this.repo});
+  const IncomingAlertScreen({
+    super.key,
+    required this.offer,
+    required this.repo,
+  });
   final Offer offer;
   final ResponderRepository repo;
 
@@ -30,13 +39,22 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
   StreamSubscription<Offer?>? _sub;
   late Offer _offer = widget.offer;
   bool _busy = false;
-  String? _lost; // message when someone else took it, it expired or was cancelled
+  String?
+  _lost; // message when someone else took it, it expired or was cancelled
 
   @override
   void initState() {
     super.initState();
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      if (_offer.isOpen && _offer.secondsLeft() == 0 && _lost == null) {
+        setState(() => _lost = 'The response window closed.');
+        Future<void>.delayed(const Duration(seconds: 3), () {
+          if (mounted) Navigator.of(context).pop();
+        });
+        return;
+      }
+      setState(() {});
     });
     _sub = widget.repo.watchOffer(widget.offer.id).listen((o) {
       if (o == null || !mounted) return;
@@ -46,10 +64,15 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
   }
 
   void _gone(Offer o) {
+    if (_lost != null) return;
     final why = switch (o.withdrawReason) {
-      'another_unit_accepted' || 'role_already_filled' => 'Another unit accepted this alert.',
+      'another_unit_accepted' ||
+      'role_already_filled' => 'Another unit accepted this alert.',
       'incident_cancelled' => 'The resident cancelled this alert.',
-      _ => o.status == 'expired' ? 'Time ran out for this alert.' : 'This alert is no longer open.',
+      _ =>
+        o.status == 'expired'
+            ? 'Time ran out for this alert.'
+            : 'This alert is no longer open.',
     };
     setState(() => _lost = why);
     Future<void>.delayed(const Duration(seconds: 3), () {
@@ -65,12 +88,18 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
   }
 
   Future<void> _answer(String status) async {
+    if (!_offer.isOpen || _offer.secondsLeft() == 0) return;
     setState(() => _busy = true);
     try {
       await widget.repo.respond(_offer.id, status);
       if (!mounted) return;
       if (status == 'accepted') {
-        Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => ActiveJobScreen(offerId: _offer.id, repo: widget.repo)));
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                ActiveJobScreen(offerId: _offer.id, repo: widget.repo),
+          ),
+        );
       } else {
         Navigator.of(context).pop();
       }
@@ -101,13 +130,34 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(color: RC.priority(o.priority), borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: RC.priority(o.priority),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('NEW ALERT · ${o.priority.toUpperCase()} PRIORITY', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Colors.white)),
-                    Text(hhmm(o.createdAt), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                    Text(
+                      'NEW ALERT · ${o.priority.toUpperCase()} PRIORITY',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      hhmm(o.createdAt),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -118,11 +168,26 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(o.category, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, height: 1.1, color: RC.text)),
+                        Text(
+                          o.category,
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                            color: RC.text,
+                          ),
+                        ),
                         if (o.subtypeLabel.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(_cap(o.subtypeLabel), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: RC.soft)),
+                            child: Text(
+                              _cap(o.subtypeLabel),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w500,
+                                color: RC.soft,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -136,13 +201,35 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
                         SizedBox(
                           width: 76,
                           height: 76,
-                          child: CircularProgressIndicator(value: o.isOpen ? left / total : 0, strokeWidth: 5, backgroundColor: RC.line, color: left <= 10 ? const Color(0xFFFF8A80) : const Color(0xFF80CBC4)),
+                          child: CircularProgressIndicator(
+                            value: o.isOpen ? left / total : 0,
+                            strokeWidth: 5,
+                            backgroundColor: RC.line,
+                            color: left <= 10
+                                ? const Color(0xFFFF8A80)
+                                : const Color(0xFF80CBC4),
+                          ),
                         ),
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('$left', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1, color: RC.text)),
-                            const Text('seconds', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: RC.muted)),
+                            Text(
+                              '$left',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                                color: RC.text,
+                              ),
+                            ),
+                            const Text(
+                              'seconds',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: RC.muted,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -153,7 +240,10 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(
+                  color: RC.card,
+                  borderRadius: BorderRadius.circular(18),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -161,9 +251,20 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
-                        Text('${o.distanceKm.toStringAsFixed(1)} km', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, height: 1, color: RC.text)),
+                        Text(
+                          '${o.distanceKm.toStringAsFixed(1)} km',
+                          style: const TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                            color: RC.text,
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        const Text('away, straight line', style: TextStyle(fontSize: 14, color: RC.muted)),
+                        const Text(
+                          'away, straight line',
+                          style: TextStyle(fontSize: 14, color: RC.muted),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -171,9 +272,21 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
                       width: double.infinity,
                       height: 48,
                       child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(foregroundColor: RC.text, side: const BorderSide(color: RC.outline), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: RC.text,
+                          side: const BorderSide(color: RC.outline),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         onPressed: () => openInMaps(o.latitude, o.longitude),
-                        child: const Text('Open location in Maps', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                        child: const Text(
+                          'Open location in Maps',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -182,36 +295,90 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
               const SizedBox(height: 16),
               const SectionLabel('WHAT WE KNOW'),
               const SizedBox(height: 10),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final f in danger) Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
-                Chip2(o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people', RC.infoChipBg, RC.infoChipFg),
-                if (danger.isEmpty) const Chip2('No danger signs reported yet', RC.infoChipBg, RC.infoChipFg),
-              ]),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final f in danger)
+                    Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
+                  Chip2(
+                    o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people',
+                    RC.infoChipBg,
+                    RC.infoChipFg,
+                  ),
+                  if (danger.isEmpty)
+                    const Chip2(
+                      'No danger signs reported yet',
+                      RC.infoChipBg,
+                      RC.infoChipFg,
+                    ),
+                ],
+              ),
               if (o.needs.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const SectionLabel('NEEDED FROM YOU'),
                 const SizedBox(height: 10),
-                Wrap(spacing: 8, runSpacing: 8, children: [for (final n in o.needs) Chip2(roleLabel(n), RC.needBg, RC.needFg)]),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final n in o.needs)
+                      Chip2(roleLabel(n), RC.needBg, RC.needFg),
+                  ],
+                ),
               ],
               if (o.freeText.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const SectionLabel('CALLER SAID'),
                 const SizedBox(height: 6),
-                Text(o.freeText, style: const TextStyle(fontSize: 14, color: RC.soft, height: 1.4)),
+                Text(
+                  o.freeText,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: RC.soft,
+                    height: 1.4,
+                  ),
+                ),
               ],
               const SizedBox(height: 12),
-              const Text("The caller's name and phone number are shared after you accept.", style: TextStyle(fontSize: 12, color: RC.muted, height: 1.45)),
+              const Text(
+                "The caller's name and phone number are shared after you accept.",
+                style: TextStyle(fontSize: 12, color: RC.muted, height: 1.45),
+              ),
               const Spacer(),
               if (_lost != null)
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: RC.card, borderRadius: BorderRadius.circular(16)),
-                  child: Text(_lost!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: RC.text)),
+                  decoration: BoxDecoration(
+                    color: RC.card,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    _lost!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: RC.text,
+                    ),
+                  ),
                 )
               else ...[
-                BigButton(label: 'Accept and go', onPressed: (_busy || !o.isOpen || left == 0) ? null : () => _answer('accepted')),
+                BigButton(
+                  label: 'Accept and go',
+                  onPressed: (_busy || !o.isOpen || left == 0)
+                      ? null
+                      : () => _answer('accepted'),
+                ),
                 const SizedBox(height: 10),
-                BigButton(label: 'Cannot respond', filled: false, height: 52, onPressed: _busy ? null : () => _answer('declined')),
+                BigButton(
+                  label: 'Cannot respond',
+                  filled: false,
+                  height: 52,
+                  onPressed: (_busy || !o.isOpen || left == 0)
+                      ? null
+                      : () => _answer('declined'),
+                ),
               ],
             ],
           ),

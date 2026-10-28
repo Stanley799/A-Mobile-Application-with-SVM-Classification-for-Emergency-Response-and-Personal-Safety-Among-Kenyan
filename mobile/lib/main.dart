@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
 import 'app/app_router.dart';
@@ -12,9 +14,10 @@ import 'firebase_options.dart';
 /// Initializes Flutter and Firebase before starting the provider-backed app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (kIsWeb && Uri.base.queryParameters['multiAccount'] == 'true') {
+    await FirebaseAuth.instance.setPersistence(Persistence.SESSION);
+  }
   runApp(const MyApp());
 }
 
@@ -25,12 +28,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<AuthRepository>(
-          create: (_) => AuthRepository(),
-        ),
-        Provider<PermissionService>(
-          create: (_) => PermissionService(),
-        ),
+        Provider<AuthRepository>(create: (_) => AuthRepository()),
+        Provider<PermissionService>(create: (_) => PermissionService()),
         ChangeNotifierProvider<AuthStateController>(
           create: (context) => AuthStateController(
             authRepository: context.read<AuthRepository>(),

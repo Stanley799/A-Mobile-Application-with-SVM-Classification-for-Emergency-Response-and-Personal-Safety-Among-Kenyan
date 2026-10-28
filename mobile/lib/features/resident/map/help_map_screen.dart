@@ -19,6 +19,7 @@ import 'help_repository.dart';
 import 'location_gate.dart';
 import 'location_resolver.dart';
 import 'map_style.dart';
+import 'maps_available.dart';
 import 'nearby_places.dart';
 import 'pin_factory.dart';
 
@@ -429,6 +430,27 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
       return const Scaffold(backgroundColor: _C.bg, body: Center(child: CircularProgressIndicator()));
     }
     if (_lat == null) return LocationGate(onResolved: (l) => _onResolved(l, confirm: true));
+    if (!hasGoogleMapsRuntime() && kIsWeb) {
+      return Scaffold(
+        backgroundColor: _C.bg,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          foregroundColor: _C.ink,
+          elevation: 0,
+          title: const Text('Map unavailable'),
+        ),
+        body: MapsUnavailableView(
+          title: 'Map unavailable',
+          message: 'Google Maps is not available in this browser because the JavaScript API key is missing. You can still continue with the emergency details and use your current location text.',
+          primaryAction: FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: _C.brand, minimumSize: const Size.fromHeight(48)),
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Back'),
+          ),
+        ),
+      );
+    }
     if (_needConfirm) return _confirmView();
     final meta = _state.meta;
     if (_hidden) {
@@ -524,6 +546,35 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     final la = _lat!, lo = _lng!;
     final acc = _local?.accuracyMeters;
     final rough = acc != null && acc > 100;
+    if (!hasGoogleMapsRuntime()) {
+      return Scaffold(
+        backgroundColor: _C.bg,
+        appBar: AppBar(backgroundColor: Colors.white, foregroundColor: _C.ink, elevation: 0, title: const Text('Confirm location')),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Map unavailable', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _C.ink)),
+                const SizedBox(height: 12),
+                Text(
+                  'The Google Maps JavaScript API is not available in this browser. You can still confirm the location textually and continue.',
+                  style: const TextStyle(fontSize: 16, color: _C.mute, height: 1.5),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: _C.brand, minimumSize: const Size.fromHeight(52)),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Continue'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: _C.bg,
       body: Column(children: [
