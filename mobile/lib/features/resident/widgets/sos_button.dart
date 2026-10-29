@@ -26,6 +26,17 @@ class _SosButtonState extends State<SosButton>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced motion: the button stays still, it is still fully reachable.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();

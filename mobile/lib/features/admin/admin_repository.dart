@@ -80,8 +80,9 @@ class AdminRepository {
 
   Future<void> setCapabilities(String responderId, List<String> capabilities) => _db.collection('responders').doc(responderId).update({'capabilities': capabilities});
 
-  Future<void> assign(String incidentId, String responderId, {String? role}) =>
-      _fn.httpsCallable('admin_assign_responder').call<dynamic>({'incidentId': incidentId, 'responderId': responderId, if (role != null) 'role': role});
+  /// The server now requires a reason (min 3, max 140) and records it in the admin_assigned event.
+  Future<void> assign(String incidentId, String responderId, {String? role, required String reason}) =>
+      _fn.httpsCallable('admin_assign_responder').call<dynamic>({'incidentId': incidentId, 'responderId': responderId, if (role != null) 'role': role, 'reason': reason});
 
   Future<AdminList> listAdmins() async {
     final r = await _fn.httpsCallable('admin_list_admins').call<dynamic>();

@@ -1,5 +1,5 @@
 /// Application roles and their corresponding Firestore values.
-enum UserRole { resident, responder, systemAdmin }
+enum UserRole { resident, responder, dispatcher, systemAdmin }
 
 /// Supported profile language codes.
 enum PreferredLanguage { en, sw }
@@ -32,6 +32,8 @@ extension UserRoleX on UserRole {
         return 'Resident';
       case UserRole.responder:
         return 'Responder';
+      case UserRole.dispatcher:
+        return 'Dispatcher';
       case UserRole.systemAdmin:
         return 'SystemAdmin';
     }
@@ -43,6 +45,8 @@ extension UserRoleX on UserRole {
         return UserRole.resident;
       case 'Responder':
         return UserRole.responder;
+      case 'Dispatcher':
+        return UserRole.dispatcher;
       case 'SystemAdmin':
         return UserRole.systemAdmin;
       default:

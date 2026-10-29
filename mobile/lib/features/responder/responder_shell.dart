@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../core/models/dispatch_models.dart';
 import '../../core/services/push_service.dart';
 import '../../core/ui/states.dart';
+import '../resident/status/location_confidence.dart' show accuracyShort;
 import 'active_job_screen.dart';
 import 'duty_heartbeat.dart';
 import 'incoming_alert_screen.dart';
@@ -16,6 +17,7 @@ import 'responder_labels.dart';
 import 'responder_offer_queue.dart';
 import 'responder_theme.dart';
 import 'responder_widgets.dart';
+import 'sos_sheet.dart';
 import 'track_publisher.dart';
 import '../../core/ui/routes.dart';
 
@@ -138,6 +140,7 @@ class _ResponderShellState extends State<ResponderShell>
   bool _offersLoading = true;
   Timer? _ticker;
   late final Future<String?> _firstName;
+  DateTime? _pausedAt;
 
   @override
   void initState() {
@@ -255,8 +258,17 @@ class _ResponderShellState extends State<ResponderShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _onDuty && !_beat.running) {
-      _beat.start();
+    if (state == AppLifecycleState.resumed) {
+      final away = _pausedAt;
+      _pausedAt = null;
+      if (_onDuty && !_beat.running) {
+        _beat.start();
+      } else if (_onDuty && away != null && DateTime.now().difference(away).inSeconds >= 60) {
+        // 2.9: after a long time in the background, show dispatch where we are right away, not up to 30 s later.
+        unawaited(_beat.refreshGps());
+      }
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive) {
+      _pausedAt ??= DateTime.now();
     }
   }
 
@@ -427,9 +439,34 @@ class _ResponderShellState extends State<ResponderShell>
           PopupMenuButton<String>(
             tooltip: 'Profile options',
             onSelected: (value) {
-              if (value == 'signOut') _signOut();
+              if (value == 'sos') {
+                final active = _offers.where((o) => o.isActiveJob).toList();
+                showSosSheet(
+                  context,
+                  widget.repo,
+                  incidentId: active.isEmpty ? null : active.first.incidentId,
+                );
+              } else if (value == 'signOut') {
+                _signOut();
+              }
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'sos',
+                child: Row(
+                  children: [
+                    Icon(Icons.sos_rounded, color: RC.alert),
+                    SizedBox(width: 10),
+                    Text(
+                      'I need help',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: RC.alert,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               PopupMenuItem(value: 'signOut', child: Text('Sign out')),
             ],
             icon: const Icon(Icons.more_vert),
@@ -726,6 +763,14 @@ class _ResponderShellState extends State<ResponderShell>
             ),
           ],
         ),
+        if (accuracyShort(offer.accuracyM) case final String line) ...[
+          const SizedBox(height: ResponderSpacing.sm),
+          Text(line, style: ResponderTextStyles.caption),
+        ],
+        if (offer.landmark.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text('Landmark: ${offer.landmark}', style: ResponderTextStyles.caption),
+        ],
         const SizedBox(height: ResponderSpacing.md),
         SizedBox(
           height: 56,

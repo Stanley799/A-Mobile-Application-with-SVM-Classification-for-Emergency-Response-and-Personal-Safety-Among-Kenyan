@@ -18,7 +18,10 @@ class ResidentTrackPublisher {
 
   bool get running => _sub != null;
 
-  /// Each open screen (alert sheet, help map) holds a reference; tracking runs while at least one is open.
+  /// True while this incident's position is being shared.
+  bool holds(String incidentId) => _holders.contains(incidentId);
+
+  /// The resident shell holds one reference per open alert; the help map keeps none of its own.
   void acquire(String incidentId) {
     _holders.add(incidentId);
     if (_sub == null) _start();

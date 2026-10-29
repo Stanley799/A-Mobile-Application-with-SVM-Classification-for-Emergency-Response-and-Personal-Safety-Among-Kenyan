@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/models/dispatch_models.dart';
 import '../../../core/models/triage_outcome.dart';
 import '../../../core/services/priority_classifier.dart';
 import '../../../core/services/triage_text_service.dart';
@@ -11,6 +13,7 @@ import '../../../core/triage/subtype_labels.dart';
 import '../../../core/triage/triage_schema.dart';
 import '../../../core/utils/incident_id.dart';
 import '../status/alert_status_body.dart';
+import '../map/help_repository.dart';
 import 'category_style.dart';
 import 'hotline_card.dart';
 import 'other_free_text_sheet.dart';
@@ -41,6 +44,9 @@ class AlertStatusSheet extends StatefulWidget {
     required this.retryCreate,
     required this.category,
     required this.locationShared,
+    this.onRaiseAlert,
+    this.repo,
+    this.dispatch,
   });
 
   final DocumentReference<Map<String, dynamic>> incidentRef;
@@ -48,6 +54,9 @@ class AlertStatusSheet extends StatefulWidget {
   final Future<void> Function() retryCreate;
   final String category;
   final bool locationShared;
+  final VoidCallback? onRaiseAlert;
+  final HelpRepository? repo;
+  final Stream<DispatchInfo>? dispatch;
 
   @override
   State<AlertStatusSheet> createState() => _AlertStatusSheetState();
@@ -60,9 +69,13 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   late _Stage _stage;
 
   bool _createFailed = false;
+  bool _docSeen = false;
+  bool _hasPendingWrites = true;
+  bool _retrying = false;
 
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
+  Timer? _retryTimer;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _docSub;
 
   DateTime? _recordedAt;
@@ -110,6 +123,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             setState(() {
               _createFailed = true;
             });
+            _startAutoRetry();
           }
         });
 
@@ -118,6 +132,10 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         .listen(
           (snap) {
             if (!mounted) return;
+            setState(() {
+              _docSeen = snap.exists;
+              _hasPendingWrites = snap.metadata.hasPendingWrites;
+            });
             if (snap.exists && !snap.metadata.hasPendingWrites) {
               setState(() {
                 _recordedAt ??= DateTime.now();
@@ -130,15 +148,27 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         );
   }
 
+  /// While the banner is on screen we keep trying, silently, every five seconds.
+  void _startAutoRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || _retrying || !_createFailed) return;
+      unawaited(_handleRetry());
+    });
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
+    _retryTimer?.cancel();
     _docSub?.cancel();
     _stopwatch.stop();
     super.dispose();
   }
 
   Future<void> _handleRetry() async {
+    if (_retrying) return;
+    _retrying = true;
     setState(() {
       _createFailed = false;
     });
@@ -147,6 +177,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         const GetOptions(source: Source.server),
       );
       if (serverSnap.exists && mounted) {
+        _retryTimer?.cancel();
         setState(() {
           _recordedAt ??= DateTime.now();
         });
@@ -157,6 +188,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     try {
       await widget.retryCreate();
       if (mounted) {
+        _retryTimer?.cancel();
         setState(() {
           _recordedAt ??= DateTime.now();
         });
@@ -168,6 +200,8 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
           _createFailed = true;
         });
       }
+    } finally {
+      _retrying = false;
     }
   }
 
@@ -451,6 +485,19 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     }
   }
 
+  Future<void> _call999() async {
+    try {
+      await launchUrl(Uri(scheme: 'tel', path: '999'));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('Could not open the dialer. Please dial 999.')),
+        );
+      }
+    }
+  }
+
+  /// Sending failed: one plain sentence, one big call button, and a quiet retry loop underneath.
   Widget _buildFailureBanner() {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -459,26 +506,47 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'We could not record this alert',
+            'Your alert has not been sent yet. Call 999 now.',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              height: 1.3,
+              fontWeight: FontWeight.w800,
               color: AppColors.sosDeep,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: 56,
+            child: Semantics(
+              button: true,
+              label: 'Call 999 now',
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.sos,
+                  foregroundColor: AppColors.surface,
+                ),
+                onPressed: _call999,
+                icon: const Icon(Icons.call, size: 24),
+                label: const Text(
+                  'Call 999',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Please call 922 now. You can also try recording the alert again.',
+            'We keep trying to send it every 5 seconds.',
             style: TextStyle(fontSize: 13, color: AppColors.sosDeep),
           ),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: _handleRetry,
-              child: const Text('Retry'),
+              onPressed: _retrying ? null : _handleRetry,
+              child: Text(_retrying ? 'Trying again…' : 'Try again now'),
             ),
           ),
         ],
@@ -490,6 +558,13 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   Widget build(BuildContext context) {
     final cStyle = categoryStyle(_category);
     final refStr = incidentReference(widget.incidentRef.id);
+    final phase = alertPhase(
+      createDone: _recordedAt != null,
+      createFailed: _createFailed,
+      hasPendingWrites: _hasPendingWrites,
+      docSeen: _docSeen,
+      secondsSinceStart: _stopwatch.elapsed.inSeconds,
+    );
 
     return PopScope(
       canPop: false,
@@ -587,6 +662,12 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
                     receivedAt: _recordedAt ?? DateTime.now(),
                     detailsPending: !_detailsCompleted,
                     onAddDetails: _openMoreDetailsSheet,
+                    repo: widget.repo,
+                    dispatch: widget.dispatch,
+                    sending:
+                        phase == AlertPhase.sending ||
+                        phase == AlertPhase.savedOffline,
+                    onRaiseAlert: widget.onRaiseAlert,
                   ),
           ),
         ),
@@ -595,29 +676,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     );
   }
 
-  Widget _buildStageContent() {
-    switch (_stage) {
-      case _Stage.chooseCategory:
-        return _buildChooseCategory();
-      case _Stage.chooseOtherType:
-        return _buildChooseOtherType();
-      case _Stage.safety:
-        return _buildSafetyQuestion();
-      case _Stage.describe:
-        return FreeTextStep(
-          key: const ValueKey('triage-description'),
-          suggestMode: true,
-          initialText: _typedText,
-          initialConsent: _textConsent,
-          canSkip: true,
-          onContinue: _onDescription,
-        );
-      case _Stage.quick:
-        return _buildQuickQuestions();
-      case _Stage.done:
-        return _buildDoneContent();
-    }
-  }
+
 
   Widget _buildChooseCategory() {
     if (_isFreeTextMode) {

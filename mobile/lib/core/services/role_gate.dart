@@ -1,19 +1,21 @@
-// Decides which app a signed-in person sees: administrator dashboard, responder app, or the normal resident app.
+// Decides which app a signed-in person sees: staff console, responder app, or the normal resident app.
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../features/admin/admin_shell.dart';
+import '../../features/ops/ops_shell.dart';
 import '../../features/responder/responder_shell.dart';
 
-enum AppRole { admin, responder, resident }
+enum AppRole { admin, dispatcher, responder, resident }
 
 Future<AppRole> resolveRole() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return AppRole.resident;
   try {
     final token = await user.getIdTokenResult(true);
-    if (token.claims?['role'] == 'SystemAdmin') return AppRole.admin;
+    final claim = token.claims?['role'];
+    if (claim == 'SystemAdmin') return AppRole.admin;
+    if (claim == 'Dispatcher') return AppRole.dispatcher;
   } catch (_) {}
   try {
     final s = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -40,7 +42,8 @@ class _RoleGateState extends State<RoleGate> {
     builder: (context, snap) {
       if (!snap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
       return switch (snap.data!) {
-        AppRole.admin => const AdminShell(),
+        AppRole.admin => const OpsShell(isAdmin: true),
+        AppRole.dispatcher => const OpsShell(isAdmin: false),
         AppRole.responder => const ResponderGate(),
         AppRole.resident => widget.residentBuilder(context),
       };

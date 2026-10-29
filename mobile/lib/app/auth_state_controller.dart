@@ -26,13 +26,17 @@ class AuthStateController extends ChangeNotifier {
   User? _firebaseUser;
   AppUserProfile? _profile;
   ResponderProfile? _responderProfile;
+  StaffDecision? _staffDecision;
   bool _isSystemAdmin = false;
+  bool _isDispatcher = false;
   bool _loading = true;
 
   User? get firebaseUser => _firebaseUser;
   AppUserProfile? get profile => _profile;
   ResponderProfile? get responderProfile => _responderProfile;
+  StaffDecision? get staffDecision => _staffDecision;
   bool get isSystemAdmin => _isSystemAdmin;
+  bool get isDispatcher => _isDispatcher;
   bool get isLoading => _loading;
 
   Future<void> _onAuthChanged(User? user) async {
@@ -41,25 +45,33 @@ class AuthStateController extends ChangeNotifier {
     // Clear the previous account's role data before asynchronous profile reads.
     _profile = null;
     _responderProfile = null;
+    _staffDecision = null;
     _isSystemAdmin = false;
+    _isDispatcher = false;
     notifyListeners();
 
     if (user != null) {
       try {
         final tokenResult = await user.getIdTokenResult(true);
         _isSystemAdmin = tokenResult.claims?['role'] == 'SystemAdmin';
+        _isDispatcher = tokenResult.claims?['role'] == 'Dispatcher';
 
         _profile = await authRepository.getUserProfile(user.uid);
         if (_profile?.role.firestoreValue == 'Responder') {
           _responderProfile = await authRepository.getResponderProfile(user.uid);
+        }
+        if (_profile?.role.firestoreValue == 'Dispatcher') {
+          _staffDecision = await authRepository.getStaffDecision(user.uid);
         }
         if (_profile != null && !_isSystemAdmin) {
           await permissionService.requestForRole(_profile!.role);
         }
       } on FirebaseException {
         _isSystemAdmin = false;
+        _isDispatcher = false;
         _profile = null;
         _responderProfile = null;
+        _staffDecision = null;
       }
     }
 

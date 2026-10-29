@@ -5,22 +5,39 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'help_models.dart';
 
 class IncidentInfo {
-  const IncidentInfo({this.latitude, this.longitude, this.category, this.subtype, this.status});
+  const IncidentInfo({
+    this.latitude,
+    this.longitude,
+    this.category,
+    this.subtype,
+    this.status,
+    this.landmark = '',
+    this.accuracyM,
+    this.feedbackSafe,
+    this.locationSource = 'gps',
+  });
   final double? latitude;
   final double? longitude;
   final String? category;
   final String? subtype;
   final String? status;
+  final String landmark;
+  final double? accuracyM;
+  final bool? feedbackSafe;
+  final String locationSource;
   bool get hasLocation => latitude != null && longitude != null;
 }
 
 class HelpRepository {
   HelpRepository({FirebaseFirestore? db, FirebaseFunctions? functions})
       : _db = db ?? FirebaseFirestore.instance,
-        _fn = functions ?? FirebaseFunctions.instanceFor(region: 'europe-west1');
+        _functions = functions;
 
   final FirebaseFirestore _db;
-  final FirebaseFunctions _fn;
+  FirebaseFunctions? _functions;
+
+  /// Created on first use: screens that never call a Cloud Function work without a Firebase app (tests).
+  FirebaseFunctions get _fn => _functions ??= FirebaseFunctions.instanceFor(region: 'europe-west1');
 
   DocumentReference<Map<String, dynamic>> _incident(String id) => _db.collection('incidents').doc(id);
 
@@ -52,14 +69,75 @@ class HelpRepository {
   Stream<IncidentInfo> watchIncident(String incidentId) => _incident(incidentId).snapshots().map((s) {
         final d = s.data();
         final loc = d?['location'];
+        final fb = d?['residentFeedback'];
         return IncidentInfo(
           latitude: loc is GeoPoint ? loc.latitude : null,
           longitude: loc is GeoPoint ? loc.longitude : null,
           category: d?['category']?.toString(),
           subtype: d?['subtype']?.toString(),
           status: d?['status']?.toString(),
+          landmark: (d?['landmark'] ?? '').toString(),
+          accuracyM: (d?['locationAccuracyM'] as num?)?.toDouble(),
+          feedbackSafe: fb is Map && fb['safe'] is bool ? fb['safe'] as bool : null,
+          locationSource: (d?['locationSource'] ?? 'gps').toString(),
         );
       }).handleError((_) {});
+
+  /// The newest question from dispatch that has not been answered. null when there is none.
+  Stream<CheckinQuestion?> watchCheckin(String incidentId) => _incident(incidentId)
+      .collection('checkins')
+      .orderBy('sentAt', descending: true)
+      .limit(5)
+      .snapshots()
+      .map((q) {
+        for (final d in q.docs) {
+          final m = d.data();
+          if (m['reply'] == null) return CheckinQuestion(id: d.id, text: (m['text'] ?? '').toString());
+        }
+        return null;
+      })
+      .handleError((_) {});
+
+  /// The caller answers a dispatcher's question. firestore.rules allow ONLY reply + repliedAt, once.
+  Future<bool> replyCheckin(String incidentId, String checkinId, String reply) async {
+    try {
+      await _incident(incidentId).collection('checkins').doc(checkinId).update({
+        'reply': reply,
+        'repliedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Landmark (in words) and how precise the fix was. firestore.rules allow ONLY these three keys, while the alert is open.
+  Future<bool> saveContext(String incidentId, {String? landmark, double? accuracyM, String? source}) async {
+    try {
+      await _incident(incidentId).update({
+        if (landmark != null) 'landmark': landmark.length > 120 ? landmark.substring(0, 120) : landmark,
+        if (accuracyM != null) 'locationAccuracyM': accuracyM,
+        if (source != null) 'locationSource': source,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// "Are you safe now?" answered once after the alert closed. Never required.
+  Future<bool> saveFeedback(String incidentId, {required bool safe, int? rating}) async {
+    try {
+      await _incident(incidentId).update({
+        'residentFeedback': {'safe': safe, if (rating != null) 'rating': rating},
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Saves a late or corrected location. firestore.rules allow ONLY location + updatedAt, and only while the alert is active.
   Future<bool> saveLocation(String incidentId, double lat, double lng) async {

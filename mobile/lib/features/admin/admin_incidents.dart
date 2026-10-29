@@ -121,8 +121,31 @@ class _IncidentDetailPageState extends State<IncidentDetailPage> {
       ),
     );
     if (picked == null) return;
+    if (!mounted) return;
+    final reason = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Ask ${picked.organizationName} directly?'),
+        content: TextField(controller: reason, maxLength: 140, decoration: const InputDecoration(labelText: 'Reason for the manual override')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (reason.text.trim().length < 3) {
+                ScaffoldMessenger.of(c).showSnackBar(const SnackBar(content: Text('Give a reason (at least 3 characters).')));
+                return;
+              }
+              Navigator.pop(c, true);
+            },
+            child: const Text('Confirm and send'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     try {
-      await widget.repo.assign(inc.id, picked.id);
+      await widget.repo.assign(inc.id, picked.id, reason: reason.text.trim());
       _toast('Offer sent to ${picked.organizationName}. It expires in 90 seconds.');
     } catch (e) {
       _toast('Could not assign: $e');

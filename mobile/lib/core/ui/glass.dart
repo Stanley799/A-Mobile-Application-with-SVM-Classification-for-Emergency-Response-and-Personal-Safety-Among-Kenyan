@@ -74,7 +74,15 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      return SizedBox(
+        width: widget.size * 2.4,
+        height: widget.size * 2.4,
+        child: Center(child: Container(width: widget.size, height: widget.size, decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color))),
+      );
+    }
+    return SizedBox(
     width: widget.size * 2.4,
     height: widget.size * 2.4,
     child: AnimatedBuilder(
@@ -84,5 +92,6 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
         Container(width: widget.size, height: widget.size, decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color)),
       ]),
     ),
-  );
+    );
+  }
 }

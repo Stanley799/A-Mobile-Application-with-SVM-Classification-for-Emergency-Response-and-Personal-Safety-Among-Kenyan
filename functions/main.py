@@ -21,6 +21,7 @@ from dispatch import admin_accounts as acct, config as C, core, notify, store
 from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
 from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
 from phase4d_functions import responder_sos, admin_resolve_sos, reveal_contact, send_checkin, request_more_units  # noqa: F401,E402  (Phase 4D)
+from phase4d_staff import admin_list_dispatchers, admin_review_dispatcher  # noqa: F401,E402  (Phase 4D dispatcher approvals)
 import phase4d_core as p4
 initialize_app()
 OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
@@ -89,6 +90,16 @@ def _event_for_status(status, reason):
     return None, None
 
 
+def _stamp_offer_times(db, offer_id, new):
+    """The phone keeps only the latest response time; stamp each status once so the completion summary has real timings."""
+    status = new.get("status")
+    if status not in ("accepted", "enroute", "arrived", "completed"):
+        return
+    if status in (new.get("offerTimes") or {}):
+        return
+    db.collection("offers").document(offer_id).update({f"offerTimes.{status}": firestore.SERVER_TIMESTAMP})
+
+
 def _record_offer_events(db, offer_id, new, old):
     iid = new.get("incidentId")
     if not iid:
@@ -97,6 +108,7 @@ def _record_offer_events(db, offer_id, new, old):
         p4.write_event(db, iid, "offer_sent", "system", "system",
                        {"role": new.get("role"), "wave": new.get("wave")}, f"offer_sent_{offer_id}")
         return
+    _stamp_offer_times(db, offer_id, new)
     rid = new.get("responderId")
     if old.get("seenAt") is None and new.get("seenAt") is not None:
         p4.write_event(db, iid, "offer_seen", "responder", rid, {}, f"offer_seen_{offer_id}")
@@ -118,6 +130,19 @@ def _record_offer_events(db, offer_id, new, old):
                            {"role": new.get("role")}, f"{etype}_{offer_id}")
 
 
+def _share_caller_feedback(db, iid, old, new):
+    """The unit that closed the job hears 'safe / still needs help', never who said it."""
+    fb = new.get("residentFeedback")
+    if not isinstance(fb, dict) or not isinstance(fb.get("safe"), bool):
+        return
+    if old is not None and old.get("residentFeedback") == new.get("residentFeedback"):
+        return
+    for s in db.collection("offers").where("incidentId", "==", iid).where("status", "==", "completed").stream():
+        if (s.to_dict().get("callerFeedback") or {}).get("safe") == fb["safe"]:
+            continue
+        s.reference.update({"callerFeedback": {"safe": fb["safe"], "at": firestore.SERVER_TIMESTAMP}})
+
+
 @firestore_fn.on_document_written(document="incidents/{incidentId}", **OPTS)
 def on_incident_written(event: firestore_fn.Event[firestore_fn.Change]):
     after = event.data.after
@@ -130,6 +155,7 @@ def on_incident_written(event: firestore_fn.Event[firestore_fn.Change]):
         return                                               # only our own dispatch write changed: stop (no loops)
     iid = event.params["incidentId"]
     _quiet(lambda: _record_incident_events(db(), iid, old, new, time.time()), f"incident {iid}")
+    _quiet(lambda: _share_caller_feedback(db(), iid, old, new), f"feedback {iid}")
     store.reconcile_incident(db(), iid, time.time(), notify.send_offer_push)
 
 
@@ -186,12 +212,23 @@ def _require_admin(req):
         raise https_fn.HttpsError(https_fn.FunctionsErrorCode.PERMISSION_DENIED, "Administrators only.")
 
 
+def _require_staff(req):
+    """Administrator or dispatcher. Returns the event actor role ('admin' or 'dispatcher')."""
+    role = (req.auth.token or {}).get("role") if req.auth is not None else None
+    if role not in ("SystemAdmin", "Dispatcher"):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.PERMISSION_DENIED, "Dispatchers and administrators only.")
+    return "admin" if role == "SystemAdmin" else "dispatcher"
+
+
 @https_fn.on_call(**OPTS)
 def admin_assign_responder(req: https_fn.CallableRequest):
-    """Manually asks one responder to attend an incident (used when automatic dispatch found nobody)."""
-    _require_admin(req)
+    """Manually asks one responder to attend an incident (dispatcher or administrator). A reason is required."""
+    actor = _require_staff(req)
     d = req.data if isinstance(req.data, dict) else {}
     iid, rid = d.get("incidentId"), d.get("responderId")
+    reason = str(d.get("reason") or "").strip()[:140]
+    if len(reason) < 3:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Give a reason for the manual assignment (at least 3 characters).")
     if not isinstance(iid, str) or not isinstance(rid, str):
         raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "incidentId and responderId are required.")
     snap = db().collection("incidents").document(iid).get()
@@ -219,8 +256,7 @@ def admin_assign_responder(req: https_fn.CallableRequest):
     doc = store._offer_doc(offer)
     ref.set(doc)                                              # an administrator may re-ask a responder who declined before
     store.audit(db(), "offer_created_manual", iid, responderId=rid, by=req.auth.uid)
-    reason = str(d.get("reason") or "")[:140]
-    _quiet(lambda: p4.write_event(db(), iid, "admin_assigned", "admin", req.auth.uid,
+    _quiet(lambda: p4.write_event(db(), iid, "admin_assigned", actor, req.auth.uid,
                                   {"role": role, "reason": reason}, f"admin_assigned_{offer['id']}"), f"assign {iid}")
     notify.send_offer_push(db(), offer)
     return {"ok": True, "offerId": offer["id"]}
@@ -228,20 +264,23 @@ def admin_assign_responder(req: https_fn.CallableRequest):
 
 @https_fn.on_call(**OPTS)
 def admin_close_incident(req: https_fn.CallableRequest):
-    _require_admin(req)
+    """Dispatchers and administrators close an incident with a required outcome note."""
+    actor = _require_staff(req)
     d = req.data if isinstance(req.data, dict) else {}
-    iid, note = d.get("incidentId"), str(d.get("note", ""))[:280]
+    iid, note = d.get("incidentId"), str(d.get("note") or "").strip()[:280]
     if not isinstance(iid, str):
         raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "incidentId is required.")
+    if len(note) < 3:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Write the outcome (at least 3 characters).")
     ref = db().collection("incidents").document(iid)
     snap = ref.get()
     if not snap.exists:
         raise https_fn.HttpsError(https_fn.FunctionsErrorCode.NOT_FOUND, "Incident not found.")
     if snap.to_dict().get("status") not in ("Active", "SupportOnly"):
         return {"ok": True, "already": True}
-    ref.update({"status": "Resolved", "resolvedAt": firestore.SERVER_TIMESTAMP, "resolution": {"by": req.auth.uid, "note": note}})
+    ref.update({"status": "Resolved", "resolvedAt": firestore.SERVER_TIMESTAMP, "resolution": {"by": req.auth.uid, "note": note, "byRole": actor}})
     store.audit(db(), "incident_closed_by_admin", iid, by=req.auth.uid, note=note)
-    _quiet(lambda: p4.write_event(db(), iid, "incident_closed", "admin", req.auth.uid, {"by": "admin"}, "incident_closed"), f"close {iid}")
+    _quiet(lambda: p4.write_event(db(), iid, "incident_closed", actor, req.auth.uid, {"by": actor}, "incident_closed"), f"close {iid}")
     return {"ok": True}
 
 

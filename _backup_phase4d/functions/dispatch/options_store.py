@@ -1,0 +1,170 @@
+"""Firestore side of the help options: reads the directory, asks the routing service for travel times (optional), writes
+incidents/{id}/options/r1..r3 and options/meta, and removes live-location tracks of units that no longer hold the job.
+Failure here must NEVER stop dispatch: store.reconcile_incident calls refresh() inside try/except."""
+import math
+
+from google.cloud.firestore import SERVER_TIMESTAMP
+
+from . import config as C
+from . import core, lookup, options, routes, store
+
+ETA_REUSE_SECONDS = 90
+SUBCOLS = ("r1", "r2", "r3")
+
+
+def facilities_near(db, lat, lng, radius_km):
+    """The directory is small (one city), so: a latitude band from Firestore, then exact distance in code. No composite index needed."""
+    dlat = radius_km / 111.0
+    out = []
+    q = db.collection("facilities").where("lat", ">=", lat - dlat).where("lat", "<=", lat + dlat)
+    for s in q.stream():
+        d = s.to_dict() or {}
+        out.append({**d, "id": s.id})
+    out += [{**(s.to_dict() or {}), "id": s.id} for s in db.collection("facilities").where("kind", "==", "hotline").stream()]
+    seen, uniq = set(), []
+    for f in out:
+        if f["id"] not in seen:
+            seen.add(f["id"]); uniq.append(f)
+    return uniq
+
+
+PLACES_TTL_S = 600
+NEAR_KM = 8.0
+
+
+def augment_with_google(db, iid, inc, facilities, wanted, now, key):
+    """If our directory has fewer than 2 places of a wanted kind within NEAR_KM, add Google's nearest ones (cached 10 min per incident)."""
+    if not key:
+        return facilities
+    lat, lng = inc["lat"], inc["lng"]
+    ref = db.collection("incidents").document(iid).collection("routes").document("places_cache")
+    snap = ref.get()
+    cache = snap.to_dict() if snap.exists else {}
+    fresh = cache and now - float(cache.get("at", 0)) < PLACES_TTL_S and abs(cache.get("lat", 0) - lat) < 0.002 and abs(cache.get("lng", 0) - lng) < 0.002
+    items = list(cache.get("items") or []) if fresh else None
+    if items is None:
+        items = []
+        for t in wanted[:3]:
+            have = [f for f in facilities if f.get("type") == t and f.get("lat") is not None and core.dl.haversine_km(lat, lng, f["lat"], f["lng"]) <= NEAR_KM]
+            if len(have) < 2:
+                items += lookup.places_nearby(key, lat, lng, t)
+        try:
+            ref.set({"at": now, "lat": lat, "lng": lng, "items": items})
+        except Exception as e:  # noqa: BLE001
+            print(f"[options] cache write failed: {type(e).__name__}")
+    known = {f["id"] for f in facilities}
+    return facilities + [i for i in items if i["id"] not in known]
+
+
+def _read_old(db, iid):
+    col = db.collection("incidents").document(iid).collection("options")
+    old = {}
+    for rid in SUBCOLS:
+        s = col.document(rid).get()
+        if s.exists:
+            old[rid] = s.to_dict()
+    return old
+
+
+def _eta_minutes(db, key, inc, avail, assigned, facilities, now, old):
+    """Road travel times for the best few candidates only (<= 6 elements per incident). Falls back to estimates by returning {}."""
+    if not key:
+        return {}
+    reuse = {}
+    for o in old.values():
+        at = store.epoch(o.get("etaAt"))
+        if o.get("etaSource") == "road" and at and now - at < ETA_REUSE_SECONDS:
+            reuse[o["refId"]] = (o["etaMin"], "road")
+    lat, lng = inc["lat"], inc["lng"]
+    units = sorted([r for r in avail + assigned if r.get("lat") is not None], key=lambda r: core.dl.haversine_km(lat, lng, r["lat"], r["lng"]))[:3]
+    places = sorted([f for f in facilities if f.get("lat") is not None and f.get("status", "active") == "active"],
+                    key=lambda f: core.dl.haversine_km(lat, lng, f["lat"], f["lng"]))[:3]
+    out = dict(reuse)
+    need_u = [u for u in units if u["id"] not in reuse]
+    if need_u:
+        m = routes.matrix_seconds(key, [(u["lat"], u["lng"]) for u in need_u], [(lat, lng)])
+        for (i, _j), sec in m.items():
+            out[need_u[i]["id"]] = (round(sec / 60.0, 1), "road")
+    need_p = [f for f in places if f["id"] not in reuse]
+    if need_p:
+        m = routes.matrix_seconds(key, [(lat, lng)], [(f["lat"], f["lng"]) for f in need_p])
+        for (_i, j), sec in m.items():
+            out[need_p[j]["id"]] = (round(sec / 60.0, 1), "road")
+    return out
+
+
+def _doc(c, now_marker=True):
+    d = {k: v for k, v in c.items() if v is not None}
+    d["etaAt"] = SERVER_TIMESTAMP
+    d["updatedAt"] = SERVER_TIMESTAMP
+    return d
+
+
+def _same(a, b):
+    ignore = ("etaAt", "updatedAt")
+    return {k: v for k, v in (a or {}).items() if k not in ignore} == {k: v for k, v in (b or {}).items() if k not in ignore}
+
+
+def refresh(db, iid, inc, dispatch, now, key=None):
+    """Recompute and store the options for one incident. `dispatch` is the dispatch summary just computed (state, escalate922)."""
+    state = dispatch.get("state")
+    col = db.collection("incidents").document(iid).collection("options")
+    if state in ("cancelled", "completed") or inc.get("status") not in ("Active", "SupportOnly", "Resolved"):
+        _clear(col); _prune_tracks(db, iid, {}); return
+    if state in ("support_only",):
+        opts, meta = options.helplines_only(state)
+    elif inc.get("lat") is None or inc.get("lng") is None or state in ("awaiting_details", "needs_review"):
+        opts, meta = [], {"mode": "map", "sensitive": inc.get("subtype") in ("sexual_violence", "domestic_violence"), "state": state, "failedCount": 0, "asking": [], "held": False, "suggestCall": False,
+                          "showNumbers": state in ("no_location",) or bool(dispatch.get("escalate922")), "noLive": True}
+    else:
+        offers = store.offers_for(db, iid)
+        pr = core.server_priority(inc, store.table())["priority"]
+        avail = store.available_responders(db)
+        held_ids = [o["responderId"] for o in offers if o["status"] in options.HELD]
+        assigned = []
+        for rid in held_ids:
+            s = db.collection("responders").document(rid).get()
+            if s.exists:
+                assigned.append(store.responder_view(db, rid, s.to_dict()))
+        facilities = facilities_near(db, inc["lat"], inc["lng"], core.R["max_radius_km"][pr])
+        k = key if key is not None else routes.key()
+        facilities = augment_with_google(db, iid, inc, facilities, lookup.wanted_types(inc.get("category"), inc.get("subtype")), now, k)
+        old = _read_old(db, iid)
+        minutes = _eta_minutes(db, k, inc, avail, assigned, facilities, now, old)
+        opts, meta = options.build(inc, pr, avail, assigned, offers, facilities, state, now, minutes)
+        if dispatch.get("escalate922"):
+            meta["showNumbers"] = True
+        # Keep the live tracks of units that hold the job, plus the resident's own track (mutual live tracking).
+        keep_tracks = {o["responderId"] for o in offers if o["status"] in options.HELD}
+        if inc.get("userId"):
+            keep_tracks.add(inc["userId"])
+        _prune_tracks(db, iid, keep_tracks)
+    old = _read_old(db, iid)
+    want = {f"r{c['rank']}": c for c in opts}
+    for rid in SUBCOLS:
+        if rid in want:
+            if not _same(old.get(rid), _plain(want[rid])):
+                col.document(rid).set(_doc(want[rid]))
+        elif rid in old:
+            col.document(rid).delete()
+    cur = col.document("meta").get()
+    if not cur.exists or not _same(cur.to_dict(), meta):
+        col.document("meta").set({**meta, "updatedAt": SERVER_TIMESTAMP})
+
+
+def _plain(c):
+    return {k: v for k, v in c.items() if v is not None}
+
+
+def _clear(col):
+    for rid in SUBCOLS + ("meta",):
+        col.document(rid).delete()
+
+
+def _prune_tracks(db, iid, keep_ids):
+    """Live-location privacy: a unit's track exists only while it holds the job; the resident's own track
+    exists only while the alert is open (refresh clears the whole collection once it is not)."""
+    col = db.collection("incidents").document(iid).collection("tracks")
+    for s in col.stream():
+        if s.id not in keep_ids:
+            s.reference.delete()

@@ -178,16 +178,47 @@ def release_resident(db, offer, incident):
     audit(db, "contact_released", incident["id"], responderId=offer["responderId"])
 
 
+def _incident_context(raw):
+    """The caller's landmark and how precise the fix was. Extras: missing values simply do not travel."""
+    out = {}
+    lm = raw.get("landmark")
+    if isinstance(lm, str) and lm.strip():
+        out["landmark"] = lm.strip()[:120]
+    acc = raw.get("locationAccuracyM")
+    if isinstance(acc, (int, float)) and not isinstance(acc, bool):
+        out["locationAccuracyM"] = int(round(acc))
+    return out
+
+
+def _sync_offer_context(db, incident_id, raw):
+    """Puts the landmark and accuracy on new and still-open offers. Never touches status or planning fields."""
+    ctx = _incident_context(raw)
+    if not ctx:
+        return
+    try:
+        for s in db.collection("offers").where("incidentId", "==", incident_id).stream():
+            d = s.to_dict()
+            if d.get("status") not in C.ACTIVE_OFFER:
+                continue
+            patch = {k: v for k, v in ctx.items() if d.get(k) != v}
+            if patch:
+                s.reference.update(patch)
+    except Exception as e:  # noqa: BLE001 - the offer is already usable without it
+        print(f"[dispatch] offer context {incident_id}: {type(e).__name__}: {e}")
+
+
 def reconcile_incident(db, incident_id, now, notify=None):
     snap = db.collection("incidents").document(incident_id).get()
     if not snap.exists:
         return None
-    inc = incident_view(incident_id, snap.to_dict())
+    raw = snap.to_dict() or {}
+    inc = incident_view(incident_id, raw)
     if not inc["category"]:
         return None
     offers = offers_for(db, incident_id)
     res = core.reconcile(inc, available_responders(db), offers, now, table())
     apply_actions(db, res["actions"], notify)
+    _sync_offer_context(db, incident_id, raw)
     write_dispatch(db, incident_id, inc.get("dispatch"), res["dispatch"])
     try:                                    # help options for the resident map; must never stop dispatch
         from . import options_store

@@ -46,7 +46,7 @@ service cloud.firestore {
     }
 
     function validPublicRole(role) {
-      return role in ["Resident", "Responder"];
+      return role in ["Resident", "Responder", "Dispatcher"];
     }
 
     function validAccountStatus(status) {
@@ -385,10 +385,11 @@ service cloud.firestore {
       return r in ["cannot_reach", "scene_unsafe", "unit_broken_down", "no_longer_available"];
     }
 
-    // Three side-writes a responder may make on their OWN offer, each exactly once:
-    //   seenAt    : the first time the offer screen was shown
-    //   transport : the hospital chosen after arrival (must exist in the directory)
-    //   moreUnits : a request for another unit while the responder holds the job
+    // Side-writes a responder may make on their OWN offer, with exact key sets:
+    //   seenAt    : the first time the offer screen was shown (once)
+    //   transport : the facility chosen after arrival, then its arrival time (once each)
+    //   moreUnits : a request for another unit while the responder holds the job (once)
+    //   note      : the unit's private notes for this job (any time while holding it)
     function validOfferSideWrite() {
       let d = request.resource.data;
       let c = request.resource.data.diff(resource.data).affectedKeys();
@@ -398,15 +399,26 @@ service cloud.firestore {
           && d.seenAt is timestamp)
         || (c.hasOnly(["transport"])
           && resource.data.status == "arrived"
-          && resource.data.get("transport", null) == null
-          && d.transport.keys().hasOnly(["destinationId", "destinationName", "startedAt", "arrivedAt"])
-          && d.transport.destinationId is string
-          && d.transport.destinationId.size() > 0
-          && exists(/databases/$(database)/documents/facilities/$(d.transport.destinationId))
-          && d.transport.destinationName is string
-          && d.transport.destinationName.size() <= 120
-          && d.transport.startedAt is timestamp
-          && (d.transport.get("arrivedAt", null) == null || d.transport.arrivedAt is timestamp))
+          && (
+            // first step: choose the destination
+            (resource.data.get("transport", null) == null
+              && d.transport.keys().hasOnly(["destinationId", "destinationName", "startedAt", "arrivedAt"])
+              && d.transport.destinationId is string
+              && d.transport.destinationId.size() > 0
+              && exists(/databases/$(database)/documents/facilities/$(d.transport.destinationId))
+              && d.transport.destinationName is string
+              && d.transport.destinationName.size() <= 120
+              && d.transport.startedAt is timestamp
+              && (d.transport.get("arrivedAt", null) == null || d.transport.arrivedAt is timestamp))
+            // second step: the unit reached that facility; nothing else in the map may change
+            || (resource.data.get("transport", null) != null
+              && resource.data.transport.get("arrivedAt", null) == null
+              && d.transport.keys().hasOnly(["destinationId", "destinationName", "startedAt", "arrivedAt"])
+              && d.transport.get("arrivedAt", null) is timestamp
+              && d.transport.destinationId == resource.data.transport.destinationId
+              && d.transport.destinationName == resource.data.transport.destinationName
+              && d.transport.startedAt == resource.data.transport.startedAt)
+          ))
         || (c.hasOnly(["moreUnits"])
           && resource.data.status in ["accepted", "enroute", "arrived"]
           && resource.data.get("moreUnits", null) == null
@@ -417,7 +429,12 @@ service cloud.firestore {
           && d.moreUnits.count <= 3
           && d.moreUnits.note is string
           && d.moreUnits.note.size() <= 140
-          && d.moreUnits.requestedAt == request.time);
+          && d.moreUnits.requestedAt == request.time)
+        || (c.hasOnly(["note", "noteUpdatedAt"])
+          && resource.data.status in ["accepted", "enroute", "arrived", "completed"]
+          && d.note is string
+          && d.note.size() <= 500
+          && d.noteUpdatedAt == request.time);
     }
 
     // One live position document. Same shape whether a unit or the resident writes it.
@@ -442,6 +459,9 @@ service cloud.firestore {
           (request.resource.data.role == "Resident" && request.resource.data.accountStatus == "Active")
           ||
           (request.resource.data.role == "Responder" && request.resource.data.accountStatus == "PendingVerification")
+          ||
+          // A dispatcher registers, then waits: staff access requires a server-set claim, never this field.
+          (request.resource.data.role == "Dispatcher" && request.resource.data.accountStatus == "PendingVerification")
         );
 
       // Owners may edit profile fields, but cannot change their identity, role, or creation time.
@@ -691,6 +711,30 @@ service cloud.firestore {
     // Training messages are written only by the save_text_feedback_fn Cloud Function.
     match /text_feedback/{feedbackId} {
       allow read, write: if false;
+    }
+
+    // The record of a dispatcher application and the administrator's decision. The applicant reads their own
+    // (so a rejection reason can be shown); only Cloud Functions write it.
+    match /staff_approvals/{uid} {
+      allow read: if isOwner(uid) || isSystemAdmin();
+      allow write: if false;
+    }
+
+    // Shift pass-on notes. The whole control room reads them; only an administrator writes them.
+    function validOpsNote() {
+      return request.resource.data.keys().hasOnly(["text", "authorUid", "at", "pinned"])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.pinned is bool
+        && request.resource.data.at == request.time;
+    }
+
+    match /ops_notes/{noteId} {
+      allow read: if isStaff();
+      allow create, update: if isSystemAdmin() && validOpsNote();
+      allow delete: if false;
     }
 
     match /auditLogs/{logId} {

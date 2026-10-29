@@ -22,7 +22,6 @@ import 'map_style.dart';
 import 'maps_available.dart';
 import 'nearby_places.dart';
 import 'pin_factory.dart';
-import 'resident_track_publisher.dart';
 
 class _C {
   static const ink = Color(0xFF1A1A1A);
@@ -114,7 +113,6 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _loadPins();
-    ResidentTrackPublisher.instance.acquire(widget.incidentId); // the unit that accepted can see me move while this map is open
     _subs.add(repo.watchIncident(widget.incidentId).listen((i) {
       if (!mounted) return;
       setState(() {
@@ -152,7 +150,6 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     }
     _routeTimer?.cancel();
     _anim.dispose();
-    ResidentTrackPublisher.instance.release(widget.incidentId);
     super.dispose();
   }
 
@@ -575,7 +572,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     for (final p in _visibleNearby()) {
       if (p.id != sel) continue;
       final key = p.type.name;
-      final facts = [placeTypeLabel(p.type), if (p.distanceKm != null) '${p.distanceKm!.toStringAsFixed(1)} km', if (p.is24h == true) 'Open 24 h', if (!p.verified) 'Phone not verified'].join(' · ');
+      final facts = [placeTypeLabel(p.type), if (p.distanceKm != null) '${p.distanceKm!.toStringAsFixed(1)} km', if (p.is24h == true) 'Open 24 h'].join(' · ');
       return Positioned(
         left: 12,
         right: 12,
@@ -584,6 +581,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
           iconKey: key,
           title: p.name,
           facts: facts,
+          unverified: p.phone.isNotEmpty && !p.verified,
           children: [
             if (p.phone.isNotEmpty) Expanded(child: SizedBox(height: 48, child: FilledButton.icon(onPressed: () => _call(p.phone), icon: const Icon(Icons.call, size: 18), label: Text(kIsWeb ? 'Call ${p.phone}' : 'Call now'), style: FilledButton.styleFrom(backgroundColor: _C.brand, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))),
             if (p.phone.isNotEmpty) const SizedBox(width: 10),
@@ -595,7 +593,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     return const SizedBox.shrink();
   }
 
-  Widget _selShell({required String iconKey, required String title, required String facts, required List<Widget> children}) => Material(
+  Widget _selShell({required String iconKey, required String title, required String facts, required List<Widget> children, bool unverified = false}) => Material(
     color: Colors.white,
     borderRadius: BorderRadius.circular(20),
     elevation: 6,
@@ -608,6 +606,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _C.ink)),
             if (facts.isNotEmpty) Text(facts, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: _C.mute, fontWeight: FontWeight.w600)),
+            if (unverified) const Padding(padding: EdgeInsets.only(top: 4), child: _UnverifiedPhoneTag()),
           ])),
           IconButton(tooltip: 'Close', icon: const Icon(Icons.close, size: 20), onPressed: () => setState(() => _selFromMap = false)),
         ]),
@@ -890,7 +889,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
 
   Widget _row(NearbyPlace p) {
     final key = p.type.name;
-    final facts = [if (p.distanceKm != null) '${p.distanceKm!.toStringAsFixed(1)} km', if (p.is24h == true) 'Open 24 h', if (!p.verified) 'Phone not verified'].join(' · ');
+    final facts = [if (p.distanceKm != null) '${p.distanceKm!.toStringAsFixed(1)} km', if (p.is24h == true) 'Open 24 h'].join(' · ');
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -907,7 +906,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
           Container(width: 38, height: 38, decoration: BoxDecoration(color: _typeColor(key), shape: BoxShape.circle), child: Icon(_typeIcon(key), color: Colors.white, size: 20)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _C.ink)),
+            Row(children: [
+              Flexible(child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _C.ink))),
+              if (p.phone.isNotEmpty && !p.verified) const Padding(padding: EdgeInsets.only(left: 6), child: _UnverifiedPhoneTag()),
+            ]),
             if (facts.isNotEmpty) Text(facts, style: const TextStyle(fontSize: 12, color: _C.mute)),
           ])),
           if (p.phone.isNotEmpty) IconButton(tooltip: kIsWeb ? 'Copy ${p.phone}' : 'Call', icon: const Icon(Icons.call, color: _C.brand), onPressed: () => _call(p.phone)),
@@ -1060,4 +1062,16 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
       if (o.hasPosition) ...[if (callBtn != null) const SizedBox(width: 10), OutlinedButton.icon(onPressed: () => _showRoute(_Dest(id: o.refId, name: o.name, typeKey: _keyOfOption(o), lat: o.latitude!, lng: o.longitude!, phone: phone)), icon: const Icon(Icons.directions_outlined, size: 18), label: const Text('Directions'), style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))))],
     ]);
   }
+}
+
+/// A small red tag shown next to a facility whose phone number an administrator has not verified.
+class _UnverifiedPhoneTag extends StatelessWidget {
+  const _UnverifiedPhoneTag();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(color: const Color(0xFFFDECEC), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFE8B4B4))),
+    child: const Text('Unverified phone', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF9B1C1C))),
+  );
 }

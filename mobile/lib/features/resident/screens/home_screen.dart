@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/incident_id.dart';
+import '../first_aid/first_aid_entry.dart';
+import '../map/resident_track_publisher.dart';
 import '../widgets/activity_record.dart';
 import '../widgets/alert_status_sheet.dart';
 import '../widgets/category_chip.dart';
@@ -30,6 +32,51 @@ class ResidentHomeScreen extends StatefulWidget {
 
 class _ResidentHomeScreenState extends State<ResidentHomeScreen> {
   int _selectedTab = 0;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _incidentSub;
+  String? _trackedIncidentId;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindTracking();
+  }
+
+  /// One owner for live location: the shell shares it from alert creation until close or cancel, on any tab.
+  void _bindTracking() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _incidentSub = FirebaseFirestore.instance
+        .collection('incidents')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(5)
+        .snapshots()
+        .listen((q) {
+          String? open;
+          for (final d in q.docs) {
+            final s = d.data()['status'];
+            if (s == 'Active' || s == 'SupportOnly') {
+              open = d.id;
+              break;
+            }
+          }
+          if (open == _trackedIncidentId) return;
+          if (_trackedIncidentId != null) {
+            ResidentTrackPublisher.instance.release(_trackedIncidentId!);
+          }
+          _trackedIncidentId = open;
+          if (open != null) ResidentTrackPublisher.instance.acquire(open);
+        }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _incidentSub?.cancel();
+    if (_trackedIncidentId != null) {
+      ResidentTrackPublisher.instance.release(_trackedIncidentId!);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -310,9 +357,79 @@ class _ResidentDashboard extends StatelessWidget {
                 child: Center(
                   child: SosHalo(
                     size: 200,
-                    child: SosButton(
-                      onPressed: () =>
-                          _confirmEmergency(context, 'SOS'),
+                    child: Semantics(
+                      button: true,
+                      label: 'Report an emergency',
+                      hint: 'Opens the SOS alert and shares your location with responders.',
+                      child: SosButton(
+                        onPressed: () =>
+                            _confirmEmergency(context, 'SOS'),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: Semantics(
+                  button: true,
+                  label: 'First aid',
+                  child: Material(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      onTap: () => openFirstAid(context),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: const BoxDecoration(
+                                color: AppColors.medicalBg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.medical_services_outlined,
+                                size: 20,
+                                color: AppColors.medicalFg,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'First aid',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Step-by-step help while you wait',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: AppColors.textTertiary,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -419,15 +536,21 @@ class _ResidentDashboard extends StatelessWidget {
 
     final createFuture = ref.set(initialData);
 
-    // Update location as soon as it resolves
+    // Location arrives after the alert: the fix is written first, then how precise it was (rules keep them separate).
     unawaited(
-      locationFuture.then((loc) {
-        if (loc != null) {
-          ref.update({
-            'location': loc,
+      locationFuture.then((fix) async {
+        if (fix == null) return;
+        try {
+          await ref.update({
+            'location': fix.point,
             'updatedAt': FieldValue.serverTimestamp(),
-          }).catchError((_) {});
-        }
+          });
+          await ref.update({
+            'locationSource': 'gps',
+            if (fix.accuracyM != null) 'locationAccuracyM': fix.accuracyM!.round(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } catch (_) {/* offline, or the alert already closed */}
       }),
     );
 
@@ -484,13 +607,19 @@ class _ResidentDashboard extends StatelessWidget {
             retryCreate: () => ref.set(initialData),
             category: category,
             locationShared: location != null,
+            onRaiseAlert: () {
+              Navigator.of(context).pop();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) _confirmEmergency(context, 'SOS');
+              });
+            },
           ),
         ),
       ),
     );
   }
 
-  Future<GeoPoint?> _getCurrentLocationRobust() async {
+  Future<({GeoPoint point, double? accuracyM})?> _getCurrentLocationRobust() async {
     try {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -506,12 +635,18 @@ class _ResidentDashboard extends StatelessWidget {
           timeLimit: Duration(seconds: 5),
         ),
       ).timeout(const Duration(seconds: 6));
-      return GeoPoint(position.latitude, position.longitude);
+      return (
+        point: GeoPoint(position.latitude, position.longitude),
+        accuracyM: position.accuracy,
+      );
     } catch (_) {
       try {
         final lastKnown = await Geolocator.getLastKnownPosition();
         if (lastKnown != null) {
-          return GeoPoint(lastKnown.latitude, lastKnown.longitude);
+          return (
+            point: GeoPoint(lastKnown.latitude, lastKnown.longitude),
+            accuracyM: lastKnown.accuracy,
+          );
         }
       } catch (_) {}
       return null;

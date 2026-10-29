@@ -48,6 +48,10 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
   @override
   void initState() {
     super.initState();
+    // 2.1: the first time this screen is shown, record it on the offer (rules accept this once, while it is open).
+    if (widget.offer.seenAt == null) {
+      unawaited(widget.repo.markSeen(widget.offer.id).catchError((Object _) {}));
+    }
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       // Grace of a few seconds past zero: client clocks can run ahead of the
@@ -268,6 +272,18 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
                                         ),
                                     ],
                                   ),
+                                if (o.landmark.isNotEmpty) ...[
+                                  const SizedBox(height: ResponderSpacing.lg),
+                                  const Text(
+                                    'Landmark',
+                                    style: ResponderTextStyles.section,
+                                  ),
+                                  const SizedBox(height: ResponderSpacing.xs),
+                                  Text(
+                                    o.landmark,
+                                    style: ResponderTextStyles.body,
+                                  ),
+                                ],
                                 if (o.freeText.isNotEmpty &&
                                     !o.confidential) ...[
                                   const SizedBox(height: ResponderSpacing.lg),
