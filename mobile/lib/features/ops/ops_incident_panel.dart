@@ -2,7 +2,6 @@
 // Messages, Caller check-in and Actions. The same widget is used read-only from the Incidents page.
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/models/dispatch_models.dart';
@@ -81,7 +80,6 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
   String? _street;
   String? _streetFor;
   ({String firstName, String phone})? _contact;
-  String? _contactFor;
   bool _revealBusy = false;
   bool _sendBusy = false;
 
@@ -118,7 +116,6 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
       _street = null;
       _streetFor = null;
       _contact = null;
-      _contactFor = null;
       _message.clear();
       _tabs.index = _indexOf(widget.initialTab).clamp(0, _tabs.length - 1);
     }
@@ -154,28 +151,12 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
     if (mounted && _streetFor == inc.id) setState(() => _street = s);
   }
 
-  Future<void> _loadContactHint(IncidentRecord inc) async {
-    if (_contactFor == inc.id || widget.readOnly) return;
-    _contactFor = inc.id;
-    // Administrators may read the user profile; dispatchers may not, so they see a plain mask until they reveal.
-    try {
-      final s = await FirebaseFirestore.instance.collection('users').doc(inc.userId).get();
-      final phone = (s.data()?['phoneNumber'] ?? '').toString();
-      if (mounted && phone.isNotEmpty) setState(() => _contact = (firstName: (s.data()?['firstName'] ?? '').toString(), phone: phone));
-    } catch (_) {
-      // Not permitted for dispatchers: the mask stays general until Reveal.
-    }
-  }
-
   Future<void> _reveal(IncidentRecord inc) async {
     setState(() => _revealBusy = true);
     try {
       final c = await widget.repo.revealContact(inc.id);
       if (!mounted) return;
-      setState(() {
-        _contact = c;
-        _contactFor = inc.id;
-      });
+      setState(() => _contact = c);
     } catch (e) {
       _toast('Could not reveal: $e');
     } finally {
@@ -263,10 +244,7 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
 
   // ----------------------------------------------------------------- Overview
   Widget _overview(IncidentRecord inc) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadStreet(inc);
-      _loadContactHint(inc);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadStreet(inc));
     final required = requiredRolesFor(category: inc.category, subtype: inc.subtype, answers: inc.answers);
     final held = [for (final u in inc.units) if (kHeldStatuses.contains(u.status)) u];
     final offered = [for (final u in inc.units) if (u.status == 'offered') u];

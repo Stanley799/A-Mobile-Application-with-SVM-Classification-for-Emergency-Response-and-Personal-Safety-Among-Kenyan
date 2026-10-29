@@ -10,6 +10,7 @@ sys.path.insert(0, FN)
 sys.path.insert(0, HERE)
 
 import dispatch  # noqa: F401  (path set-up)
+from dispatch import store
 import phase4d_core as p4
 import fake_firestore as fake
 from fake_firestore import DB
@@ -99,6 +100,29 @@ def main():
     ok("a resident is refused", _raises(p4.Phase4DError, lambda: p4.reveal_contact(db, {"role": "Resident", "uid": "x"}, "INC1")))
     ok("a responder is refused", _raises(p4.Phase4DError, lambda: p4.reveal_contact(db, {"role": "Responder", "uid": "x"}, "INC1")))
     ok("an administrator is allowed", p4.reveal_contact(db, {"role": "SystemAdmin", "uid": "a1"}, "INC1")["phone"] == "+254700000000")
+
+    # 4b the dispatch contact goes into a Functions-only document at alert creation
+    db = DB()
+    incident(db)
+    db.put("users/res1", {"firstName": "Test", "phoneNumber": "+254700000000"})
+    ok("the contact snapshot is written at creation", p4.snapshot_contact(db, "INC1", db.data["incidents/INC1"]) is True)
+    snap = db.data["incidents/INC1/private/contact"]
+    ok("the snapshot holds the caller's first name and phone", snap["firstName"] == "Test" and snap["phone"] == "+254700000000")
+    ok("the snapshot is never rewritten", p4.snapshot_contact(db, "INC1", db.data["incidents/INC1"]) is False)
+    db.data["users/res1"]["phoneNumber"] = "+254700000099"
+    ok("reveal_contact reads the snapshot, not the profile", p4.reveal_contact(db, {"role": "Dispatcher", "uid": "d1"}, "INC1")["phone"] == "+254700000000")
+    ok("a caller with no profile still gets an empty snapshot", p4.snapshot_contact(db, "INC2", {"userId": "missing"}) is True
+       and db.data["incidents/INC2/private/contact"]["phone"] == "")
+
+    # 4c the post-acceptance release prefers the snapshot (the profile is only a fallback for older alerts)
+    db.put("offers/O9", {"incidentId": "INC1", "responderId": "r1", "status": "accepted"})
+    offer_doc = {"id": "O9", "incidentId": "INC1", "responderId": "r1", "resident": None}
+    store.release_resident(db, offer_doc, {"id": "INC1", "userId": "res1"})
+    ok("the unit receives the snapshot contact", db.data["offers/O9"]["resident"] == {"firstName": "Test", "phone": "+254700000000"})
+    released_events = len([p for p in db.data if p.startswith("auditLogs/")])
+    store.release_resident(db, {"id": "O9", "incidentId": "INC1", "responderId": "r1", "resident": db.data["offers/O9"]["resident"]},
+                          {"id": "INC1", "userId": "res1"})
+    ok("the contact is released once", len([p for p in db.data if p.startswith("auditLogs/")]) == released_events)
 
     # 5 check-ins: fixed questions only
     db = DB()

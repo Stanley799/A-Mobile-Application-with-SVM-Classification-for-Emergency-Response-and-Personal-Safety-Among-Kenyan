@@ -256,15 +256,30 @@ def resolve_sos(db, token, sos_id, note, now):
     return True
 
 
+def snapshot_contact(db, incident_id, incident):
+    """Copies the caller's dispatch contact into a Functions-only document when the alert is created.
+    Clients cannot read or write it (firestore.rules); reveal_contact and the post-acceptance release are the only paths."""
+    uid = incident.get("userId")
+    if not uid:
+        return False
+    ref = db.collection("incidents").document(incident_id).collection("private").document("contact")
+    if ref.get().exists:
+        return False
+    u = db.collection("users").document(uid).get()
+    ud = u.to_dict() if u.exists else {}
+    ref.set({"userId": uid, "firstName": str(ud.get("firstName") or ""), "phone": str(ud.get("phoneNumber") or ""),
+             "at": SERVER_TIMESTAMP})
+    return True
+
+
 def reveal_contact(db, token, incident_id):
     """Staff only. Returns the caller's first name and phone, and records who looked."""
     role, uid = staff_role(token)
     doc = _open_incident_or_recent(db, incident_id)
     contact = db.collection("incidents").document(incident_id).collection("private").document("contact").get()
-    if contact.exists:
-        c = contact.to_dict() or {}
-        first, phone = c.get("firstName", ""), c.get("phone", "")
-    else:
+    c = (contact.to_dict() or {}) if contact.exists else {}
+    first, phone = c.get("firstName", ""), c.get("phone", "")
+    if not first and not phone:                 # older alert, or a profile that was not ready when it was created
         u = db.collection("users").document(doc.get("userId") or "").get()
         ud = u.to_dict() if u.exists else {}
         first, phone = ud.get("firstName", ""), ud.get("phoneNumber", "")

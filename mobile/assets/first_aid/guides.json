@@ -1,0 +1,1435 @@
+{
+ "schemaVersion": 1,
+ "contentVersion": "0.1.0-draft",
+ "languages": [
+  "en",
+  "sw"
+ ],
+ "emergencyNumbers": {
+  "emergency": [
+   "999",
+   "112"
+  ],
+  "nationalDispatch": "922",
+  "redCross": "1199",
+  "gbvHelpline": "1195"
+ },
+ "draftNotice": {
+  "en": "DRAFT. Not yet clinically approved. Call 999 or 112 first.",
+  "sw": "DRAFTI. Haijaidhinishwa na wataalamu wa afya. Piga 999 au 112 kwanza."
+ },
+ "flows": {
+  "medical_start": [
+   {
+    "id": "responding",
+    "text": {
+     "en": "Is the person responding when you tap their shoulders and shout?",
+     "sw": "Je, mtu anaitikia ukimgusa mabegani na kupiga kelele?"
+    },
+    "yes": "choking_q",
+    "no": "breathing"
+   },
+   {
+    "id": "breathing",
+    "text": {
+     "en": "Are they breathing normally?",
+     "sw": "Je, anapumua kawaida?"
+    },
+    "yes": "guide:recovery_position",
+    "no": "guide:cpr_adult"
+   },
+   {
+    "id": "choking_q",
+    "text": {
+     "en": "Is the person choking or unable to speak?",
+     "sw": "Je, anakabwa au hawezi kuongea?"
+    },
+    "yes": "guide:choking_adult",
+    "no": "pick_topic"
+   }
+  ]
+ },
+ "guides": [
+  {
+   "id": "cpr_adult",
+   "status": "draft",
+   "title": {
+    "en": "Adult not breathing (CPR)",
+    "sw": "Mtu mzima hapumui (CPR)"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [
+    "cardiac_arrest",
+    "unresponsive"
+   ],
+   "keywords": {
+    "en": [
+     "not breathing",
+     "unconscious",
+     "collapsed",
+     "no pulse",
+     "cpr",
+     "heart stopped",
+     "unresponsive"
+    ],
+    "sw": [
+     "hapumui",
+     "amezimia",
+     "ameanguka",
+     "moyo umesimama",
+     "hajitambui",
+     "hajibu"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 now. Put your phone on speaker.",
+    "sw": "Piga 999 au 112 sasa. Weka simu kwenye spika."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Make sure it is safe",
+      "sw": "Hakikisha mahali ni salama"
+     },
+     "b": {
+      "en": "Check for danger around you. Do not put yourself at risk.",
+      "sw": "Angalia hatari karibu nawe. Usijiweke hatarini."
+     }
+    },
+    {
+     "t": {
+      "en": "Check if they respond",
+      "sw": "Angalia kama anaitikia"
+     },
+     "b": {
+      "en": "Tap their shoulders firmly and shout. If they do not respond and are not breathing normally, start CPR. Gasping is not normal breathing.",
+      "sw": "Gusa mabega yake kwa nguvu na upige kelele. Asipoitikia na hapumui kawaida, anza CPR. Kuhema kwa shida si kupumua kawaida."
+     }
+    },
+    {
+     "t": {
+      "en": "Get help",
+      "sw": "Pata msaada"
+     },
+     "b": {
+      "en": "Call 999 or 112, or ask someone nearby to call. Send someone to find a defibrillator (AED) if one is close.",
+      "sw": "Piga 999 au 112, au mwombe mtu aliye karibu apige. Mtume mtu atafute mashine ya AED ikiwa ipo karibu."
+     }
+    },
+    {
+     "t": {
+      "en": "Lay them flat",
+      "sw": "Mlaze chali"
+     },
+     "b": {
+      "en": "Lay them on their back on a firm surface. Kneel beside their chest.",
+      "sw": "Mlaze chali kwenye sehemu ngumu. Piga magoti kando ya kifua chake."
+     }
+    },
+    {
+     "t": {
+      "en": "Push hard and fast",
+      "sw": "Bonyeza kwa nguvu na haraka"
+     },
+     "b": {
+      "en": "Put the heel of one hand on the centre of the chest, the other hand on top. Push down about 5 to 6 cm, 100 to 120 times a minute. Let the chest rise fully each time. Follow the pulse on screen.",
+      "sw": "Weka kiganja katikati ya kifua, mkono mwingine juu yake. Bonyeza chini kama sentimita 5 hadi 6, mara 100 hadi 120 kwa dakika. Acha kifua kirudi juu kabisa kila mara. Fuata mdundo ulio kwenye skrini."
+     },
+     "pulse": {
+      "bpm": 110
+     }
+    },
+    {
+     "t": {
+      "en": "Keep going",
+      "sw": "Endelea"
+     },
+     "b": {
+      "en": "Do not stop until help takes over, they start breathing normally, or you cannot continue. If an AED arrives, switch it on and follow its voice. If someone else can help, swap every 2 minutes.",
+      "sw": "Usisimame hadi wahudumu wachukue nafasi, aanze kupumua kawaida, au ushindwe kuendelea. AED ikifika, iwashe na ufuate sauti yake. Ikiwa kuna mtu mwingine, badilishane kila dakika 2."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": {
+    "en": "This guide is for adults. Children and babies need different steps.",
+    "sw": "Mwongozo huu ni wa watu wazima. Watoto na watoto wachanga wanahitaji hatua tofauti."
+   },
+   "sources": [
+    "ERC Guidelines 2025 (Basic Life Support, First Aid)",
+    "AHA/Red Cross 2025 Guidelines",
+    "IFRC/ICRC International First Aid, Resuscitation and Education Guidelines"
+   ],
+   "reviewNote": "Verified from published summaries: call before checking breathing, 100-120/min, 5-6 cm, compression-only for untrained rescuers (ERC 2025). Reviewer to confirm wording and whether to add rescue breaths for trained people.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "choking_adult",
+   "status": "draft",
+   "title": {
+    "en": "Adult or older child choking",
+    "sw": "Mtu mzima au mtoto mkubwa anakabwa"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [
+    "choking"
+   ],
+   "keywords": {
+    "en": [
+     "choking",
+     "cannot breathe",
+     "food stuck",
+     "object in throat"
+    ],
+    "sw": [
+     "anakabwa",
+     "amekabwa",
+     "kimekwama kooni",
+     "hawezi kupumua",
+     "chakula kimekwama"
+    ]
+   },
+   "banner": {
+    "en": "If they cannot breathe, cough or speak, act now and call 999 or 112.",
+    "sw": "Asipoweza kupumua, kukohoa au kuongea, chukua hatua sasa na upige 999 au 112."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Ask: are you choking?",
+      "sw": "Uliza: unakabwa?"
+     },
+     "b": {
+      "en": "If they can cough, speak or breathe, encourage them to keep coughing. Do not hit their back yet.",
+      "sw": "Wakiweza kukohoa, kuongea au kupumua, wahimize waendelee kukohoa. Usipige mgongo bado."
+     }
+    },
+    {
+     "t": {
+      "en": "Give 5 back blows",
+      "sw": "Piga mgongo mara 5"
+     },
+     "b": {
+      "en": "Lean them forward. Give up to 5 firm blows between the shoulder blades with the heel of your hand.",
+      "sw": "Mwinamishe mbele. Mpige hadi mara 5 kwa nguvu kati ya mabega kwa kiganja chako."
+     }
+    },
+    {
+     "t": {
+      "en": "Give 5 abdominal thrusts",
+      "sw": "Vuta tumbo mara 5"
+     },
+     "b": {
+      "en": "Stand behind them. Make a fist just above the belly button, hold it with your other hand, and pull sharply inwards and upwards, up to 5 times.",
+      "sw": "Simama nyuma yake. Funga ngumi juu kidogo ya kitovu, ishike kwa mkono mwingine, na vuta kwa kasi kuelekea ndani na juu, hadi mara 5."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep alternating",
+      "sw": "Endelea kubadilishana"
+     },
+     "b": {
+      "en": "Alternate 5 back blows and 5 abdominal thrusts until the object comes out or the person stops responding.",
+      "sw": "Badilishana mapigo 5 ya mgongoni na mivuto 5 ya tumboni hadi kitu kitoke au mtu aache kuitikia."
+     }
+    },
+    {
+     "t": {
+      "en": "If they stop responding",
+      "sw": "Akiacha kuitikia"
+     },
+     "b": {
+      "en": "Lay them on the ground and start CPR straight away. See the CPR guide.",
+      "sw": "Mlaze chini na uanze CPR mara moja. Tazama mwongozo wa CPR."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "AHA 2025 Guidelines update (adults and conscious children: alternate 5 back blows and 5 abdominal thrusts)",
+    "ERC Guidelines 2025 First Aid",
+    "IFRC/ICRC guidelines"
+   ],
+   "reviewNote": "Sequence verified against the AHA 2025 summary. Reviewer to decide advice for pregnant or very large people (chest thrusts).",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "bleeding_severe",
+   "status": "draft",
+   "title": {
+    "en": "Heavy bleeding",
+    "sw": "Kutoka damu nyingi"
+   },
+   "appliesTo": [
+    "medical",
+    "violence_crime",
+    "accident_road"
+   ],
+   "subtypes": [
+    "bleeding",
+    "stab",
+    "gunshot",
+    "injury"
+   ],
+   "keywords": {
+    "en": [
+     "bleeding",
+     "blood",
+     "cut",
+     "stabbed",
+     "shot",
+     "wound"
+    ],
+    "sw": [
+     "damu",
+     "anavuja damu",
+     "kidonda",
+     "amechomwa kisu",
+     "amepigwa risasi",
+     "jeraha"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 now. Heavy bleeding can be life-threatening.",
+    "sw": "Piga 999 au 112 sasa. Kutoka damu nyingi kunaweza kuhatarisha maisha."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Protect yourself",
+      "sw": "Jilinde"
+     },
+     "b": {
+      "en": "If you can, cover your hand with a glove or a clean plastic bag. Do not delay pressing on the wound.",
+      "sw": "Ukiweza, funika mkono wako kwa glavu au mfuko safi wa plastiki. Usichelewe kubonyeza jeraha."
+     }
+    },
+    {
+     "t": {
+      "en": "Press hard on the wound",
+      "sw": "Bonyeza jeraha kwa nguvu"
+     },
+     "b": {
+      "en": "Press firmly with a clean cloth, or your hand, directly on the wound. Keep pressing. Do not lift it to look.",
+      "sw": "Bonyeza kwa nguvu kwa kitambaa safi, au mkono wako, moja kwa moja kwenye jeraha. Endelea kubonyeza. Usiinue kuangalia."
+     }
+    },
+    {
+     "t": {
+      "en": "Add more, never remove",
+      "sw": "Ongeza, usiondoe"
+     },
+     "b": {
+      "en": "If blood soaks through, put more cloth on top and keep pressing.",
+      "sw": "Damu ikilowesha, weka kitambaa kingine juu na uendelee kubonyeza."
+     }
+    },
+    {
+     "t": {
+      "en": "Lay them down and keep warm",
+      "sw": "Mlaze na umpe joto"
+     },
+     "b": {
+      "en": "Lay the person down. Cover them with a blanket or coat. Do not give food or drink.",
+      "sw": "Mlaze mtu chini. Mfunike kwa blanketi au koti. Usimpe chakula wala kinywaji."
+     }
+    },
+    {
+     "t": {
+      "en": "Bandage when bleeding slows",
+      "sw": "Funga bandeji damu ikipungua"
+     },
+     "b": {
+      "en": "Bind firmly with a bandage or strip of cloth. It should be firm but not so tight that fingers or toes turn pale or cold.",
+      "sw": "Funga kwa nguvu kwa bandeji au kipande cha kitambaa. Iwe imara lakini isibane hadi vidole vipate weupe au baridi."
+     }
+    }
+   ],
+   "donts": {
+    "en": "Do not pull out anything stuck in the wound. Press around it.",
+    "sw": "Usitoe kitu kilichokwama kwenye jeraha. Bonyeza kuzunguka."
+   },
+   "warning": null,
+   "sources": [
+    "ERC Guidelines 2025 First Aid (life-threatening bleeding)",
+    "IFRC/ICRC guidelines"
+   ],
+   "reviewNote": "Tourniquet use by lay people intentionally NOT included; reviewer to decide (ERC 2025 mentions tourniquets as a simple intervention).",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "burns",
+   "status": "draft",
+   "title": {
+    "en": "Burns",
+    "sw": "Kuungua"
+   },
+   "appliesTo": [
+    "fire",
+    "medical"
+   ],
+   "subtypes": [
+    "burn"
+   ],
+   "keywords": {
+    "en": [
+     "burn",
+     "burned",
+     "scald",
+     "fire injury"
+    ],
+    "sw": [
+     "ameungua",
+     "moto umemwunguza",
+     "maji ya moto",
+     "kuungua"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 for large burns, burns on the face, hands or genitals, chemical or electrical burns, or any burn on a child.",
+    "sw": "Piga 999 au 112 kwa kuungua kukubwa, usoni, mikononi au sehemu za siri, kuungua kwa kemikali au umeme, au mtoto yeyote."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Stop the burning",
+      "sw": "Zuia kuungua"
+     },
+     "b": {
+      "en": "Move away from the heat. If clothes are on fire: stop, drop to the ground and roll. Remove wet or smouldering clothing unless it is stuck to the skin.",
+      "sw": "Ondoka kwenye joto. Nguo ikiwaka: simama, lala chini na ujiviringishe. Vua nguo zilizolowa au zinazofuka isipokuwa zimeganda kwenye ngozi."
+     }
+    },
+    {
+     "t": {
+      "en": "Cool the burn",
+      "sw": "Poza mahali palipoungua"
+     },
+     "b": {
+      "en": "Hold under cool running water for 20 minutes. Do not use ice.",
+      "sw": "Weka chini ya maji baridi yanayotiririka kwa dakika 20. Usitumie barafu."
+     }
+    },
+    {
+     "t": {
+      "en": "Take off rings and watches",
+      "sw": "Ondoa pete na saa"
+     },
+     "b": {
+      "en": "Remove jewellery near the burn before it swells, but not anything stuck to the skin.",
+      "sw": "Ondoa vito karibu na pahali palipoungua kabla ya kuvimba, lakini si kitu kilichoganda kwenye ngozi."
+     }
+    },
+    {
+     "t": {
+      "en": "Cover loosely",
+      "sw": "Funika kwa huru"
+     },
+     "b": {
+      "en": "Cover with cling film or a clean, non-fluffy cloth. Do not wrap tightly.",
+      "sw": "Funika kwa karatasi ya kufunga chakula au kitambaa safi kisicho na manyoya. Usifunge kwa kubana."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep them warm",
+      "sw": "Mpe joto"
+     },
+     "b": {
+      "en": "Keep the rest of the body warm and stay with them until help arrives.",
+      "sw": "Weka sehemu nyingine ya mwili joto na ubaki naye hadi msaada ufike."
+     }
+    }
+   ],
+   "donts": {
+    "en": "Do not put butter, oil, toothpaste or ointment on a burn. Do not burst blisters.",
+    "sw": "Usipake siagi, mafuta, dawa ya meno au marhamu kwenye pahali palipoungua. Usipasue malengelenge."
+   },
+   "warning": null,
+   "sources": [
+    "IFRC/ICRC guidelines (cool burns with running water)",
+    "ERC Guidelines 2025 First Aid"
+   ],
+   "reviewNote": "Reviewer to confirm 20-minute cooling and the referral criteria in the banner.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "snakebite",
+   "status": "draft",
+   "title": {
+    "en": "Snakebite",
+    "sw": "Kuumwa na nyoka"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [
+    "snakebite"
+   ],
+   "keywords": {
+    "en": [
+     "snake",
+     "snakebite",
+     "bitten by snake"
+    ],
+    "sw": [
+     "nyoka",
+     "ameumwa na nyoka",
+     "kuumwa na nyoka"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 now. The person must reach a hospital with antivenom as fast as possible.",
+    "sw": "Piga 999 au 112 sasa. Mgonjwa afike hospitali yenye dawa ya sumu ya nyoka haraka iwezekanavyo."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Move away from the snake",
+      "sw": "Ondoka mbali na nyoka"
+     },
+     "b": {
+      "en": "Get the person out of reach. Do not try to catch or kill the snake.",
+      "sw": "Mwondoe mtu mbali. Usijaribu kumkamata au kumuua nyoka."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep them calm and still",
+      "sw": "Mtuliza abaki kimya"
+     },
+     "b": {
+      "en": "Make them sit or lie down. Movement spreads venom faster. Reassure them.",
+      "sw": "Mkalishe au mlaze. Kutembea kunasambaza sumu haraka. Mtuliza."
+     }
+    },
+    {
+     "t": {
+      "en": "Remove tight items",
+      "sw": "Ondoa vitu vinavyobana"
+     },
+     "b": {
+      "en": "Take off rings, watches and tight clothing near the bite before it swells.",
+      "sw": "Ondoa pete, saa na nguo zinazobana karibu na pale alipoumwa kabla ya kuvimba."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep the limb still",
+      "sw": "Weka kiungo kimya"
+     },
+     "b": {
+      "en": "Rest the bitten limb and support it like a broken limb. Keep it at about heart level.",
+      "sw": "Pumzisha kiungo kilichoumwa na kisaidie kama kiungo kilichovunjika. Kiweke usawa wa moyo."
+     }
+    },
+    {
+     "t": {
+      "en": "Note the time",
+      "sw": "Kumbuka muda"
+     },
+     "b": {
+      "en": "Note the time of the bite and what the snake looked like, if you saw it. Mark the edge of any swelling with a pen if you can.",
+      "sw": "Kumbuka muda wa kuumwa na umbo la nyoka ukimwona. Weka alama ya kalamu mwisho wa uvimbe ukiweza."
+     }
+    }
+   ],
+   "donts": {
+    "en": "Do not cut the bite, suck the venom, tie a tight band, apply ice, or use herbs, stones or alcohol.",
+    "sw": "Usikate pale, usinyonye sumu, usifunge kamba kwa kubana, usiweke barafu, wala usitumie mitishamba, mawe au pombe."
+   },
+   "warning": null,
+   "sources": [
+    "WHO snakebite first-aid guidance (immobilise; avoid cutting, suction and tight tourniquets)",
+    "IFRC/ICRC guidelines"
+   ],
+   "reviewNote": "Reviewer to confirm against current Kenya MoH snakebite guidance.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "seizure",
+   "status": "draft",
+   "title": {
+    "en": "Seizure (fit)",
+    "sw": "Degedege / kifafa"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [
+    "seizure"
+   ],
+   "keywords": {
+    "en": [
+     "seizure",
+     "fit",
+     "convulsion",
+     "epilepsy"
+    ],
+    "sw": [
+     "degedege",
+     "kifafa",
+     "anatetemeka",
+     "kutetemeka"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 if it lasts more than 5 minutes, repeats, it is their first seizure, they are injured, pregnant or in water.",
+    "sw": "Piga 999 au 112 ikizidi dakika 5, ikirudia, ni mara ya kwanza, amejeruhiwa, ana mimba au yuko majini."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Clear the space",
+      "sw": "Ondoa vitu hatari"
+     },
+     "b": {
+      "en": "Move hard or sharp objects away. Note the time the seizure started.",
+      "sw": "Ondoa vitu vigumu au vikali. Kumbuka muda ulipoanza."
+     }
+    },
+    {
+     "t": {
+      "en": "Protect the head",
+      "sw": "Linda kichwa"
+     },
+     "b": {
+      "en": "Put something soft under their head. Loosen tight clothing around the neck.",
+      "sw": "Weka kitu laini chini ya kichwa. Legeza nguo shingoni."
+     }
+    },
+    {
+     "t": {
+      "en": "Do not hold them down",
+      "sw": "Usimshike"
+     },
+     "b": {
+      "en": "Do not restrain them and do not put anything in their mouth.",
+      "sw": "Usimshike kwa nguvu na usiweke kitu mdomoni."
+     }
+    },
+    {
+     "t": {
+      "en": "When it stops",
+      "sw": "Ikiisha"
+     },
+     "b": {
+      "en": "Roll them onto their side (recovery position). Stay with them and speak calmly until they are fully awake.",
+      "sw": "Mgeuze ubavuni (nafasi ya kupona). Baki naye na uongee kwa utulivu hadi aamke kabisa."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "IFRC/ICRC guidelines",
+    "ERC Guidelines 2025 First Aid"
+   ],
+   "reviewNote": "Reviewer to confirm the 5-minute threshold and add infant febrile seizure advice if wanted.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "recovery_position",
+   "status": "draft",
+   "title": {
+    "en": "Unconscious but breathing",
+    "sw": "Hajitambui lakini anapumua"
+   },
+   "appliesTo": [
+    "medical",
+    "accident_road"
+   ],
+   "subtypes": [
+    "unconscious"
+   ],
+   "keywords": {
+    "en": [
+     "unconscious but breathing",
+     "fainted",
+     "passed out",
+     "drunk unconscious"
+    ],
+    "sw": [
+     "amezimia lakini anapumua",
+     "amepoteza fahamu",
+     "amezirai"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 now. Put your phone on speaker.",
+    "sw": "Piga 999 au 112 sasa. Weka simu kwenye spika."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Check breathing",
+      "sw": "Angalia kupumua"
+     },
+     "b": {
+      "en": "Tilt the head back gently and lift the chin. Look, listen and feel for normal breathing for up to 10 seconds.",
+      "sw": "Inamisha kichwa nyuma kwa upole na inua kidevu. Tazama, sikiliza na hisi kupumua kawaida kwa hadi sekunde 10."
+     }
+    },
+    {
+     "t": {
+      "en": "If not breathing normally",
+      "sw": "Asipopumua kawaida"
+     },
+     "b": {
+      "en": "Start CPR. See the CPR guide.",
+      "sw": "Anza CPR. Tazama mwongozo wa CPR."
+     }
+    },
+    {
+     "t": {
+      "en": "If breathing: roll onto the side",
+      "sw": "Akipumua: mgeuze ubavuni"
+     },
+     "b": {
+      "en": "Kneel beside them. Bring the nearer arm up, place the far hand against their cheek, bend the far knee, and roll them towards you.",
+      "sw": "Piga magoti kando yake. Inua mkono ulio karibu nawe, weka kiganja cha upande wa mbali shavuni, kunja goti la mbali, na umgeuze kuelekea kwako."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep the airway open",
+      "sw": "Weka njia ya hewa wazi"
+     },
+     "b": {
+      "en": "Tilt the head back slightly so the mouth faces downwards. Stay with them and check breathing often.",
+      "sw": "Inamisha kichwa nyuma kidogo ili mdomo uelekee chini. Baki naye na uangalie kupumua mara kwa mara."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": {
+    "en": "If you suspect a neck or spine injury, move them only if breathing is at risk.",
+    "sw": "Ukishuku jeraha la shingo au uti wa mgongo, msogeze tu ikiwa kupumua kuko hatarini."
+   },
+   "sources": [
+    "ERC Guidelines 2025 First Aid (recovery position)",
+    "IFRC/ICRC guidelines"
+   ],
+   "reviewNote": "Reviewer to confirm wording for suspected spinal injury.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "stroke_signs",
+   "status": "draft",
+   "title": {
+    "en": "Possible stroke",
+    "sw": "Dalili za kiharusi"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [
+    "stroke"
+   ],
+   "keywords": {
+    "en": [
+     "stroke",
+     "face drooping",
+     "slurred speech",
+     "weak arm"
+    ],
+    "sw": [
+     "kiharusi",
+     "uso umepinda",
+     "anaongea vibaya",
+     "mkono hauna nguvu"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 immediately. Every minute matters.",
+    "sw": "Piga 999 au 112 mara moja. Kila dakika ni muhimu."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Check FAST",
+      "sw": "Angalia FAST"
+     },
+     "b": {
+      "en": "Face: is one side drooping? Arms: can they raise both? Speech: slurred or confused? Time: if any sign, call now.",
+      "sw": "Uso: upande mmoja umeinama? Mikono: anaweza kuinua yote miwili? Usemi: unakwama au amechanganyikiwa? Muda: dalili yoyote, piga simu sasa."
+     }
+    },
+    {
+     "t": {
+      "en": "Note the time",
+      "sw": "Kumbuka muda"
+     },
+     "b": {
+      "en": "Note when the signs started. Tell the responders.",
+      "sw": "Kumbuka muda dalili zilipoanza. Waambie wahudumu."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep them comfortable",
+      "sw": "Mpe starehe"
+     },
+     "b": {
+      "en": "Sit or lie them down safely. Do not give food, drink or medicine.",
+      "sw": "Mkalishe au mlaze salama. Usimpe chakula, kinywaji au dawa."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "ERC Guidelines 2025 First Aid",
+    "IFRC/ICRC guidelines"
+   ],
+   "reviewNote": "Reviewer to confirm.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "road_crash",
+   "status": "draft",
+   "title": {
+    "en": "Road crash",
+    "sw": "Ajali ya barabarani"
+   },
+   "appliesTo": [
+    "accident_road"
+   ],
+   "subtypes": [
+    "crash"
+   ],
+   "keywords": {
+    "en": [
+     "accident",
+     "crash",
+     "road accident",
+     "hit by car",
+     "motorbike"
+    ],
+    "sw": [
+     "ajali",
+     "gari",
+     "pikipiki",
+     "amegongwa"
+    ]
+   },
+   "banner": {
+    "en": "Call 999 or 112 now. Put your phone on speaker.",
+    "sw": "Piga 999 au 112 sasa. Weka simu kwenye spika."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Stay safe first",
+      "sw": "Jilinde kwanza"
+     },
+     "b": {
+      "en": "Park safely, switch on hazard lights, stay out of traffic. Do not stand between vehicles.",
+      "sw": "Egesha gari salama, washa taa za hatari, kaa mbali na magari. Usisimame kati ya magari."
+     }
+    },
+    {
+     "t": {
+      "en": "Do not move injured people",
+      "sw": "Usiwahamishe majeruhi"
+     },
+     "b": {
+      "en": "Move them only if there is fire or immediate danger. Keep the head and neck still.",
+      "sw": "Wahamishe tu kukiwa na moto au hatari ya papo hapo. Weka kichwa na shingo vitulie."
+     }
+    },
+    {
+     "t": {
+      "en": "Check breathing and bleeding",
+      "sw": "Angalia kupumua na damu"
+     },
+     "b": {
+      "en": "If not breathing normally, start CPR. If bleeding heavily, press hard on the wound.",
+      "sw": "Asipopumua kawaida, anza CPR. Akivuja damu nyingi, bonyeza jeraha kwa nguvu."
+     }
+    },
+    {
+     "t": {
+      "en": "Leave helmets on",
+      "sw": "Usivue kofia ngumu"
+     },
+     "b": {
+      "en": "Do not remove a motorcyclist's helmet unless it blocks breathing.",
+      "sw": "Usivue kofia ngumu ya mwendesha pikipiki isipokuwa inazuia kupumua."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep them warm and talk",
+      "sw": "Mpe joto na uongee naye"
+     },
+     "b": {
+      "en": "Cover them and keep talking calmly until help arrives.",
+      "sw": "Mfunike na uendelee kuongea naye kwa utulivu hadi msaada ufike."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "IFRC/ICRC guidelines",
+    "ERC Guidelines 2025 First Aid"
+   ],
+   "reviewNote": "Reviewer to confirm helmet advice.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "fire_escape",
+   "status": "draft",
+   "title": {
+    "en": "Fire: get out safely",
+    "sw": "Moto: toka salama"
+   },
+   "appliesTo": [
+    "fire"
+   ],
+   "subtypes": [
+    "fire"
+   ],
+   "keywords": {
+    "en": [
+     "fire",
+     "smoke",
+     "house on fire",
+     "burning building"
+    ],
+    "sw": [
+     "moto",
+     "moshi",
+     "nyumba inaungua",
+     "jengo linaungua"
+    ]
+   },
+   "banner": {
+    "en": "Get out, stay out, call 999 or 112.",
+    "sw": "Toka, usirudi ndani, piga 999 au 112."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Get everyone out",
+      "sw": "Toa kila mtu nje"
+     },
+     "b": {
+      "en": "Leave immediately. Do not collect belongings. Stay low if there is smoke.",
+      "sw": "Ondoka mara moja. Usichukue mali. Kaa chini kama kuna moshi."
+     }
+    },
+    {
+     "t": {
+      "en": "Close doors behind you",
+      "sw": "Funga milango nyuma yako"
+     },
+     "b": {
+      "en": "Closing doors slows the fire and smoke.",
+      "sw": "Kufunga milango kunapunguza kasi ya moto na moshi."
+     }
+    },
+    {
+     "t": {
+      "en": "Check doors before opening",
+      "sw": "Gusa milango kabla ya kufungua"
+     },
+     "b": {
+      "en": "If a door is hot, do not open it. Use another way out or signal from a window.",
+      "sw": "Mlango ukiwa moto, usiufungue. Tumia njia nyingine au toa ishara dirishani."
+     }
+    },
+    {
+     "t": {
+      "en": "Stay outside",
+      "sw": "Baki nje"
+     },
+     "b": {
+      "en": "Do not go back inside for people or pets. Tell the fire crew who may still be inside.",
+      "sw": "Usirudi ndani kwa watu au wanyama. Waambie zima moto nani yuko ndani."
+     }
+    },
+    {
+     "t": {
+      "en": "If clothes catch fire",
+      "sw": "Nguo zikishika moto"
+     },
+     "b": {
+      "en": "Stop, drop and roll. Cool burns with running water for 20 minutes. See the Burns guide.",
+      "sw": "Simama, lala chini na ujiviringishe. Poza kwa maji yanayotiririka dakika 20. Tazama mwongozo wa Kuungua."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "IFRC/ICRC guidelines (burns)",
+    "Kenya fire service public guidance (reviewer to attach)"
+   ],
+   "reviewNote": "Reviewer to attach an official Kenyan fire-safety source.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "violence_safety",
+   "status": "draft",
+   "title": {
+    "en": "Violence or attack: stay safe",
+    "sw": "Vurugu au shambulio: jilinde"
+   },
+   "appliesTo": [
+    "violence_crime"
+   ],
+   "subtypes": [
+    "assault",
+    "mob",
+    "robbery",
+    "looting"
+   ],
+   "keywords": {
+    "en": [
+     "attack",
+     "robbery",
+     "mob",
+     "gunshot",
+     "thieves",
+     "looting",
+     "fight"
+    ],
+    "sw": [
+     "wizi",
+     "majambazi",
+     "vurugu",
+     "umati",
+     "wanapigana",
+     "shambulio"
+    ]
+   },
+   "banner": {
+    "en": "If you can speak safely, call 999 or 112. If you cannot, stay quiet. Your alert is already sent.",
+    "sw": "Ukiweza kuongea salama, piga 999 au 112. Usipoweza, kaa kimya. Ombi lako limeshatumwa."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Get to safety",
+      "sw": "Nenda mahali salama"
+     },
+     "b": {
+      "en": "Move away from the danger to a place with a lock or many people, if you can do so safely.",
+      "sw": "Ondoka kwenye hatari uende mahali penye kufuli au watu wengi, ikiwa ni salama."
+     }
+    },
+    {
+     "t": {
+      "en": "Do not confront",
+      "sw": "Usikabiliane"
+     },
+     "b": {
+      "en": "Do not argue, chase or fight. Property can be replaced.",
+      "sw": "Usibishane, usifukuze wala usipigane. Mali inaweza kurudishwa."
+     }
+    },
+    {
+     "t": {
+      "en": "Keep quiet and keep your phone silent",
+      "sw": "Kaa kimya na zima sauti ya simu"
+     },
+     "b": {
+      "en": "Silence your phone. Keep your location sharing on so responders can find you.",
+      "sw": "Zima sauti ya simu. Endelea kushiriki mahali ulipo ili wahudumu wakupate."
+     }
+    },
+    {
+     "t": {
+      "en": "Help the injured only when safe",
+      "sw": "Saidia majeruhi ukiwa salama"
+     },
+     "b": {
+      "en": "If someone is bleeding and it is safe, press hard on the wound. See the Heavy bleeding guide.",
+      "sw": "Mtu akivuja damu na ni salama, bonyeza jeraha kwa nguvu. Tazama mwongozo wa Kutoka damu nyingi."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "Reviewer to attach official Kenyan public safety guidance"
+   ],
+   "reviewNote": "This is safety guidance, not clinical first aid. Reviewer (and police liaison if available) to confirm.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "sexual_violence_support",
+   "status": "draft",
+   "title": {
+    "en": "If you or someone has been sexually assaulted",
+    "sw": "Ikiwa wewe au mtu amebakwa au kunyanyaswa kingono"
+   },
+   "appliesTo": [
+    "sexual_violence"
+   ],
+   "subtypes": [
+    "rape",
+    "sexual_assault"
+   ],
+   "keywords": {
+    "en": [
+     "raped",
+     "sexual assault",
+     "assaulted sexually",
+     "abused"
+    ],
+    "sw": [
+     "nimebakwa",
+     "amebakwa",
+     "kunyanyaswa kingono",
+     "ubakaji"
+    ]
+   },
+   "banner": {
+    "en": "You are not to blame. Help is available. You decide what happens next.",
+    "sw": "Wewe huna kosa. Msaada upo. Wewe ndiye unayeamua hatua inayofuata."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "It is not your fault",
+      "sw": "Si kosa lako"
+     },
+     "b": {
+      "en": "What happened is not your fault. You do not have to speak to anyone you do not want to.",
+      "sw": "Kilichotokea si kosa lako. Huhitaji kuongea na mtu usiyemtaka."
+     }
+    },
+    {
+     "t": {
+      "en": "Get to a safe place",
+      "sw": "Nenda mahali salama"
+     },
+     "b": {
+      "en": "If you can, go somewhere you feel safe, with someone you trust.",
+      "sw": "Ukiweza, nenda mahali unapojisikia salama, na mtu unayemwamini."
+     }
+    },
+    {
+     "t": {
+      "en": "Go for medical care soon",
+      "sw": "Nenda kupata huduma ya afya mapema"
+     },
+     "b": {
+      "en": "Health workers can treat injuries and give medicines that help prevent HIV and pregnancy. They work best the sooner you go, ideally within 72 hours. You can still go if more time has passed.",
+      "sw": "Wahudumu wa afya wanaweza kutibu majeraha na kutoa dawa za kusaidia kuzuia VVU na mimba. Zinafanya kazi vizuri ukienda mapema, ikiwezekana ndani ya saa 72. Unaweza kwenda hata ikiwa muda umepita."
+     }
+    },
+    {
+     "t": {
+      "en": "If you can, keep evidence",
+      "sw": "Ukiweza, hifadhi ushahidi"
+     },
+     "b": {
+      "en": "If possible, avoid washing and keep the clothes you wore in a paper bag. You can still get care and report if you have already washed. Your health comes first.",
+      "sw": "Ikiwezekana, usioge na uhifadhi nguo ulizovaa kwenye mfuko wa karatasi. Bado unaweza kupata huduma na kuripoti ukishaoga. Afya yako ndiyo kipaumbele."
+     }
+    },
+    {
+     "t": {
+      "en": "Free support: call 1195",
+      "sw": "Msaada wa bure: piga 1195"
+     },
+     "b": {
+      "en": "Kenya's national gender-based violence helpline is free. Call 1195 to talk to someone and be linked to services.",
+      "sw": "Nambari ya taifa ya unyanyasaji wa kijinsia ni ya bure. Piga 1195 uongee na mtu na uunganishwe na huduma."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "Kenya MoH National Guidelines on Management of Sexual Violence (3rd ed., 2014)",
+    "WHO clinical guidance on responding to sexual violence",
+    "National GBV helpline 1195 (State Department for Gender / UN Women)"
+   ],
+   "reviewNote": "SENSITIVE. Reviewer must check the time windows (HIV prevention within 72 h; emergency contraception window) against the current Kenya MoH guideline and have a GBV counsellor review the tone. Never log the content a person views.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "emotional_support",
+   "status": "draft",
+   "title": {
+    "en": "Someone in emotional crisis",
+    "sw": "Mtu aliye katika dhiki ya kihisia"
+   },
+   "appliesTo": [
+    "emotional_distress"
+   ],
+   "subtypes": [
+    "crisis",
+    "suicide_risk"
+   ],
+   "keywords": {
+    "en": [
+     "suicidal",
+     "want to die",
+     "panic",
+     "very sad",
+     "heartbroken",
+     "hopeless"
+    ],
+    "sw": [
+     "anataka kujiua",
+     "nataka kufa",
+     "huzuni",
+     "moyo umevunjika",
+     "amekata tamaa"
+    ]
+   },
+   "banner": {
+    "en": "If someone is in immediate danger, call 999 or 112. You can also call the Kenya Red Cross on 1199.",
+    "sw": "Mtu akiwa hatarini sasa, piga 999 au 112. Unaweza pia kupiga Kenya Red Cross 1199."
+   },
+   "steps": [
+    {
+     "t": {
+      "en": "Look: is it safe?",
+      "sw": "Tazama: je, ni salama?"
+     },
+     "b": {
+      "en": "Check for danger. If they may hurt themselves, stay with them and do not leave them alone.",
+      "sw": "Angalia hatari. Akiweza kujidhuru, baki naye na usimwache peke yake."
+     }
+    },
+    {
+     "t": {
+      "en": "Listen without judging",
+      "sw": "Sikiliza bila kuhukumu"
+     },
+     "b": {
+      "en": "Give them time. Do not rush to fix things or say 'calm down'. Let them speak.",
+      "sw": "Mpe muda. Usikimbilie kutatua mambo wala kusema 'tulia'. Mruhusu aseme."
+     }
+    },
+    {
+     "t": {
+      "en": "Ask directly",
+      "sw": "Uliza moja kwa moja"
+     },
+     "b": {
+      "en": "If they say they want to die, ask kindly and clearly if they are thinking of ending their life. Asking does not put the idea in their mind.",
+      "sw": "Akisema anataka kufa, muulize kwa upole na wazi kama anafikiria kujiua. Kuuliza hakumwekei wazo."
+     }
+    },
+    {
+     "t": {
+      "en": "Make it safer",
+      "sw": "Fanya iwe salama zaidi"
+     },
+     "b": {
+      "en": "If it is safe, help move anything they could use to harm themselves out of reach.",
+      "sw": "Ikiwa ni salama, saidia kuondoa kitu chochote anachoweza kutumia kujidhuru."
+     }
+    },
+    {
+     "t": {
+      "en": "Link to help",
+      "sw": "Muunganishe na msaada"
+     },
+     "b": {
+      "en": "Stay until help arrives. Help them contact a trusted person or call 1199.",
+      "sw": "Baki hadi msaada ufike. Msaidie kuwasiliana na mtu anayemwamini au apige 1199."
+     }
+    }
+   ],
+   "donts": [],
+   "warning": null,
+   "sources": [
+    "WHO Psychological First Aid: Guide for field workers (Look, Listen, Link)",
+    "WHO mhGAP guidance on self-harm and suicide"
+   ],
+   "reviewNote": "SENSITIVE. Reviewer (mental-health professional) to confirm wording and to verify the 1199 line and add any other verified Kenyan crisis line.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "cpr_child_infant",
+   "status": "needs_content",
+   "title": {
+    "en": "Child or baby not breathing (CPR)",
+    "sw": "Child or baby not breathing (CPR)"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [],
+   "keywords": {
+    "en": [],
+    "sw": []
+   },
+   "banner": null,
+   "steps": [],
+   "donts": [],
+   "warning": null,
+   "sources": [],
+   "reviewNote": "Depth, breaths and ratios differ from adults; needs clinician-authored steps.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "choking_infant",
+   "status": "needs_content",
+   "title": {
+    "en": "Baby choking",
+    "sw": "Baby choking"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [],
+   "keywords": {
+    "en": [],
+    "sw": []
+   },
+   "banner": null,
+   "steps": [],
+   "donts": [],
+   "warning": null,
+   "sources": [],
+   "reviewNote": "Sources differ on chest-thrust technique for infants (heel of hand vs two fingers). Clinician must decide.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "childbirth_emergency",
+   "status": "needs_content",
+   "title": {
+    "en": "Baby being born",
+    "sw": "Baby being born"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [],
+   "keywords": {
+    "en": [],
+    "sw": []
+   },
+   "banner": null,
+   "steps": [],
+   "donts": [],
+   "warning": null,
+   "sources": [],
+   "reviewNote": "Needs clinician-authored steps.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "overdose_poisoning",
+   "status": "needs_content",
+   "title": {
+    "en": "Poisoning or overdose",
+    "sw": "Poisoning or overdose"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [],
+   "keywords": {
+    "en": [],
+    "sw": []
+   },
+   "banner": null,
+   "steps": [],
+   "donts": [],
+   "warning": null,
+   "sources": [],
+   "reviewNote": "AHA 2025 added an opioid overdose algorithm; local naloxone availability must be reviewed.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "asthma_attack",
+   "status": "needs_content",
+   "title": {
+    "en": "Asthma or breathing difficulty",
+    "sw": "Asthma or breathing difficulty"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [],
+   "keywords": {
+    "en": [],
+    "sw": []
+   },
+   "banner": null,
+   "steps": [],
+   "donts": [],
+   "warning": null,
+   "sources": [],
+   "reviewNote": "Inhaler dosing must be set by clinician.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  },
+  {
+   "id": "heart_attack",
+   "status": "needs_content",
+   "title": {
+    "en": "Chest pain or possible heart attack",
+    "sw": "Chest pain or possible heart attack"
+   },
+   "appliesTo": [
+    "medical"
+   ],
+   "subtypes": [],
+   "keywords": {
+    "en": [],
+    "sw": []
+   },
+   "banner": null,
+   "steps": [],
+   "donts": [],
+   "warning": null,
+   "sources": [],
+   "reviewNote": "Whether to advise aspirin must be decided by clinician.",
+   "reviewedBy": null,
+   "reviewedAt": null,
+   "sourceVersion": null
+  }
+ ]
+}

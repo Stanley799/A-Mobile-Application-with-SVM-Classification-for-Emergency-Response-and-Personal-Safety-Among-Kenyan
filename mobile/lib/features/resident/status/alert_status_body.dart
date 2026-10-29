@@ -539,7 +539,7 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
     button: true,
     label: 'First aid for this emergency',
     child: OutlinedButton.icon(
-      onPressed: () => openFirstAid(context, category: inc.category, subtype: inc.subtype),
+      onPressed: () => openFirstAid(context, category: inc.category, subtype: inc.subtype, quiet: _quiet.on),
       icon: const Icon(Icons.medical_services_outlined, size: 20),
       label: const Text('First aid for this emergency', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
       style: OutlinedButton.styleFrom(foregroundColor: Tk.brandDeep, side: const BorderSide(color: Tk.brand), minimumSize: const Size(0, 52)),

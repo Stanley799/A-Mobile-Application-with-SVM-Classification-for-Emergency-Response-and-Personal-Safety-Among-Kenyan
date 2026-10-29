@@ -93,7 +93,8 @@ class IncidentDetailPage extends StatefulWidget {
 
 class _IncidentDetailPageState extends State<IncidentDetailPage> {
   Future<List<AuditEntry>>? _audit;
-  Future<Map<String, dynamic>?>? _resident;
+  ({String firstName, String phone})? _contact;
+  bool _revealBusy = false;
 
   @override
   void initState() {
@@ -257,28 +258,46 @@ class _IncidentDetailPageState extends State<IncidentDetailPage> {
     ),
   );
 
-  Widget _resident_(IncidentRecord i) {
-    _resident ??= widget.repo.residentOf(i.userId);
-    return Panel(
-      title: 'Resident',
-      child: FutureBuilder<Map<String, dynamic>?>(
-        future: _resident,
-        builder: (context, s) {
-          final u = s.data;
-          if (s.connectionState != ConnectionState.done) return const LinearProgressIndicator();
-          if (u == null) return const Text('Profile not available.', style: TextStyle(color: AC.mute));
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim(), style: const TextStyle(fontWeight: FontWeight.w700, color: AC.ink)),
-            Text('${u['phoneNumber'] ?? ''}', style: const TextStyle(color: AC.mute)),
-            const SizedBox(height: 6),
-            Text(i.description.isEmpty ? 'No description saved.' : i.description, style: const TextStyle(color: AC.ink)),
-            const SizedBox(height: 6),
-            const Text('Personal details are visible to administrators only for handling this alert.', style: TextStyle(fontSize: 11, color: AC.mute)),
-          ]);
-        },
-      ),
-    );
+  Future<void> _revealContact(IncidentRecord i) async {
+    setState(() => _revealBusy = true);
+    try {
+      final c = await widget.repo.revealContact(i.id);
+      if (mounted) setState(() => _contact = c);
+    } catch (e) {
+      _toast('Could not reveal: $e');
+    } finally {
+      if (mounted) setState(() => _revealBusy = false);
+    }
   }
+
+  Widget _resident_(IncidentRecord i) => Panel(
+    title: 'Caller',
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(
+          child: Text(
+            _contact == null ? '••• ••• •••' : '${_contact!.firstName.isEmpty ? 'Caller' : _contact!.firstName} · ${_contact!.phone}',
+            style: const TextStyle(fontWeight: FontWeight.w700, color: AC.ink),
+          ),
+        ),
+        OutlinedButton(
+          onPressed: _revealBusy ? null : () => _revealContact(i),
+          child: _revealBusy
+              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              : Text(_contact == null ? 'Reveal contact' : 'Show again'),
+        ),
+      ]),
+      if (_contact != null && _contact!.phone.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        SelectableText(_contact!.phone, style: const TextStyle(color: AC.mute)),
+        const Text('Revealing is written to the timeline.', style: TextStyle(fontSize: 11, color: AC.mute)),
+      ],
+      const SizedBox(height: 8),
+      Text(i.description.isEmpty ? 'No description saved.' : i.description, style: const TextStyle(color: AC.ink)),
+      const SizedBox(height: 6),
+      const Text("The caller's number is never read from Firestore directly.", style: TextStyle(fontSize: 11, color: AC.mute)),
+    ]),
+  );
 
   Widget _timeline() => Panel(
     title: 'Timeline',

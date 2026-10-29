@@ -105,6 +105,14 @@ new_incident("INC4", loc=False); store.reconcile_incident(db, "INC4", CLOCK[0], 
 assert db.data["incidents"]["INC4"]["dispatch"]["state"] == "waiting_location" and not offers("INC4")
 db.data["incidents"]["INC4"]["location"] = GeoPoint(LAT, LNG); store.reconcile_incident(db, "INC4", CLOCK[0] + 2, notify); assert len(offers("INC4")) == 2; ok("GPS arrives after the alert -> dispatch starts")
 
+# a unit stands down from a job it took: the server releases it in the same pass (no client availability write)
+for k in list(db.data["responders"]): db.data["responders"][k]["lastSeenAt"] = now_dt(); db.data["responders"][k]["availabilityStatus"] = "Available"
+new_incident("INC5"); store.reconcile_incident(db, "INC5", CLOCK[0], notify)
+respond("INC5_A2", "accepted"); assert db.data["responders"]["A2"]["availabilityStatus"] == "Busy"
+db.data["offers"]["INC5_A2"]["withdrawReason"] = "scene_unsafe"
+respond("INC5_A2", "withdrawn")
+assert db.data["responders"]["A2"]["availabilityStatus"] == "Available"; ok("standing down releases the unit: the server sets Available in the same pass")
+
 # stale responder set offline by sweep
 CLOCK[0] += 700; ran = store.sweep(db, CLOCK[0], notify); assert all(r["availabilityStatus"] == "Offline" for r in db.data["responders"].values()); ok("silent responders are set Offline")
 print("\nALL STORE LIFECYCLE TESTS PASSED")

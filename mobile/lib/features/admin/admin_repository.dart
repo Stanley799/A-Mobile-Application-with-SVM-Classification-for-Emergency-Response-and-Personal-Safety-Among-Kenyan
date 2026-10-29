@@ -64,9 +64,12 @@ class AdminRepository {
     ];
   }
 
-  Future<Map<String, dynamic>?> residentOf(String userId) async {
-    final s = await _db.collection('users').doc(userId).get();
-    return s.data();
+  /// The caller's name and phone for one alert, through the logged callable. Direct reads of the
+  /// Functions-only contact document are denied by the rules.
+  Future<({String firstName, String phone})> revealContact(String incidentId) async {
+    final r = await _fn.httpsCallable('reveal_contact').call<dynamic>({'incidentId': incidentId});
+    final d = Map<String, dynamic>.from(r.data as Map);
+    return (firstName: (d['firstName'] ?? '').toString(), phone: (d['phone'] ?? '').toString());
   }
 
   /// status: Verified | Rejected | Suspended | Pending.  Allowed keys only (see firestore.rules).

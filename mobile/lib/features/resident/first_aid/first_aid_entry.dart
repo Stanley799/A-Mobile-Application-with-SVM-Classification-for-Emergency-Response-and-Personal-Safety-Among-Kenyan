@@ -4,5 +4,13 @@ import 'package:flutter/material.dart';
 import 'first_aid_screen.dart';
 
 /// Opens the guide for the incident's classified category and subtype when known.
-Future<void> openFirstAid(BuildContext context, {String? category, String? subtype}) =>
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FirstAidScreen(category: category, subtype: subtype)));
+Future<void> openFirstAid(
+  BuildContext context, {
+  String? category,
+  String? subtype,
+  bool quiet = false,
+}) => Navigator.of(context).push(
+  MaterialPageRoute<void>(
+    builder: (_) => FirstAidScreen(category: category, subtype: subtype, quiet: quiet),
+  ),
+);

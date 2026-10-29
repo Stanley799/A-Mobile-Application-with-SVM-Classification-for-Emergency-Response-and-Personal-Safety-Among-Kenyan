@@ -449,7 +449,9 @@ service cloud.firestore {
     // Collections
     // ------------------------------------------------------------------------------------------
     match /users/{userId} {
-      allow read: if isOwner(userId) || isSystemAdmin();
+      // Owners read their own profile. Administrators keep access to staff and responder accounts only: a resident's
+      // name and phone are reachable through the logged reveal_contact callable, never by reading this document.
+      allow read: if isOwner(userId) || (isSystemAdmin() && resource.data.get("role", "") != "Resident");
 
       allow create: if isOwner(userId)
         && !exists(/databases/$(database)/documents/users/$(userId))

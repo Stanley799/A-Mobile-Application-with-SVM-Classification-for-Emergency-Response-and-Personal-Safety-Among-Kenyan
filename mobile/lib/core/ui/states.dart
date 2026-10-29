@@ -101,16 +101,26 @@ class EmptyState extends StatelessWidget {
 }
 
 class ErrorState extends StatelessWidget {
-  const ErrorState({super.key, this.message, this.onRetry});
+  const ErrorState({
+    super.key,
+    this.message,
+    this.onRetry,
+    this.title = 'We could not load this',
+    this.retryLabel = 'Try again',
+  });
   final String? message;
   final VoidCallback? onRetry;
+
+  /// Screens with their own language pass translated words here; the layout stays the same.
+  final String title;
+  final String retryLabel;
 
   @override
   Widget build(BuildContext context) => EmptyState(
     icon: Icons.cloud_off_outlined,
-    title: 'We could not load this',
+    title: title,
     body: message ?? 'Check your connection and try again.',
-    actionLabel: onRetry == null ? null : 'Try again',
+    actionLabel: onRetry == null ? null : retryLabel,
     onAction: onRetry,
   );
 }

@@ -155,6 +155,8 @@ def on_incident_written(event: firestore_fn.Event[firestore_fn.Change]):
         return                                               # only our own dispatch write changed: stop (no loops)
     iid = event.params["incidentId"]
     _quiet(lambda: _record_incident_events(db(), iid, old, new, time.time()), f"incident {iid}")
+    if old is None:
+        _quiet(lambda: p4.snapshot_contact(db(), iid, new), f"contact {iid}")
     _quiet(lambda: _share_caller_feedback(db(), iid, old, new), f"feedback {iid}")
     store.reconcile_incident(db(), iid, time.time(), notify.send_offer_push)
 

@@ -159,9 +159,8 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     if (picked == null || !mounted) return;
     setState(() => _busy = true);
     try {
+      // The server releases this unit's availability when it records the withdrawal.
       await widget.repo.respond(widget.offerId, 'withdrawn', withdrawReason: picked);
-      // The server only flips Busy -> Available on its own withdrawals; after standing down we release ourselves.
-      await widget.repo.setAvailability('Available');
       if (mounted) {
         setState(() => _stoodDown = true);
         ScaffoldMessenger.of(context).showSnackBar(

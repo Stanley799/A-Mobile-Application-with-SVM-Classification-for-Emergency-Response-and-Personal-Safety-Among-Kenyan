@@ -157,6 +157,14 @@ class _QueueTile extends StatelessWidget {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
                       PriorityTag(i.priority),
+                      if (i.needsAttention) ...[
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(color: OT.alert, borderRadius: BorderRadius.circular(6)),
+                          child: const Text('!', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white)),
+                        ),
+                      ],
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(

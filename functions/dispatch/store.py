@@ -12,6 +12,9 @@ from . import core
 
 _TABLE = None
 
+# Withdrawals the server makes itself. Any other withdrawal came from the unit holding the job.
+SERVER_WITHDRAW_REASONS = ("incident_cancelled", "incident_resolved", "another_unit_accepted", "role_already_filled")
+
 
 def table():
     global _TABLE
@@ -169,12 +172,29 @@ def set_responder_status(db, rid, status):
         print(f"[dispatch] could not set responder {rid} {status}: {type(e).__name__}")
 
 
+def _private_contact(db, incident_id):
+    """The dispatch contact snapshot (Functions-only). Absent for alerts created before it existed."""
+    try:
+        snap = db.collection("incidents").document(incident_id).collection("private").document("contact").get()
+        if snap.exists:
+            c = snap.to_dict() or {}
+            if c.get("phone") or c.get("firstName"):
+                return {"firstName": c.get("firstName", ""), "phone": c.get("phone", "")}
+    except Exception as e:  # noqa: BLE001 - older snapshots and the in-memory test fakes
+        print(f"[dispatch] private contact {incident_id}: {type(e).__name__}")
+    return None
+
+
 def release_resident(db, offer, incident):
-    """After a responder accepts they receive the resident's first name and phone, nothing else."""
+    """After a responder accepts they receive the resident's first name and phone, nothing else.
+    Prefers the Functions-only dispatch snapshot; the profile is read only for older alerts."""
     if offer.get("resident"):
         return
-    u = _user(db, incident["userId"])
-    db.collection("offers").document(offer["id"]).update({"resident": {"firstName": u.get("firstName", ""), "phone": u.get("phoneNumber", "")}})
+    contact = _private_contact(db, incident["id"])
+    if contact is None:
+        u = _user(db, incident["userId"])
+        contact = {"firstName": u.get("firstName", ""), "phone": u.get("phoneNumber", "")}
+    db.collection("offers").document(offer["id"]).update({"resident": contact})
     audit(db, "contact_released", incident["id"], responderId=offer["responderId"])
 
 
@@ -244,6 +264,11 @@ def handle_offer_status_change(db, offer_id, new, now, notify=None):
                 audit(db, "offer_" + status, incident_id, responderId=new.get("responderId"))
     elif status == "declined":
         audit(db, "offer_declined", incident_id, responderId=new.get("responderId"))
+    elif status == "withdrawn":
+        # A unit standing down releases its own availability here, in the same pass as the withdrawal.
+        reason = str(new.get("withdrawReason") or "")
+        if reason and reason not in SERVER_WITHDRAW_REASONS:
+            set_responder_status(db, new.get("responderId"), "Available")
     return reconcile_incident(db, incident_id, now, notify)
 
 
