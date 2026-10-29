@@ -71,6 +71,20 @@ class HelpRepository {
     }
   }
 
+  /// The resident closes their own alert. firestore.rules allow ONLY status/cancelledAt/updatedAt, and only while it is active.
+  Future<bool> cancelIncident(String incidentId) async {
+    try {
+      await _incident(incidentId).update({
+        'status': 'Cancelled',
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Throws a FirebaseFunctionsException whose message is safe to show.
   Future<void> requestUnit(String incidentId, String responderId) => _fn.httpsCallable('resident_request_unit').call<dynamic>({'incidentId': incidentId, 'responderId': responderId});
 

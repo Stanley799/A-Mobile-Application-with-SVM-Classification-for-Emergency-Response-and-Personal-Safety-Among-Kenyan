@@ -22,6 +22,7 @@ import 'map_style.dart';
 import 'maps_available.dart';
 import 'nearby_places.dart';
 import 'pin_factory.dart';
+import 'resident_track_publisher.dart';
 
 class _C {
   static const ink = Color(0xFF1A1A1A);
@@ -90,6 +91,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
   final Map<String, double> _etaSeconds = {};
   Timer? _routeTimer;
   String? _selected;
+  bool _selFromMap = false;
   String? _busyId;
   bool _hidden = false;
   String _fitKey = '';
@@ -112,6 +114,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _loadPins();
+    ResidentTrackPublisher.instance.acquire(widget.incidentId); // the unit that accepted can see me move while this map is open
     _subs.add(repo.watchIncident(widget.incidentId).listen((i) {
       if (!mounted) return;
       setState(() {
@@ -149,6 +152,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     }
     _routeTimer?.cancel();
     _anim.dispose();
+    ResidentTrackPublisher.instance.release(widget.incidentId);
     super.dispose();
   }
 
@@ -357,7 +361,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
         anchor: const Offset(0.5, 0.5),
         infoWindow: InfoWindow(title: o.name, snippet: o.isLive ? 'Registered unit' : 'Listed place'),
         zIndexInt: o.holdsJob ? 4 : 3,
-        onTap: () => setState(() => _selected = o.refId),
+        onTap: () => setState(() {
+          _selected = o.refId;
+          _selFromMap = true;
+        }),
       ));
     }
     for (final p in _visibleNearby()) {
@@ -370,7 +377,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
         anchor: const Offset(0.5, 0.5),
         infoWindow: InfoWindow(title: p.name, snippet: placeTypeLabel(p.type)),
         zIndexInt: sel ? 3 : 1,
-        onTap: () => setState(() => _selected = p.id),
+        onTap: () => setState(() {
+          _selected = p.id;
+          _selFromMap = true;
+        }),
       ));
     }
     return out;
@@ -491,6 +501,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
             trafficEnabled: false,
             buildingsEnabled: false,
             indoorViewEnabled: false,
+            onTap: (_) => setState(() => _selFromMap = false),
             padding: kIsWeb ? EdgeInsets.zero : EdgeInsets.only(top: 120, bottom: routing ? 210 : 270),
           ),
         ),
@@ -505,9 +516,108 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
           ),
         ),
         if (routing) _routeCard() else _sheet(meta),
+        if (!routing) _mapSelectionCard(),
       ]),
     );
   }
+
+  /// Floating detail card for the pin the resident just tapped on the map: name, facts, call and directions.
+  /// Sits above the collapsed sheet; the full list with the same item highlighted stays in the sheet.
+  Widget _mapSelectionCard() {
+    if (!_selFromMap) return const SizedBox.shrink();
+    final sel = _selected;
+    if (sel == null) return const SizedBox.shrink();
+
+    for (final o in _state.options) {
+      if (o.refId != sel) continue;
+      final key = _keyOfOption(o);
+      final phone = o.phone.isNotEmpty ? o.phone : (o.phones.isNotEmpty ? o.phones.first : '');
+      final facts = [kOrgLabels[o.orgType] ?? '', o.etaText, if (o.distanceKm != null) '${o.distanceKm!.toStringAsFixed(1)} km'].where((e) => e != null && e.isNotEmpty).join(' · ');
+      final Widget action;
+      if (o.isLive && o.holdsJob) {
+        action = Expanded(child: Container(height: 48, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(14)), child: Text({'accepted': 'Accepted', 'enroute': 'On the way', 'arrived': 'Arrived'}[o.status] ?? o.status, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1B5E20)))));
+      } else if (o.isLive) {
+        final asking = o.status == 'asking';
+        action = Expanded(
+          child: SizedBox(
+            height: 48,
+            child: FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _C.brand, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+              onPressed: asking || _busyId != null ? null : () => _request(o),
+              child: _busyId == o.refId ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)) : Text(asking ? 'Asked, waiting…' : 'Request this unit', style: const TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        );
+      } else {
+        action = const SizedBox.shrink();
+      }
+      return Positioned(
+        left: 12,
+        right: 12,
+        bottom: MediaQuery.of(context).size.height * 0.36 + 8,
+        child: _selShell(
+          iconKey: key,
+          title: o.name,
+          facts: facts,
+          children: [
+            if (o.isLive) action,
+            if (o.isLive && phone.isNotEmpty) const SizedBox(width: 10),
+            if (phone.isNotEmpty) Expanded(child: SizedBox(height: 48, child: OutlinedButton.icon(onPressed: () => _call(phone), icon: const Icon(Icons.call, size: 18), label: Text(kIsWeb ? phone : 'Call'), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))),
+            if (!o.isLive && o.hasPosition) ...[
+              if (phone.isNotEmpty) const SizedBox(width: 10),
+              Expanded(child: SizedBox(height: 48, child: FilledButton.icon(onPressed: () => _showRoute(_Dest(id: o.refId, name: o.name, typeKey: key, lat: o.latitude!, lng: o.longitude!, phone: phone)), icon: const Icon(Icons.directions_outlined, size: 18), label: const Text('Directions'), style: FilledButton.styleFrom(backgroundColor: _C.brand, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))),
+            ],
+          ],
+        ),
+      );
+    }
+
+    for (final p in _visibleNearby()) {
+      if (p.id != sel) continue;
+      final key = p.type.name;
+      final facts = [placeTypeLabel(p.type), if (p.distanceKm != null) '${p.distanceKm!.toStringAsFixed(1)} km', if (p.is24h == true) 'Open 24 h', if (!p.verified) 'Phone not verified'].join(' · ');
+      return Positioned(
+        left: 12,
+        right: 12,
+        bottom: MediaQuery.of(context).size.height * 0.36 + 8,
+        child: _selShell(
+          iconKey: key,
+          title: p.name,
+          facts: facts,
+          children: [
+            if (p.phone.isNotEmpty) Expanded(child: SizedBox(height: 48, child: FilledButton.icon(onPressed: () => _call(p.phone), icon: const Icon(Icons.call, size: 18), label: Text(kIsWeb ? 'Call ${p.phone}' : 'Call now'), style: FilledButton.styleFrom(backgroundColor: _C.brand, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))),
+            if (p.phone.isNotEmpty) const SizedBox(width: 10),
+            if (p.hasPosition) Expanded(child: SizedBox(height: 48, child: OutlinedButton.icon(onPressed: () => _showRoute(_Dest(id: p.id, name: p.name, typeKey: key, lat: p.latitude!, lng: p.longitude!, phone: p.phone)), icon: const Icon(Icons.directions_outlined, size: 18), label: const Text('Directions'), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _selShell({required String iconKey, required String title, required String facts, required List<Widget> children}) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    elevation: 6,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          Container(width: 42, height: 42, decoration: BoxDecoration(color: _typeColor(iconKey), shape: BoxShape.circle), child: Icon(_typeIcon(iconKey), color: Colors.white, size: 22)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _C.ink)),
+            if (facts.isNotEmpty) Text(facts, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: _C.mute, fontWeight: FontWeight.w600)),
+          ])),
+          IconButton(tooltip: 'Close', icon: const Icon(Icons.close, size: 20), onPressed: () => setState(() => _selFromMap = false)),
+        ]),
+        if (children.where((w) => w is! SizedBox).isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Row(children: children),
+        ],
+      ]),
+    ),
+  );
 
   Widget _roundBtn(IconData icon, String tip, VoidCallback onTap) => GlassIconButton(icon: icon, tooltip: tip, onPressed: onTap);
 
@@ -783,7 +893,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     final facts = [if (p.distanceKm != null) '${p.distanceKm!.toStringAsFixed(1)} km', if (p.is24h == true) 'Open 24 h', if (!p.verified) 'Phone not verified'].join(' · ');
     return GestureDetector(
       onTap: () {
-        setState(() => _selected = p.id);
+        setState(() {
+          _selected = p.id;
+          _selFromMap = false;
+        });
         if (p.hasPosition) _map?.animateCamera(CameraUpdate.newLatLng(LatLng(p.latitude!, p.longitude!)));
       },
       child: Container(
@@ -894,7 +1007,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     final phone = o.phone.isNotEmpty ? o.phone : (o.phones.isNotEmpty ? o.phones.first : '');
     return GestureDetector(
       onTap: () {
-        setState(() => _selected = o.refId);
+        setState(() {
+          _selected = o.refId;
+          _selFromMap = false;
+        });
         if (o.hasPosition) _map?.animateCamera(CameraUpdate.newLatLng(LatLng(o.latitude!, o.longitude!)));
       },
       child: Container(

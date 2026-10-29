@@ -134,7 +134,11 @@ def refresh(db, iid, inc, dispatch, now, key=None):
         opts, meta = options.build(inc, pr, avail, assigned, offers, facilities, state, now, minutes)
         if dispatch.get("escalate922"):
             meta["showNumbers"] = True
-        _prune_tracks(db, iid, {o["responderId"] for o in offers if o["status"] in options.HELD})
+        # Keep the live tracks of units that hold the job, plus the resident's own track (mutual live tracking).
+        keep_tracks = {o["responderId"] for o in offers if o["status"] in options.HELD}
+        if inc.get("userId"):
+            keep_tracks.add(inc["userId"])
+        _prune_tracks(db, iid, keep_tracks)
     old = _read_old(db, iid)
     want = {f"r{c['rank']}": c for c in opts}
     for rid in SUBCOLS:
@@ -158,7 +162,8 @@ def _clear(col):
 
 
 def _prune_tracks(db, iid, keep_ids):
-    """Live-location privacy: a unit's track exists only while it holds the job."""
+    """Live-location privacy: a unit's track exists only while it holds the job; the resident's own track
+    exists only while the alert is open (refresh clears the whole collection once it is not)."""
     col = db.collection("incidents").document(iid).collection("tracks")
     for s in col.stream():
         if s.id not in keep_ids:

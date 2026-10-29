@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/dispatch_models.dart';
 import 'incoming_alert_screen.dart' show openInMaps;
+import 'job_map_screen.dart';
 import 'responder_repository.dart';
 import 'responder_theme.dart';
 import 'track_publisher.dart';
@@ -19,6 +20,7 @@ class ActiveJobScreen extends StatefulWidget {
 
 class _ActiveJobScreenState extends State<ActiveJobScreen> {
   bool _busy = false;
+  bool _stoodDown = false;
 
   Future<void> _move(String status) async {
     setState(() => _busy = true);
@@ -32,6 +34,73 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
               'Could not update. Check your connection and try again.',
             ),
           ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  static const _withdrawReasons = [
+    ('cannot_reach', 'I cannot get there', 'Blocked route, no vehicle or too far.'),
+    ('scene_unsafe', 'The scene is not safe for me', 'I need backup or a different unit.'),
+    ('unit_broken_down', 'My unit has broken down', 'Vehicle or equipment failure.'),
+    ('no_longer_available', 'I am no longer available', 'Something else came up.'),
+  ];
+
+  Future<void> _standDown() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          children: [
+            Text(
+              'Stand down from this job?',
+              style: Theme.of(c).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Only do this if you truly cannot respond. The system will immediately alert the next nearest unit, and the caller stays informed.',
+              style: TextStyle(color: RC.soft, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            for (final (value, label, hint) in _withdrawReasons)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(hint),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(c, value),
+              ),
+            const SizedBox(height: 4),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Keep the job'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.repo.respond(widget.offerId, 'withdrawn', withdrawReason: picked);
+      // The server only flips Busy -> Available on its own withdrawals; after standing down we release ourselves.
+      await widget.repo.setAvailability('Available');
+      if (mounted) {
+        setState(() => _stoodDown = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You stood down. The next nearest unit is being alerted.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not stand down. Check your connection and try again.')),
         );
       }
     }
@@ -195,17 +264,31 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
               color: RC.card,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(
-              o.status == 'completed'
-                  ? 'Job completed. Thank you.'
-                  : o.withdrawReason == 'incident_cancelled'
-                  ? 'The resident cancelled this alert. You can stand down.'
-                  : 'This job is no longer open.',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: RC.text,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  o.status == 'completed'
+                      ? 'Job completed. Thank you.'
+                      : _stoodDown
+                      ? 'You stood down from this job. Dispatch has alerted the next nearest unit, and the caller can see the update.'
+                      : o.withdrawReason == 'incident_cancelled'
+                      ? 'The resident cancelled this alert. You can stand down.'
+                      : 'This job is no longer open.',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: RC.text,
+                  ),
+                ),
+                if (_stoodDown) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You are back to Available, so you can take the next call.',
+                    style: TextStyle(fontSize: 13, color: RC.soft, height: 1.4),
+                  ),
+                ],
+              ],
             ),
           ),
         Container(
@@ -243,8 +326,19 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                     : () => launchUrl(Uri(scheme: 'tel', path: phone)),
               ),
               const SizedBox(height: 10),
+              if (o.isActiveJob) ...[
+                BigButton(
+                  label: 'Live map — see the caller move',
+                  height: 52,
+                  color: RC.accent,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => JobMapScreen(offer: o)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               BigButton(
-                label: 'Open location in Maps',
+                label: 'Open location in Google Maps',
                 filled: false,
                 height: 52,
                 onPressed: () => openInMaps(o.latitude, o.longitude),
@@ -302,6 +396,16 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
               label: 'Complete job',
               onPressed: _busy ? null : _confirmComplete,
             ),
+          if (o.status == 'accepted' || o.status == 'enroute') ...[
+            const SizedBox(height: 10),
+            Center(
+              child: TextButton.icon(
+                onPressed: _busy ? null : _standDown,
+                icon: const Icon(Icons.exit_to_app, size: 18),
+                label: const Text("I can't take this job"),
+              ),
+            ),
+          ],
         ],
       ],
     );

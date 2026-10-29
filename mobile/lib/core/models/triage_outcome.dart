@@ -71,6 +71,7 @@ class TriageOutcome {
       'confidence': confidence,
       'fallbackReason': fallbackReason,
       'schemaVersion': schemaVersion,
+      if (description != null) 'input': 'text_description',
     },
     if (description != null) 'description': description,
     if (flags.isNotEmpty) 'flags': flags,

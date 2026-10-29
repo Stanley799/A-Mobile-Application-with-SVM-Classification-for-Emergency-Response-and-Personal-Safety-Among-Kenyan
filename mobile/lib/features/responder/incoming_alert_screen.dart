@@ -6,8 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/dispatch_models.dart';
 import 'active_job_screen.dart';
+import 'responder_labels.dart';
 import 'responder_repository.dart';
 import 'responder_theme.dart';
+import 'responder_widgets.dart';
+import '../../core/ui/routes.dart';
 
 Future<void> openInMaps(double? lat, double? lng) async {
   if (lat == null || lng == null) return;
@@ -47,7 +50,9 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
     super.initState();
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      if (_offer.isOpen && _offer.secondsLeft() == 0 && _lost == null) {
+      // Grace of a few seconds past zero: client clocks can run ahead of the
+      // server, which is what actually expires the offer.
+      if (_offer.isOpen && _offer.secondsLeft() <= -3 && _lost == null) {
         setState(() => _lost = 'The response window closed.');
         Future<void>.delayed(const Duration(seconds: 3), () {
           if (mounted) Navigator.of(context).pop();
@@ -95,9 +100,8 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
       if (!mounted) return;
       if (status == 'accepted') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                ActiveJobScreen(offerId: _offer.id, repo: widget.repo),
+          appRoute<void>(
+            (_) => ActiveJobScreen(offerId: _offer.id, repo: widget.repo),
           ),
         );
       } else {
@@ -119,273 +123,247 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
   Widget build(BuildContext context) {
     final o = _offer;
     final left = o.secondsLeft();
-    final total = 45;
-    final danger = o.flags;
+    final canAnswer = !_busy && o.isOpen && left > 0;
     return Scaffold(
       backgroundColor: RC.bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: RC.priority(o.priority),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'NEW ALERT · ${o.priority.toUpperCase()} PRIORITY',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      hhmm(o.createdAt),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          o.category,
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
-                            color: RC.text,
-                          ),
-                        ),
-                        if (o.subtypeLabel.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              _cap(o.subtypeLabel),
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w500,
-                                color: RC.soft,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 76,
-                    height: 76,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 76,
-                          height: 76,
-                          child: CircularProgressIndicator(
-                            value: o.isOpen ? left / total : 0,
-                            strokeWidth: 5,
-                            backgroundColor: RC.line,
-                            color: left <= 10
-                                ? const Color(0xFFFF8A80)
-                                : const Color(0xFF80CBC4),
-                          ),
-                        ),
-                        Column(
+        child: Column(
+          children: [
+            Expanded(
+              child: _lost != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(ResponderSpacing.xl),
+                        child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              '$left',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                height: 1,
-                                color: RC.text,
-                              ),
+                            const Icon(
+                              Icons.info_outline,
+                              size: 44,
+                              color: RC.muted,
                             ),
-                            const Text(
-                              'seconds',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: RC.muted,
-                              ),
+                            const SizedBox(height: ResponderSpacing.md),
+                            Text(
+                              _lost!,
+                              textAlign: TextAlign.center,
+                              style: ResponderTextStyles.section,
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: RC.card,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '${o.distanceKm.toStringAsFixed(1)} km',
-                          style: const TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            height: 1,
-                            color: RC.text,
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(
+                        ResponderSpacing.lg,
+                        ResponderSpacing.lg,
+                        ResponderSpacing.lg,
+                        ResponderSpacing.lg,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              PriorityTag(priority: o.priority),
+                              const SizedBox(width: ResponderSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  _receivedAge(o.createdAt),
+                                  textAlign: TextAlign.end,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: ResponderTextStyles.caption,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'away, straight line',
-                          style: TextStyle(fontSize: 14, color: RC.muted),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: RC.text,
-                          side: const BorderSide(color: RC.outline),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: ResponderSpacing.md),
+                          Text(
+                            ResponderLabels.category(o.category),
+                            style: ResponderTextStyles.title,
                           ),
-                        ),
-                        onPressed: () => openInMaps(o.latitude, o.longitude),
-                        child: const Text(
-                          'Open location in Maps',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                          if (o.subtypeLabel.isNotEmpty) ...[
+                            const SizedBox(height: ResponderSpacing.xs),
+                            Text(
+                              o.subtypeLabel,
+                              style: ResponderTextStyles.body,
+                            ),
+                          ],
+                          const SizedBox(height: ResponderSpacing.lg),
+                          Center(
+                            child: CountdownRing(
+                              secondsLeft: left,
+                              totalSeconds: _windowSeconds(o),
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: ResponderSpacing.lg),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: StatTile(
+                                  value:
+                                      '${o.distanceKm.toStringAsFixed(1)} km',
+                                  label: 'Straight-line distance',
+                                  icon: Icons.near_me_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: ResponderSpacing.sm),
+                              Expanded(
+                                child: StatTile(
+                                  value: '${o.peopleCount}',
+                                  label: o.peopleCount == 1
+                                      ? 'Person reported'
+                                      : 'People reported',
+                                  icon: Icons.people_outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (o.needs.isNotEmpty) ...[
+                            const SizedBox(height: ResponderSpacing.lg),
+                            const Text(
+                              'Needed from you',
+                              style: ResponderTextStyles.section,
+                            ),
+                            const SizedBox(height: ResponderSpacing.sm),
+                            Wrap(
+                              spacing: ResponderSpacing.sm,
+                              runSpacing: ResponderSpacing.sm,
+                              children: [
+                                for (final need in o.needs)
+                                  Chip2(
+                                    ResponderLabels.capability(need),
+                                    RC.needBg,
+                                    RC.needFg,
+                                  ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: ResponderSpacing.xl),
+                          SectionCard(
+                            title: 'More details',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'What we know',
+                                  style: ResponderTextStyles.section,
+                                ),
+                                const SizedBox(height: ResponderSpacing.sm),
+                                if (o.flags.isEmpty)
+                                  const Text(
+                                    'No danger signs reported yet.',
+                                    style: ResponderTextStyles.caption,
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: ResponderSpacing.sm,
+                                    runSpacing: ResponderSpacing.sm,
+                                    children: [
+                                      for (final flag in o.flags)
+                                        Chip2(
+                                          flag,
+                                          RC.dangerChipBg,
+                                          RC.dangerChipFg,
+                                        ),
+                                    ],
+                                  ),
+                                if (o.freeText.isNotEmpty &&
+                                    !o.confidential) ...[
+                                  const SizedBox(height: ResponderSpacing.lg),
+                                  const Text(
+                                    'Caller description',
+                                    style: ResponderTextStyles.section,
+                                  ),
+                                  const SizedBox(height: ResponderSpacing.xs),
+                                  Text(
+                                    o.freeText,
+                                    style: ResponderTextStyles.body,
+                                  ),
+                                ],
+                                const SizedBox(height: ResponderSpacing.md),
+                                const Text(
+                                  'Caller name and phone are shared after you accept.',
+                                  style: ResponderTextStyles.caption,
+                                ),
+                                const SizedBox(height: ResponderSpacing.md),
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      openInMaps(o.latitude, o.longitude),
+                                  icon: const Icon(Icons.map_outlined),
+                                  label: const Text('Open location in Maps'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const SectionLabel('WHAT WE KNOW'),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final f in danger)
-                    Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
-                  Chip2(
-                    o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people',
-                    RC.infoChipBg,
-                    RC.infoChipFg,
-                  ),
-                  if (danger.isEmpty)
-                    const Chip2(
-                      'No danger signs reported yet',
-                      RC.infoChipBg,
-                      RC.infoChipFg,
+            ),
+            PrimaryActionBar(
+              primary: _lost != null
+                  ? FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Back to alerts'),
+                    )
+                  : FilledButton(
+                      onPressed: canAnswer ? () => _answer('accepted') : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: RC.accept,
+                        foregroundColor: const Color(0xFF04130C),
+                      ),
+                      child: _busy
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF04130C),
+                              ),
+                            )
+                          : const Text(
+                              'Accept and go',
+                              style: TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                     ),
-                ],
-              ),
-              if (o.needs.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const SectionLabel('NEEDED FROM YOU'),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final n in o.needs)
-                      Chip2(roleLabel(n), RC.needBg, RC.needFg),
-                  ],
-                ),
-              ],
-              if (o.freeText.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const SectionLabel('CALLER SAID'),
-                const SizedBox(height: 6),
-                Text(
-                  o.freeText,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: RC.soft,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              const Text(
-                "The caller's name and phone number are shared after you accept.",
-                style: TextStyle(fontSize: 12, color: RC.muted, height: 1.45),
-              ),
-              const Spacer(),
-              if (_lost != null)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: RC.card,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    _lost!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: RC.text,
+              secondary: _lost != null
+                  ? null
+                  : OutlinedButton(
+                      onPressed: canAnswer && !_busy
+                          ? () => _answer('declined')
+                          : null,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: RC.text,
+                        side: const BorderSide(color: RC.outline),
+                      ),
+                      child: const Text('Cannot respond'),
                     ),
-                  ),
-                )
-              else ...[
-                BigButton(
-                  label: 'Accept and go',
-                  onPressed: (_busy || !o.isOpen || left == 0)
-                      ? null
-                      : () => _answer('accepted'),
-                ),
-                const SizedBox(height: 10),
-                BigButton(
-                  label: 'Cannot respond',
-                  filled: false,
-                  height: 52,
-                  onPressed: (_busy || !o.isOpen || left == 0)
-                      ? null
-                      : () => _answer('declined'),
-                ),
-              ],
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+  /// Offer windows differ (automatic 45s, admin-assigned 90s): derive the ring's total from the timestamps.
+  static int _windowSeconds(Offer o) {
+    final created = o.createdAt;
+    final expires = o.expiresAt;
+    if (created == null || expires == null) return 45;
+    return expires.difference(created).inSeconds.clamp(1, 600);
+  }
+
+  String _receivedAge(DateTime? createdAt) {
+    if (createdAt == null) return 'Just received';
+    final seconds = DateTime.now()
+        .difference(createdAt)
+        .inSeconds
+        .clamp(0, 999999);
+    return seconds < 60
+        ? 'Received ${seconds}s ago'
+        : 'Received ${seconds ~/ 60}m ago';
+  }
 }

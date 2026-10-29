@@ -325,7 +325,22 @@ service cloud.firestore {
       return (from == "offered" && to in ["accepted", "declined"])
         || (from == "accepted" && to in ["enroute", "arrived", "completed"])
         || (from == "enroute" && to in ["arrived", "completed"])
-        || (from == "arrived" && to == "completed");
+        || (from == "arrived" && to == "completed")
+        // A unit may stand down from a job it has taken (breakdown, scene unsafe...). Dispatch reconciles and alerts the next unit.
+        || (from in ["accepted", "enroute", "arrived"] && to == "withdrawn");
+    }
+
+    // Reason a unit gives when it stands down (written with the withdrawal, same update).
+    function validWithdrawReason(r) {
+      return r in ["cannot_reach", "scene_unsafe", "unit_broken_down", "no_longer_available"];
+    }
+
+    // One live position document. Same shape whether a unit or the resident writes it.
+    function validTrackPoint() {
+      return request.resource.data.keys().hasOnly(["lat", "lng", "heading", "speed", "accuracy", "at"])
+        && request.resource.data.lat is number && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.at is timestamp;
     }
 
     // ------------------------------------------------------------------------------------------
@@ -479,8 +494,9 @@ service cloud.firestore {
 
       allow update: if isSignedIn()
         && resource.data.responderId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt", "withdrawReason"])
         && validOfferMove(resource.data.status, request.resource.data.status)
+        && (request.resource.data.status != "withdrawn" || validWithdrawReason(request.resource.data.withdrawReason))
         && (resource.data.status != "offered" || request.time < resource.data.expiresAt);
     }
 
@@ -503,18 +519,26 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Live position of a unit that HOLDS this job. The resident of this alert, that unit and administrators can read it. Only that unit can write it,
-    // and only while its own offer for this alert is accepted / en route / arrived. Functions delete it when the job ends.
-    match /incidents/{incidentId}/tracks/{responderId} {
+    // Live positions for one alert. A unit that HOLDS the job shares its position so the resident sees it coming;
+    // the resident shares their own position while the alert is open so the unit sees them (Uber-style mutual tracking).
+    // The resident of this alert, a unit holding this job, and administrators can read these documents.
+    match /incidents/{incidentId}/tracks/{trackOwnerId} {
       allow read: if isSignedIn()
-        && (isSystemAdmin() || responderId == request.auth.uid
-            || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid);
-      allow create, update: if isSignedIn() && responderId == request.auth.uid
-        && get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"]
-        && request.resource.data.keys().hasOnly(["lat", "lng", "heading", "speed", "accuracy", "at"])
-        && request.resource.data.lat is number && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
-        && request.resource.data.lng is number && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
-        && request.resource.data.at is timestamp;
+        && (isSystemAdmin() || trackOwnerId == request.auth.uid
+            || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid
+            || get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"]);
+
+      allow create, update: if isSignedIn() && validTrackPoint()
+        && (
+          // the unit holding the job
+          (trackOwnerId == request.auth.uid
+            && get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"])
+          ||
+          // the resident, only while their own alert is still open
+          (trackOwnerId == request.auth.uid
+            && get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid
+            && get(/databases/$(database)/documents/incidents/$(incidentId)).data.status in ["Active", "SupportOnly"])
+        );
       allow delete: if false;
     }
 

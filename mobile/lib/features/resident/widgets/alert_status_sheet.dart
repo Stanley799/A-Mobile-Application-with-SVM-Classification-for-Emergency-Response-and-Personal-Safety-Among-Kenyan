@@ -2,11 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/config/feature_flags.dart';
-import '../../../core/models/dispatch_models.dart';
 import '../../../core/models/triage_outcome.dart';
 import '../../../core/services/priority_classifier.dart';
 import '../../../core/services/triage_text_service.dart';
@@ -16,8 +12,6 @@ import '../../../core/triage/triage_schema.dart';
 import '../../../core/utils/incident_id.dart';
 import '../status/alert_status_body.dart';
 import 'category_style.dart';
-import 'dispatch_card.dart';
-import '../map/help_map_entry.dart';
 import 'hotline_card.dart';
 import 'other_free_text_sheet.dart';
 import 'triage_question_sheet.dart';
@@ -65,10 +59,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   final Map<String, String> _answers = {};
   late _Stage _stage;
 
-  bool _createDone = false;
   bool _createFailed = false;
-  bool _docSeen = false;
-  bool _hasPendingWrites = true;
 
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
@@ -82,6 +73,8 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   List<String> _textFlags = const [];
   bool _detailsCompleted = false;
   bool _supportMode = false;
+  bool _classified = false; // a category or a text description was submitted
+  bool _cancelWrite = false; // the Cancelled write was already attempted
 
   @override
   void initState() {
@@ -107,7 +100,6 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         .then((_) {
           if (mounted) {
             setState(() {
-              _createDone = true;
               _recordedAt ??= DateTime.now();
             });
           }
@@ -126,13 +118,11 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         .listen(
           (snap) {
             if (!mounted) return;
-            setState(() {
-              _docSeen = snap.exists;
-              _hasPendingWrites = snap.metadata.hasPendingWrites;
-              if (snap.exists && !snap.metadata.hasPendingWrites) {
+            if (snap.exists && !snap.metadata.hasPendingWrites) {
+              setState(() {
                 _recordedAt ??= DateTime.now();
-              }
-            });
+              });
+            }
           },
           onError: (err) {
             debugPrint('Incident doc snapshot error: $err');
@@ -148,14 +138,6 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     super.dispose();
   }
 
-  AlertPhase get _phase => alertPhase(
-    createDone: _createDone,
-    createFailed: _createFailed,
-    hasPendingWrites: _hasPendingWrites,
-    docSeen: _docSeen,
-    secondsSinceStart: _stopwatch.elapsed.inSeconds,
-  );
-
   Future<void> _handleRetry() async {
     setState(() {
       _createFailed = false;
@@ -166,7 +148,6 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
       );
       if (serverSnap.exists && mounted) {
         setState(() {
-          _createDone = true;
           _recordedAt ??= DateTime.now();
         });
         return;
@@ -177,7 +158,6 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
       await widget.retryCreate();
       if (mounted) {
         setState(() {
-          _createDone = true;
           _recordedAt ??= DateTime.now();
         });
       }
@@ -199,6 +179,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         'answers': Map<String, String>.of(_answers),
         'schemaVersion': kTriageSchemaVersion,
         'stage': 'quick',
+        if (_typedText.trim().isNotEmpty) 'input': 'text_description',
       },
       'triageStatus': 'quick',
       'updatedAt': FieldValue.serverTimestamp(),
@@ -222,19 +203,6 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
         debugPrint('Complete update error: $err');
       }),
     );
-  }
-
-  Future<void> _callHotline(String number) async {
-    var launched = false;
-    try {
-      launched = await launchUrl(Uri(scheme: 'tel', path: number));
-    } catch (_) {
-      launched = false;
-    }
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Please dial $number')));
-    }
   }
 
   List<String> get _quickQuestionIds {
@@ -265,6 +233,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   }
 
   void _onSelectCategoryTile(String cat) {
+    _classified = true;
     if (cat == 'Other / General') {
       setState(() {
         _category = cat;
@@ -283,6 +252,10 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   }
 
   void _onDescription(FreeTextResult result) {
+    // Skipping with an empty box classifies nothing: cancelling must still end the alert.
+    if (result.text.trim().isNotEmpty || result.chosenCategory != null) {
+      _classified = true;
+    }
     final category = result.chosenCategory;
     final suggestion = result.suggestion;
     setState(() {
@@ -312,6 +285,7 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   }
 
   void _onSelectOtherSubtype(String sub) {
+    _classified = true;
     if (sub == 'emotional_distress') {
       setState(() {
         _subtype = sub;
@@ -434,12 +408,99 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     });
   }
 
+  Future<void> _onCloseRequested() async {
+    if (_classified) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final cancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel this alert?'),
+        content: const Text(
+          'No emergency category or description was given, so no help is being sent. The alert will be saved as Cancelled.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep alert'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.sos),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel alert'),
+          ),
+        ],
+      ),
+    );
+    if (cancel == true && mounted) Navigator.of(context).pop();
+  }
+
+  /// Runs when the sheet actually pops: an unclassified alert must not keep dispatching.
+  Future<void> _cancelIfUnclassified() async {
+    if (_classified || _cancelWrite || _createFailed) return;
+    _cancelWrite = true;
+    try {
+      await widget.incidentRef.update({
+        'status': 'Cancelled',
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      debugPrint('Cancel unclassified incident error: $err');
+    }
+  }
+
+  Widget _buildFailureBanner() {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.sosLight,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'We could not record this alert',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.sosDeep,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Please call 922 now. You can also try recording the alert again.',
+            style: TextStyle(fontSize: 13, color: AppColors.sosDeep),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _handleRetry,
+              child: const Text('Retry'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cStyle = categoryStyle(_category);
     final refStr = incidentReference(widget.incidentRef.id);
 
-    return Column(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          unawaited(_cancelIfUnclassified());
+        } else {
+          unawaited(_onCloseRequested());
+        }
+      },
+      child: Column(
       children: [
         const SizedBox(height: AppSpacing.sm),
         Container(
@@ -501,9 +562,9 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
               ),
               const Spacer(),
               IconButton(
-                tooltip: 'Close',
+                tooltip: _classified ? 'Close' : 'Cancel alert',
                 icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(context).maybePop(),
               ),
             ],
           ),
@@ -516,269 +577,20 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
               AppSpacing.lg,
               100,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildStageContent(),
-                const SizedBox(height: AppSpacing.lg),
-                AlertStatusBody(
-                  incidentId: widget.incidentRef.id,
-                  categoryLabel: _category,
-                  priorityLabel: 'High',
-                  reference: refStr,
-                  receivedAt: _recordedAt ?? DateTime.now(),
-                  detailsPending: !_detailsCompleted,
-                  onAddDetails: _openMoreDetailsSheet,
-                ),
-              ],
-            ),
+            child: _createFailed
+                ? _buildFailureBanner()
+                : AlertStatusBody(
+                    incidentId: widget.incidentRef.id,
+                    categoryLabel: _category,
+                    priorityLabel: 'High',
+                    reference: refStr,
+                    receivedAt: _recordedAt ?? DateTime.now(),
+                    detailsPending: !_detailsCompleted,
+                    onAddDetails: _openMoreDetailsSheet,
+                  ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildStatusCard(String refStr) {
-    final phase = _phase;
-    Widget iconWidget;
-    String title;
-    String subtitle;
-
-    switch (phase) {
-      case AlertPhase.sending:
-        iconWidget = Container(
-          width: 36,
-          height: 36,
-          decoration: const BoxDecoration(
-            color: AppColors.brandLight,
-            shape: BoxShape.circle,
-          ),
-          padding: const EdgeInsets.all(8),
-          child: const CircularProgressIndicator(strokeWidth: 2),
-        );
-        title = 'Sending your alert';
-        subtitle = 'Keep this screen open.';
-        break;
-      case AlertPhase.recorded:
-        iconWidget = Container(
-          width: 36,
-          height: 36,
-          decoration: const BoxDecoration(
-            color: AppColors.successLight,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.check_circle,
-            color: AppColors.success,
-            size: 24,
-          ),
-        );
-        title = 'Alert recorded';
-        final timeStr = _recordedAt != null
-            ? DateFormat('h:mm:ss a').format(_recordedAt!)
-            : DateFormat('h:mm:ss a').format(DateTime.now());
-        subtitle = 'Received at $timeStr';
-        break;
-      case AlertPhase.savedOffline:
-        iconWidget = Container(
-          width: 36,
-          height: 36,
-          decoration: const BoxDecoration(
-            color: AppColors.warningLight,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.warning_amber,
-            color: AppColors.warning,
-            size: 24,
-          ),
-        );
-        title = 'Saved on this phone';
-        subtitle = 'It will send as soon as you are online. Call 922 now.';
-        break;
-      case AlertPhase.failed:
-        iconWidget = Container(
-          width: 36,
-          height: 36,
-          decoration: const BoxDecoration(
-            color: AppColors.sosLight,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.error_outline,
-            color: AppColors.sosDeep,
-            size: 24,
-          ),
-        );
-        title = 'We could not record this alert';
-        subtitle = 'Please call 922 now.';
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              iconWidget,
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (phase == AlertPhase.failed) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _handleRetry,
-                child: const Text('Retry'),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.sosLight,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: const Text(
-                  'High priority',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.sosDeep,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: widget.locationShared
-                      ? AppColors.brandLight
-                      : AppColors.neutralLight,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Text(
-                  widget.locationShared
-                      ? 'Location shared'
-                      : 'Location not shared',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: widget.locationShared
-                        ? AppColors.brand
-                        : AppColors.neutral,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.neutralLight,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Text(
-                  'Ref $refStr',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.neutral,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineCard() {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppShadows.card,
-      ),
-      child: const Column(
-        children: [
-          Row(
-            children: [
-              Icon(Icons.check_circle, size: 18, color: AppColors.success),
-              SizedBox(width: AppSpacing.md),
-              Text(
-                'Alert sent',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Icon(
-                Icons.radio_button_checked,
-                size: 18,
-                color: AppColors.brand,
-              ),
-              SizedBox(width: AppSpacing.md),
-              Text(
-                'Finding the nearest help',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Icon(
-                Icons.radio_button_checked,
-                size: 18,
-                color: AppColors.textTertiary,
-              ),
-              SizedBox(width: AppSpacing.md),
-              Text(
-                'A responder confirms',
-                style: TextStyle(fontSize: 14, color: AppColors.textTertiary),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

@@ -2,27 +2,55 @@
 import 'package:flutter/material.dart';
 
 class RC {
-  static const bg = Color(0xFF14181B);
-  static const card = Color(0xFF1F262B);
-  static const line = Color(0xFF3A444B);
-  static const outline = Color(0xFF4A565E);
-  static const text = Color(0xFFFFFFFF);
-  static const muted = Color(0xFFA9B1B7);
+  static const bg = Color(0xFF0F1214);
+  static const card = Color(0xFF171B1F);
+  static const surface2 = Color(0xFF1F252B);
+  static const line = Color(0xFF2A3138);
+  static const outline = Color(0xFF76828D);
+  static const text = Color(0xFFF3F5F7);
+  static const muted = Color(0xFFA9B3BC);
   static const soft = Color(0xFFC9D1D6);
-  static const alert = Color(0xFFB33A3A);
-  static const accept = Color(0xFF2E7D32);
-  static const dangerChipBg = Color(0xFF5A2A2A);
-  static const dangerChipFg = Color(0xFFFFD9D9);
-  static const infoChipBg = Color(0xFF2A333A);
-  static const infoChipFg = Color(0xFFE3E8EB);
-  static const needBg = Color(0xFF1D3B36);
-  static const needFg = Color(0xFFBFEDE6);
+  static const alert = Color(0xFFFF6B5E);
+  static const high = alert;
+  static const accept = Color(0xFF2BD38F);
+  static const danger = Color(0xFFC23B3B);
+  static const accent = Color(0xFF34D3C0);
+  static const medium = Color(0xFFFFB020);
+  static const low = Color(0xFF5AB0FF);
+  static const dangerChipBg = Color(0xFF3C2020);
+  static const dangerChipFg = Color(0xFFFFB8B0);
+  static const infoChipBg = surface2;
+  static const infoChipFg = text;
+  static const needBg = Color(0xFF15352F);
+  static const needFg = Color(0xFF8FE8D8);
 
   static Color priority(String p) => switch (p) {
-    'High' => const Color(0xFFB33A3A),
-    'Medium' => const Color(0xFFB26A00),
-    _ => const Color(0xFF3A6EA5),
+    'High' => high,
+    'Medium' => medium,
+    _ => low,
   };
+}
+
+class ResponderSpacing {
+  static const xs = 4.0;
+  static const sm = 8.0;
+  static const md = 12.0;
+  static const lg = 16.0;
+  static const xl = 24.0;
+}
+
+class ResponderRadius {
+  static const chip = 12.0;
+  static const card = 20.0;
+  static const sheet = 28.0;
+  static const pill = 999.0;
+}
+
+class ResponderTextStyles {
+  static const title = TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: RC.text);
+  static const section = TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: RC.text);
+  static const body = TextStyle(fontSize: 15, color: RC.text, height: 1.4);
+  static const caption = TextStyle(fontSize: 12.5, color: RC.muted, height: 1.35);
 }
 
 class Chip2 extends StatelessWidget {
