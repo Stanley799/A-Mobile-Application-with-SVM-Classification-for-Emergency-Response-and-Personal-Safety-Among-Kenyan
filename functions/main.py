@@ -20,6 +20,8 @@ from dispatch import admin_accounts as acct, config as C, core, notify, store
 
 from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
 from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
+from phase4d_functions import responder_sos, admin_resolve_sos, reveal_contact, send_checkin, request_more_units  # noqa: F401,E402  (Phase 4D)
+import phase4d_core as p4
 initialize_app()
 OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
 _db = None
@@ -36,15 +38,99 @@ def _strip(d):
     return {k: v for k, v in (d or {}).items() if k not in ("dispatch", "updatedAt")}
 
 
+def _quiet(fn, label):
+    """An event or metric failure must never stop dispatch."""
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001
+        print(f"[events] {label}: {type(e).__name__}")
+
+
+def _record_incident_events(db, iid, old, new, now):
+    """Who opened the call, when it was classified, what priority was set, when it closed."""
+    uid = new.get("userId") or "system"
+    if old is None:
+        p4.write_event(db, iid, "incident_created", "resident", uid, {"category": new.get("category")}, "incident_created")
+    else:
+        if old.get("triageStatus") != new.get("triageStatus") and new.get("triageStatus") in ("quick", "complete"):
+            p4.write_event(db, iid, "classified", "resident", uid,
+                           {"triageStatus": new.get("triageStatus"), "priority": new.get("priority")},
+                           f"classified_{new.get('triageStatus')}")
+        if old.get("priority") != new.get("priority"):
+            p4.write_event(db, iid, "priority_set", "resident", uid,
+                           {"priority": new.get("priority"), "source": new.get("prioritySource")},
+                           f"priority_set_{new.get('priority')}")
+        if old.get("status") != "Cancelled" and new.get("status") == "Cancelled":
+            p4.write_event(db, iid, "incident_cancelled", "resident", uid, {"from": old.get("status")}, "incident_cancelled")
+        if old.get("status") != "Resolved" and new.get("status") == "Resolved":
+            p4.write_event(db, iid, "incident_closed", "system", "system", {}, "incident_closed")
+    acc = new.get("locationAccuracyM")
+    if isinstance(acc, (int, float)) and acc > p4.LOW_ACCURACY_M and (old is None or old.get("locationAccuracyM") != acc):
+        p4.raise_attention(db, iid, "low_accuracy")
+    if new.get("status") in ("Cancelled", "Resolved"):
+        p4.close_metrics(db, iid, new, now)
+
+
+def _event_for_status(status, reason):
+    """(event type, who) for an offer that moved. Withdrawals caused by the server are system events."""
+    if status == "accepted":
+        return "offer_accepted", "responder"
+    if status == "declined":
+        return "offer_declined", "responder"
+    if status == "expired":
+        return "offer_expired", "system"
+    if status == "enroute":
+        return "unit_en_route", "responder"
+    if status == "arrived":
+        return "unit_arrived", "responder"
+    if status == "withdrawn":
+        server = ("incident_cancelled", "incident_resolved", "another_unit_accepted", "role_already_filled")
+        return "offer_withdrawn", "system" if reason in server else "responder"
+    return None, None
+
+
+def _record_offer_events(db, offer_id, new, old):
+    iid = new.get("incidentId")
+    if not iid:
+        return
+    if old is None:
+        p4.write_event(db, iid, "offer_sent", "system", "system",
+                       {"role": new.get("role"), "wave": new.get("wave")}, f"offer_sent_{offer_id}")
+        return
+    rid = new.get("responderId")
+    if old.get("seenAt") is None and new.get("seenAt") is not None:
+        p4.write_event(db, iid, "offer_seen", "responder", rid, {}, f"offer_seen_{offer_id}")
+    if old.get("moreUnits") is None and isinstance(new.get("moreUnits"), dict):
+        mu = new["moreUnits"]
+        p4.write_event(db, iid, "extra_resources_requested", "responder", rid,
+                       {"role": mu.get("role"), "count": mu.get("count")}, f"extra_resources_requested_{offer_id}")
+        p4.raise_attention(db, iid, "extra_resources")
+    t_old, t_new = old.get("transport"), new.get("transport")
+    if t_old is None and isinstance(t_new, dict):
+        p4.write_event(db, iid, "transport_started", "responder", rid,
+                       {"destinationId": t_new.get("destinationId")}, f"transport_started_{offer_id}")
+    elif isinstance(t_new, dict) and (t_old or {}).get("arrivedAt") is None and t_new.get("arrivedAt") is not None:
+        p4.write_event(db, iid, "transport_arrived", "responder", rid, {}, f"transport_arrived_{offer_id}")
+    if old.get("status") != new.get("status"):
+        etype, who = _event_for_status(new.get("status"), new.get("withdrawReason"))
+        if etype:
+            p4.write_event(db, iid, etype, who, rid if who == "responder" else "system",
+                           {"role": new.get("role")}, f"{etype}_{offer_id}")
+
+
 @firestore_fn.on_document_written(document="incidents/{incidentId}", **OPTS)
 def on_incident_written(event: firestore_fn.Event[firestore_fn.Change]):
     after = event.data.after
     if after is None or not after.exists:
         return
     before = event.data.before
-    if before is not None and before.exists and _strip(before.to_dict()) == _strip(after.to_dict()):
+    new = after.to_dict() or {}
+    old = before.to_dict() if before is not None and before.exists else None
+    if old is not None and _strip(old) == _strip(new):
         return                                               # only our own dispatch write changed: stop (no loops)
-    store.reconcile_incident(db(), event.params["incidentId"], time.time(), notify.send_offer_push)
+    iid = event.params["incidentId"]
+    _quiet(lambda: _record_incident_events(db(), iid, old, new, time.time()), f"incident {iid}")
+    store.reconcile_incident(db(), iid, time.time(), notify.send_offer_push)
 
 
 @firestore_fn.on_document_written(document="offers/{offerId}", **OPTS)
@@ -55,16 +141,44 @@ def on_offer_written(event: firestore_fn.Event[firestore_fn.Change]):
     before = event.data.before
     new = after.to_dict()
     old = before.to_dict() if before is not None and before.exists else None
-    if old is not None and old.get("status") == new.get("status"):
-        return
+    _quiet(lambda: _record_offer_events(db(), after.id, new, old), f"offer {after.id}")
     if old is None:
         return                                               # a new offer: the push was sent when it was created
+    if old.get("status") == new.get("status"):
+        return
     store.handle_offer_status_change(db(), after.id, new, time.time(), notify.send_offer_push)
 
 
 @scheduler_fn.on_schedule(schedule="every 1 minutes", **OPTS)
 def sweep_dispatch(event: scheduler_fn.ScheduledEvent) -> None:
     store.sweep(db(), time.time(), notify.send_offer_push)
+    _quiet(lambda: p4.sweep_attention(db(), time.time()), "attention sweep")
+
+
+@firestore_fn.on_document_created(document="incidents/{incidentId}/messages/{messageId}", **OPTS)
+def on_message_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]):
+    """A message from dispatch is part of the record. Responder messages are already on the offer trail."""
+    d = event.data.to_dict() or {}
+    if d.get("senderRole") != "admin":
+        return
+    iid, mid = event.params["incidentId"], event.params["messageId"]
+    _quiet(lambda: p4.write_event(db(), iid, "admin_message_sent", "admin", d.get("senderUid") or "system", {}, f"admin_message_sent_{mid}"), f"message {mid}")
+
+
+@firestore_fn.on_document_written(document="incidents/{incidentId}/checkins/{checkinId}", **OPTS)
+def on_checkin_written(event: firestore_fn.Event[firestore_fn.Change]):
+    after = event.data.after
+    if after is None or not after.exists:
+        return
+    new = after.to_dict() or {}
+    before = event.data.before
+    old = before.to_dict() if before is not None and before.exists else None
+    if new.get("reply") is None or (old is not None and old.get("reply") == new.get("reply")):
+        return
+    iid, cid = event.params["incidentId"], event.params["checkinId"]
+    snap = db().collection("incidents").document(iid).get()
+    uid = (snap.to_dict() or {}).get("userId") if snap.exists else None
+    _quiet(lambda: p4.write_event(db(), iid, "checkin_replied", "resident", uid or "resident", {"reply": new.get("reply")}, f"checkin_replied_{cid}"), f"checkin {cid}")
 
 
 def _require_admin(req):
@@ -105,6 +219,9 @@ def admin_assign_responder(req: https_fn.CallableRequest):
     doc = store._offer_doc(offer)
     ref.set(doc)                                              # an administrator may re-ask a responder who declined before
     store.audit(db(), "offer_created_manual", iid, responderId=rid, by=req.auth.uid)
+    reason = str(d.get("reason") or "")[:140]
+    _quiet(lambda: p4.write_event(db(), iid, "admin_assigned", "admin", req.auth.uid,
+                                  {"role": role, "reason": reason}, f"admin_assigned_{offer['id']}"), f"assign {iid}")
     notify.send_offer_push(db(), offer)
     return {"ok": True, "offerId": offer["id"]}
 
@@ -124,6 +241,7 @@ def admin_close_incident(req: https_fn.CallableRequest):
         return {"ok": True, "already": True}
     ref.update({"status": "Resolved", "resolvedAt": firestore.SERVER_TIMESTAMP, "resolution": {"by": req.auth.uid, "note": note}})
     store.audit(db(), "incident_closed_by_admin", iid, by=req.auth.uid, note=note)
+    _quiet(lambda: p4.write_event(db(), iid, "incident_closed", "admin", req.auth.uid, {"by": "admin"}, "incident_closed"), f"close {iid}")
     return {"ok": True}
 
 
