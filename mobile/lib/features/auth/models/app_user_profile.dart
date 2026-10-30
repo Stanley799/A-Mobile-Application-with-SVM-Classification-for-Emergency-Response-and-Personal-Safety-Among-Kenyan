@@ -31,20 +31,3 @@ class AppUserProfile {
     );
   }
 }
-
-/// The administrator's latest decision on a dispatcher application (staff_approvals/{uid}).
-/// Read-only for the applicant; written only by Cloud Functions.
-class StaffDecision {
-  const StaffDecision({required this.status, this.reason = ''});
-  final String status; // pending | approved | rejected | suspended
-  final String reason;
-
-  bool get rejected => status == 'rejected';
-  bool get suspended => status == 'suspended';
-  bool get approved => status == 'approved';
-
-  factory StaffDecision.fromMap(Map<String, dynamic> m) => StaffDecision(
-        status: (m['status'] ?? 'pending').toString(),
-        reason: (m['reason'] ?? '').toString(),
-      );
-}

@@ -62,7 +62,6 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
   late final QuietMode _quiet = widget.quiet ?? QuietMode();
   String? _street;
   String _streetFor = '';
-  bool _answering = false;
   bool _closureOpen = false;
 
   /// "Show once" survives reopening the alert sheet in the same app session.
@@ -130,16 +129,6 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
     if (mounted) AppToast.show(context, ok ? 'Landmark saved.' : 'Could not save the landmark.', kind: ok ? ToastKind.success : ToastKind.error);
   }
 
-  Future<void> _answerCheckin(CheckinQuestion q, String reply) async {
-    if (_answering) return;
-    if (!_quiet.on) HapticFeedback.selectionClick(); // a small tick, deliberately silent in quiet mode
-    setState(() => _answering = true);
-    final ok = await repo.replyCheckin(widget.incidentId, q.id, reply);
-    if (!mounted) return;
-    setState(() => _answering = false);
-    if (!ok) AppToast.show(context, 'Your answer did not send. Try again.', kind: ToastKind.error);
-  }
-
   /// Completed or closed: ask once whether the caller is safe. Never required, never repeated.
   void _maybePromptClosure(IncidentInfo inc) {
     if (inc.status != 'Resolved' || inc.feedbackSafe != null) return;
@@ -181,44 +170,37 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
               stream: widget.dispatch ?? watchDispatch(widget.incidentId),
               builder: (context, dSnap) {
                 final info = dSnap.data ?? DispatchInfo.empty;
-                return StreamBuilder<CheckinQuestion?>(
-                  stream: repo.watchCheckin(widget.incidentId),
-                  builder: (context, cSnap) {
-                    final question = cSnap.data;
-                    return ListenableBuilder(
-                      listenable: _quiet,
-                      builder: (context, _) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (question != null) ...[_checkinCard(question), const SizedBox(height: 12)],
-                          _quietRow(),
-                          if (_sharing(inc)) ...[const SizedBox(height: 8), _sharingPill()],
-                          const SizedBox(height: 12),
-                          Opacity(
-                            opacity: _quiet.on ? 0.82 : 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _header(),
-                                const SizedBox(height: 14),
-                                _locationCard(inc),
-                                const SizedBox(height: 12),
-                                _statusCard(info, help, incSnap.hasData && optSnap.hasData, inc.status),
-                                const SizedBox(height: 12),
-                                _callRow(),
-                                const SizedBox(height: 12),
-                                _mapButton(help),
-                                if (inc.category != null) ...[const SizedBox(height: 12), _firstAidButton(inc)],
-                                if (widget.detailsPending && widget.onAddDetails != null) ...[const SizedBox(height: 12), _detailsRow()],
-                                const SizedBox(height: 12),
-                                _quickDetails(),
-                              ],
-                            ),
-                          ),
-                        ],
+                return ListenableBuilder(
+                  listenable: _quiet,
+                  builder: (context, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _quietRow(),
+                      if (_sharing(inc)) ...[const SizedBox(height: 8), _sharingPill()],
+                      const SizedBox(height: 12),
+                      Opacity(
+                        opacity: _quiet.on ? 0.82 : 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _header(),
+                            const SizedBox(height: 14),
+                            _locationCard(inc),
+                            const SizedBox(height: 12),
+                            _statusCard(info, help, incSnap.hasData && optSnap.hasData, inc.status),
+                            const SizedBox(height: 12),
+                            _callRow(),
+                            const SizedBox(height: 12),
+                            _mapButton(help),
+                            if (inc.category != null) ...[const SizedBox(height: 12), _firstAidButton(inc)],
+                            if (widget.detailsPending && widget.onAddDetails != null) ...[const SizedBox(height: 12), _detailsRow()],
+                            const SizedBox(height: 12),
+                            _quickDetails(),
+                          ],
+                        ),
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 );
               },
             );
@@ -278,48 +260,6 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
           ),
         ),
       ],
-    ),
-  );
-
-  Widget _checkinCard(CheckinQuestion q) => Container(
-    key: ValueKey('checkin-${q.id}'),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: Tk.brandTint, borderRadius: BorderRadius.circular(Tk.rCard)),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('FROM DISPATCH', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Tk.brandDeep, letterSpacing: .8)),
-        const SizedBox(height: 6),
-        Text(q.text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Tk.ink, height: 1.3)),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(child: _answerButton('Yes', Tk.okInk, const Color(0xFFE7F5EA), 'yes', q)),
-            const SizedBox(width: 8),
-            Expanded(child: _answerButton('No', Tk.danger, Tk.dangerTint, 'no', q)),
-            if (!_quiet.on) ...[
-              const SizedBox(width: 8),
-              Expanded(child: _answerButton('Not sure', Tk.mute, const Color(0xFFEDEBE6), 'unsure', q)),
-            ],
-          ],
-        ),
-      ],
-    ),
-  );
-
-  Widget _answerButton(String label, Color fg, Color bg, String value, CheckinQuestion q) => SizedBox(
-    height: 52,
-    child: Semantics(
-      button: true,
-      label: 'Answer $label',
-      child: FilledButton(
-        style: FilledButton.styleFrom(backgroundColor: bg, foregroundColor: fg, padding: const EdgeInsets.symmetric(horizontal: 6)),
-        onPressed: _answering ? null : () => _answerCheckin(q, value),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-        ),
-      ),
     ),
   );
 
@@ -398,7 +338,17 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
                 ],
               ]),
             ),
-            TextButton(onPressed: () => _movePin(inc), child: Text(has ? 'Wrong place?' : 'Set it', style: const TextStyle(fontWeight: FontWeight.w800, color: Tk.brandDeep))),
+            Flexible(
+              child: TextButton(
+                onPressed: () => _movePin(inc),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                child: Text(
+                  has ? 'Wrong place?' : 'Set it',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Tk.brandDeep),
+                ),
+              ),
+            ),
           ]),
           if (has)
             Padding(

@@ -136,13 +136,6 @@ class TrackPoint {
   }
 }
 
-/// One fixed question from dispatch (incidents/{id}/checkins). Answered once, in words.
-class CheckinQuestion {
-  const CheckinQuestion({required this.id, required this.text});
-  final String id;
-  final String text;
-}
-
 class RouteInfo {
   const RouteInfo({required this.points, required this.etaSeconds, required this.distanceMeters, this.estimate = false});
   final List<({double lat, double lng})> points;

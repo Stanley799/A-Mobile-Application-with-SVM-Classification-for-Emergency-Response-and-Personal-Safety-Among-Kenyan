@@ -20,8 +20,7 @@ from dispatch import admin_accounts as acct, config as C, core, notify, store
 
 from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
 from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
-from phase4d_functions import responder_sos, admin_resolve_sos, reveal_contact, send_checkin, request_more_units  # noqa: F401,E402  (Phase 4D)
-from phase4d_staff import admin_list_dispatchers, admin_review_dispatcher  # noqa: F401,E402  (Phase 4D dispatcher approvals)
+from phase4d_functions import responder_sos, admin_resolve_sos, reveal_contact  # noqa: F401,E402  (Phase 4D)
 import phase4d_core as p4
 initialize_app()
 OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
@@ -72,64 +71,6 @@ def _record_incident_events(db, iid, old, new, now):
         p4.close_metrics(db, iid, new, now)
 
 
-def _event_for_status(status, reason):
-    """(event type, who) for an offer that moved. Withdrawals caused by the server are system events."""
-    if status == "accepted":
-        return "offer_accepted", "responder"
-    if status == "declined":
-        return "offer_declined", "responder"
-    if status == "expired":
-        return "offer_expired", "system"
-    if status == "enroute":
-        return "unit_en_route", "responder"
-    if status == "arrived":
-        return "unit_arrived", "responder"
-    if status == "withdrawn":
-        server = ("incident_cancelled", "incident_resolved", "another_unit_accepted", "role_already_filled")
-        return "offer_withdrawn", "system" if reason in server else "responder"
-    return None, None
-
-
-def _stamp_offer_times(db, offer_id, new):
-    """The phone keeps only the latest response time; stamp each status once so the completion summary has real timings."""
-    status = new.get("status")
-    if status not in ("accepted", "enroute", "arrived", "completed"):
-        return
-    if status in (new.get("offerTimes") or {}):
-        return
-    db.collection("offers").document(offer_id).update({f"offerTimes.{status}": firestore.SERVER_TIMESTAMP})
-
-
-def _record_offer_events(db, offer_id, new, old):
-    iid = new.get("incidentId")
-    if not iid:
-        return
-    if old is None:
-        p4.write_event(db, iid, "offer_sent", "system", "system",
-                       {"role": new.get("role"), "wave": new.get("wave")}, f"offer_sent_{offer_id}")
-        return
-    _stamp_offer_times(db, offer_id, new)
-    rid = new.get("responderId")
-    if old.get("seenAt") is None and new.get("seenAt") is not None:
-        p4.write_event(db, iid, "offer_seen", "responder", rid, {}, f"offer_seen_{offer_id}")
-    if old.get("moreUnits") is None and isinstance(new.get("moreUnits"), dict):
-        mu = new["moreUnits"]
-        p4.write_event(db, iid, "extra_resources_requested", "responder", rid,
-                       {"role": mu.get("role"), "count": mu.get("count")}, f"extra_resources_requested_{offer_id}")
-        p4.raise_attention(db, iid, "extra_resources")
-    t_old, t_new = old.get("transport"), new.get("transport")
-    if t_old is None and isinstance(t_new, dict):
-        p4.write_event(db, iid, "transport_started", "responder", rid,
-                       {"destinationId": t_new.get("destinationId")}, f"transport_started_{offer_id}")
-    elif isinstance(t_new, dict) and (t_old or {}).get("arrivedAt") is None and t_new.get("arrivedAt") is not None:
-        p4.write_event(db, iid, "transport_arrived", "responder", rid, {}, f"transport_arrived_{offer_id}")
-    if old.get("status") != new.get("status"):
-        etype, who = _event_for_status(new.get("status"), new.get("withdrawReason"))
-        if etype:
-            p4.write_event(db, iid, etype, who, rid if who == "responder" else "system",
-                           {"role": new.get("role")}, f"{etype}_{offer_id}")
-
-
 def _share_caller_feedback(db, iid, old, new):
     """The unit that closed the job hears 'safe / still needs help', never who said it."""
     fb = new.get("residentFeedback")
@@ -169,7 +110,7 @@ def on_offer_written(event: firestore_fn.Event[firestore_fn.Change]):
     before = event.data.before
     new = after.to_dict()
     old = before.to_dict() if before is not None and before.exists else None
-    _quiet(lambda: _record_offer_events(db(), after.id, new, old), f"offer {after.id}")
+    _quiet(lambda: p4.record_offer_events(db(), after.id, new, old), f"offer {after.id}")
     if old is None:
         return                                               # a new offer: the push was sent when it was created
     if old.get("status") == new.get("status"):
@@ -183,49 +124,16 @@ def sweep_dispatch(event: scheduler_fn.ScheduledEvent) -> None:
     _quiet(lambda: p4.sweep_attention(db(), time.time()), "attention sweep")
 
 
-@firestore_fn.on_document_created(document="incidents/{incidentId}/messages/{messageId}", **OPTS)
-def on_message_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]):
-    """A message from dispatch is part of the record. Responder messages are already on the offer trail."""
-    d = event.data.to_dict() or {}
-    if d.get("senderRole") != "admin":
-        return
-    iid, mid = event.params["incidentId"], event.params["messageId"]
-    _quiet(lambda: p4.write_event(db(), iid, "admin_message_sent", "admin", d.get("senderUid") or "system", {}, f"admin_message_sent_{mid}"), f"message {mid}")
-
-
-@firestore_fn.on_document_written(document="incidents/{incidentId}/checkins/{checkinId}", **OPTS)
-def on_checkin_written(event: firestore_fn.Event[firestore_fn.Change]):
-    after = event.data.after
-    if after is None or not after.exists:
-        return
-    new = after.to_dict() or {}
-    before = event.data.before
-    old = before.to_dict() if before is not None and before.exists else None
-    if new.get("reply") is None or (old is not None and old.get("reply") == new.get("reply")):
-        return
-    iid, cid = event.params["incidentId"], event.params["checkinId"]
-    snap = db().collection("incidents").document(iid).get()
-    uid = (snap.to_dict() or {}).get("userId") if snap.exists else None
-    _quiet(lambda: p4.write_event(db(), iid, "checkin_replied", "resident", uid or "resident", {"reply": new.get("reply")}, f"checkin_replied_{cid}"), f"checkin {cid}")
-
-
 def _require_admin(req):
     if req.auth is None or (req.auth.token or {}).get("role") != "SystemAdmin":
         raise https_fn.HttpsError(https_fn.FunctionsErrorCode.PERMISSION_DENIED, "Administrators only.")
 
 
-def _require_staff(req):
-    """Administrator or dispatcher. Returns the event actor role ('admin' or 'dispatcher')."""
-    role = (req.auth.token or {}).get("role") if req.auth is not None else None
-    if role not in ("SystemAdmin", "Dispatcher"):
-        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.PERMISSION_DENIED, "Dispatchers and administrators only.")
-    return "admin" if role == "SystemAdmin" else "dispatcher"
-
-
 @https_fn.on_call(**OPTS)
 def admin_assign_responder(req: https_fn.CallableRequest):
-    """Manually asks one responder to attend an incident (dispatcher or administrator). A reason is required."""
-    actor = _require_staff(req)
+    """Manually asks one responder to attend an incident (administrators only). A reason is required."""
+    _require_admin(req)
+    actor = "admin"
     d = req.data if isinstance(req.data, dict) else {}
     iid, rid = d.get("incidentId"), d.get("responderId")
     reason = str(d.get("reason") or "").strip()[:140]
@@ -266,8 +174,9 @@ def admin_assign_responder(req: https_fn.CallableRequest):
 
 @https_fn.on_call(**OPTS)
 def admin_close_incident(req: https_fn.CallableRequest):
-    """Dispatchers and administrators close an incident with a required outcome note."""
-    actor = _require_staff(req)
+    """Administrators close an incident with a required outcome note."""
+    _require_admin(req)
+    actor = "admin"
     d = req.data if isinstance(req.data, dict) else {}
     iid, note = d.get("incidentId"), str(d.get("note") or "").strip()[:280]
     if not isinstance(iid, str):

@@ -1,7 +1,5 @@
-// The incident panel shared by the dispatcher and the administrator: Overview, Candidates, Timeline,
-// Messages, Caller check-in and Actions. The same widget is used read-only from the Incidents page.
-import 'dart:async';
-
+// The administrator's incident panel: Overview, Candidates, Timeline and Actions.
+// The same widget is used read-only from the Incidents page.
 import 'package:flutter/material.dart';
 
 import '../../core/models/dispatch_models.dart';
@@ -11,7 +9,7 @@ import 'ops_repository.dart';
 import 'ops_tokens.dart';
 import 'ops_widgets.dart';
 
-enum OpsPanelTab { overview, candidates, timeline, messages, checkin, actions }
+enum OpsPanelTab { overview, engine, timeline, actions }
 
 const Map<String, String> _eventWords = {
   'incident_created': 'Alert created',
@@ -28,11 +26,8 @@ const Map<String, String> _eventWords = {
   'transport_started': 'Transport started',
   'transport_arrived': 'Arrived at facility',
   'extra_resources_requested': 'Extra units requested',
-  'admin_assigned': 'Dispatcher assigned a unit',
+  'admin_assigned': 'Administrator assigned a unit',
   'admin_revealed_contact': 'Contact revealed',
-  'admin_message_sent': 'Message sent',
-  'checkin_sent': 'Check-in sent to caller',
-  'checkin_replied': 'Caller answered a check-in',
   'attention_raised': 'Flagged for attention',
   'responder_sos': 'Responder SOS',
   'incident_cancelled': 'Caller cancelled',
@@ -50,7 +45,6 @@ class OpsIncidentPanel extends StatefulWidget {
     required this.offers,
     required this.readOnly,
     this.initialTab = OpsPanelTab.overview,
-    this.messageFocusToken = 0,
     this.onClose,
   });
 
@@ -60,7 +54,6 @@ class OpsIncidentPanel extends StatefulWidget {
   final List<Offer> offers;
   final bool readOnly;
   final OpsPanelTab initialTab;
-  final int messageFocusToken;
   final VoidCallback? onClose;
 
   @override
@@ -69,43 +62,33 @@ class OpsIncidentPanel extends StatefulWidget {
 
 class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerProviderStateMixin {
   late final TabController _tabs;
-  final _message = TextEditingController();
-  final _messageFocus = FocusNode();
 
   late Stream<IncidentRecord?> _incident;
   late Stream<List<OpsEvent>> _events;
-  late Stream<List<OpsMessage>> _messages;
-  late Stream<List<OpsCheckin>> _checkins;
 
   String? _street;
   String? _streetFor;
   ({String firstName, String phone})? _contact;
   bool _revealBusy = false;
-  bool _sendBusy = false;
 
   static int _indexOf(OpsPanelTab t) => switch (t) {
     OpsPanelTab.overview => 0,
-    OpsPanelTab.candidates => 1,
+    OpsPanelTab.engine => 1,
     OpsPanelTab.timeline => 2,
-    OpsPanelTab.messages => 3,
-    OpsPanelTab.checkin => 4,
-    OpsPanelTab.actions => 5,
+    OpsPanelTab.actions => 3,
   };
 
   @override
   void initState() {
     super.initState();
-    final count = widget.readOnly ? 5 : 6;
+    final count = widget.readOnly ? 3 : 4;
     _tabs = TabController(length: count, initialIndex: _indexOf(widget.initialTab).clamp(0, count - 1), vsync: this);
     _bind(widget.incidentId);
-    if (widget.initialTab == OpsPanelTab.messages) WidgetsBinding.instance.addPostFrameCallback((_) => _focusMessage());
   }
 
   void _bind(String id) {
     _incident = widget.repo.watchIncident(id);
     _events = widget.repo.watchEvents(id);
-    _messages = widget.repo.watchMessages(id);
-    _checkins = widget.repo.watchCheckins(id);
   }
 
   @override
@@ -116,26 +99,13 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
       _street = null;
       _streetFor = null;
       _contact = null;
-      _message.clear();
       _tabs.index = _indexOf(widget.initialTab).clamp(0, _tabs.length - 1);
     }
-    if (old.messageFocusToken != widget.messageFocusToken) {
-      _tabs.index = _indexOf(OpsPanelTab.messages).clamp(0, _tabs.length - 1);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _focusMessage());
-    }
-  }
-
-  void _focusMessage() {
-    if (!mounted || widget.readOnly) return;
-    _tabs.animateTo(_indexOf(OpsPanelTab.messages).clamp(0, _tabs.length - 1));
-    _messageFocus.requestFocus();
   }
 
   @override
   void dispose() {
     _tabs.dispose();
-    _message.dispose();
-    _messageFocus.dispose();
     super.dispose();
   }
 
@@ -189,10 +159,8 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
                 dividerColor: OT.line,
                 tabs: [
                   const Tab(text: 'Overview'),
-                  const Tab(text: 'Candidates'),
+                  const Tab(text: 'Engine'),
                   const Tab(text: 'Timeline'),
-                  const Tab(text: 'Messages'),
-                  const Tab(text: 'Caller check-in'),
                   if (!widget.readOnly) const Tab(text: 'Actions'),
                 ],
               ),
@@ -201,10 +169,8 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
                   controller: _tabs,
                   children: [
                     _overview(inc),
-                    _candidates(inc),
+                    _engine(inc),
                     _timeline(inc),
-                    _messagesTab(inc),
-                    _checkinTab(inc),
                     if (!widget.readOnly) _actions(inc),
                   ],
                 ),
@@ -323,9 +289,70 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
     return [const OpsTag('Not yet', bg: Color(0xFF2A2020), fg: Color(0xFFFFB8B0))];
   }
 
-  // ----------------------------------------------------------------- Candidates
-  Widget _candidates(IncidentRecord inc) {
-    if (!inc.isOpen) return const EmptyState(icon: Icons.lock_outline, title: 'This incident is closed', message: 'Candidates are only listed while an incident is open.');
+  // ----------------------------------------------------------------- Engine
+  Widget _engine(IncidentRecord inc) {
+    final required = requiredRolesFor(category: inc.category, subtype: inc.subtype, answers: inc.answers);
+    final roles = required.isEmpty ? const ['any_responder'] : required;
+    final mine = [for (final o in widget.offers) if (o.incidentId == inc.id) o];
+    return ListView(padding: const EdgeInsets.all(OT.pad), children: [
+      const _SubTitle('Offers sent'),
+      for (final role in roles) _roleOffers(role, offersForRole(mine, inc.id, role)),
+      const SizedBox(height: 10),
+      const _SubTitle('Ranked candidates (read-only)'),
+      ..._candidateSection(inc),
+    ]);
+  }
+
+  Widget _roleOffers(String role, List<Offer> list) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text(roleLabel(role), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: OT.text))),
+        OpsTag('${list.length} sent', bg: OT.raised, fg: OT.muted),
+      ]),
+      const SizedBox(height: 6),
+      if (list.isEmpty)
+        const Text('No offer has been sent for this role yet.', style: TextStyle(fontSize: 12, color: OT.muted))
+      else
+        for (final o in list) _offerRow(o),
+    ]),
+  );
+
+  Widget _offerRow(Offer o) {
+    final org = _orgName(o.responderId);
+    final reason = offerReasonWord(o);
+    final answer = offerAnswerWord(o);
+    final declined = const ['declined', 'expired', 'withdrawn'].contains(o.status);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: OT.raised, borderRadius: BorderRadius.circular(10), border: Border.all(color: OT.line)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Text(org, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: OT.text))),
+          OpsTag(answer, bg: declined ? const Color(0xFF3A2020) : OT.raised, fg: declined ? const Color(0xFFFFB8B0) : OT.soft),
+        ]),
+        const SizedBox(height: 3),
+        Text(
+          'Wave ${o.wave} · sent ${_offerWhen(o.createdAt)} · seen ${o.seenAt == null ? 'not yet' : _offerWhen(o.seenAt)}',
+          style: const TextStyle(fontSize: 11.5, color: OT.muted),
+        ),
+        if (reason.isNotEmpty) Text('Reason: $reason', style: const TextStyle(fontSize: 11.5, color: OT.muted)),
+      ]),
+    );
+  }
+
+  String _orgName(String responderId) {
+    for (final r in widget.responders) {
+      if (r.id == responderId) return r.organizationName;
+    }
+    return 'Unit $responderId';
+  }
+
+  String _offerWhen(DateTime? t) => t == null ? 'unknown' : _clock(t);
+
+  List<Widget> _candidateSection(IncidentRecord inc) {
+    if (!inc.isOpen) return const [EmptyState(icon: Icons.lock_outline, title: 'This incident is closed', message: 'Candidates are only listed while an incident is open.')];
     final required = requiredRolesFor(category: inc.category, subtype: inc.subtype, answers: inc.answers);
     final asked = {for (final o in widget.offers) o.responderId};
     final filled = filledRoleCount(required, inc.units);
@@ -338,11 +365,11 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
         if (!heldRoles.contains(r) && !heldRoles.contains('any_responder')) unfilled.add(r);
       }
     }
-    if (unfilled.isEmpty) return const EmptyState(icon: Icons.check_circle_outline, title: 'Every role is filled', message: 'No manual assignment is needed.');
-    return ListView(padding: const EdgeInsets.all(OT.pad), children: [
+    if (unfilled.isEmpty) return const [EmptyState(icon: Icons.check_circle_outline, title: 'Every role is filled', message: 'No manual assignment is needed.')];
+    return [
       for (final role in unfilled) ...[
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(bottom: 8, top: 6),
           child: Row(children: [
             Expanded(child: Text(roleLabel(role), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: OT.text))),
             const OpsTag('Unfilled', bg: Color(0xFF3A2020), fg: Color(0xFFFFB8B0)),
@@ -375,14 +402,14 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
                     ]),
                   ),
                   const SizedBox(width: 8),
-                  if (!widget.readOnly) FilledButton(onPressed: () => _assign(inc, c, role), child: const Text('Assign')),
+                  if (!widget.readOnly)
+                    OutlinedButton(onPressed: () => _assign(inc, c, role), child: const Text('Override: assign this unit')),
                 ]),
               ),
           ];
         })(),
-        const SizedBox(height: 8),
       ],
-    ]);
+    ];
   }
 
   String _reliability(String responderId) {
@@ -480,152 +507,12 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
     },
   );
 
-  // ----------------------------------------------------------------- Messages
-  Widget _messagesTab(IncidentRecord inc) => Column(children: [
-    const Padding(
-      padding: EdgeInsets.fromLTRB(OT.pad, 10, OT.pad, 4),
-      child: Align(alignment: Alignment.centerLeft, child: Text('Responders only · the caller cannot see this thread', style: TextStyle(fontSize: 11.5, color: OT.muted))),
-    ),
-    Expanded(
-      child: StreamBuilder<List<OpsMessage>>(
-        stream: _messages,
-        builder: (context, s) {
-          if (s.hasError) return ErrorState(message: 'Could not load messages.', onRetry: () => setState(() => _bind(widget.incidentId)));
-          if (!s.hasData) return const Center(child: CircularProgressIndicator());
-          final list = s.data ?? const <OpsMessage>[];
-          if (list.isEmpty) return const EmptyState(icon: Icons.forum_outlined, title: 'No messages yet', message: 'Use a quick message or type below.');
-          return ListView.builder(
-            reverse: true,
-            padding: const EdgeInsets.all(OT.pad),
-            itemCount: list.length,
-            itemBuilder: (_, k) {
-              final m = list[list.length - 1 - k];
-              final mine = m.senderRole == 'admin';
-              return Align(
-                alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  constraints: const BoxConstraints(maxWidth: 300),
-                  decoration: BoxDecoration(color: mine ? const Color(0xFF153A36) : OT.raised, borderRadius: BorderRadius.circular(10)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(m.text, style: const TextStyle(fontSize: 13, color: OT.text)),
-                    const SizedBox(height: 2),
-                    Text(mine ? 'Dispatch · ${_clock(m.at)}' : 'Unit · ${_clock(m.at)}', style: const TextStyle(fontSize: 10, color: OT.muted)),
-                  ]),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    ),
-    if (!widget.readOnly && inc.isOpen) ...[
-      SizedBox(
-        height: 34,
-        child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: OT.pad), children: [
-          for (final q in const ['On our way', 'Send your location', 'Stand by'])
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ActionChip(label: Text(q, style: const TextStyle(fontSize: 12)), onPressed: _sendBusy ? null : () => _send(inc, q)),
-            ),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.all(OT.pad),
-        child: Row(children: [
-          Expanded(child: TextField(controller: _message, focusNode: _messageFocus, maxLength: 500, minLines: 1, maxLines: 3, decoration: const InputDecoration(hintText: 'Message the units on this job', border: OutlineInputBorder(), counterText: ''))),
-          const SizedBox(width: 8),
-          IconButton.filled(onPressed: _sendBusy ? null : () => _send(inc, _message.text), icon: const Icon(Icons.send)),
-        ]),
-      ),
-    ] else if (!inc.isOpen)
-      const Padding(padding: EdgeInsets.all(OT.pad), child: Text('This incident is closed. The thread is read-only.', style: TextStyle(fontSize: 12, color: OT.muted))),
-  ]);
-
-  Future<void> _send(IncidentRecord inc, String text) async {
-    final t = text.trim();
-    if (t.isEmpty || _sendBusy) return;
-    setState(() => _sendBusy = true);
-    try {
-      await widget.repo.sendMessage(inc.id, t);
-      _message.clear();
-    } catch (e) {
-      _toast('Could not send: $e');
-    } finally {
-      if (mounted) setState(() => _sendBusy = false);
-    }
-  }
-
-  // ----------------------------------------------------------------- Caller check-in
-  Widget _checkinTab(IncidentRecord inc) => StreamBuilder<List<OpsCheckin>>(
-    stream: _checkins,
-    builder: (context, s) {
-      if (s.hasError) return ErrorState(message: 'Could not load check-ins.', onRetry: () => setState(() => _bind(widget.incidentId)));
-      if (!s.hasData) return const Center(child: CircularProgressIndicator());
-      final list = s.data ?? const <OpsCheckin>[];
-      final latest = <String, OpsCheckin>{};
-      for (final c in list) {
-        latest.putIfAbsent(c.template, () => c);
-      }
-      return ListView(padding: const EdgeInsets.all(OT.pad), children: [
-        if (!inc.isOpen)
-          const Padding(padding: EdgeInsets.only(bottom: 10), child: Text('The incident is closed: check-ins cannot be sent.', style: TextStyle(fontSize: 12, color: OT.muted))),
-        for (final e in kCheckinTemplates.entries)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: OT.raised, borderRadius: BorderRadius.circular(10), border: Border.all(color: OT.line)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(e.value, style: const TextStyle(fontSize: 13, color: OT.text)),
-              const SizedBox(height: 6),
-              Row(children: [
-                if (latest[e.key] != null)
-                  OpsTag(
-                    latest[e.key]!.reply == null
-                        ? 'Sent ${_ago(latest[e.key]!.sentAt)} · waiting'
-                        : 'Answered ${_replyWord(latest[e.key]!.reply!)} ${_ago(latest[e.key]!.repliedAt)}',
-                    bg: latest[e.key]!.reply == null ? OT.panel : const Color(0xFF15352F),
-                    fg: latest[e.key]!.reply == null ? OT.muted : const Color(0xFF8FE8D8),
-                  ),
-                const Spacer(),
-                TextButton(
-                  onPressed: widget.readOnly || !inc.isOpen || _sendBusy ? null : () => _sendCheckin(inc, e.key),
-                  child: Text(latest[e.key] == null ? 'Send' : 'Send again'),
-                ),
-              ]),
-            ]),
-          ),
-      ]);
-    },
-  );
-
-  Future<void> _sendCheckin(IncidentRecord inc, String template) async {
-    setState(() => _sendBusy = true);
-    try {
-      await widget.repo.sendCheckin(inc.id, template);
-      _toast('Check-in sent to the caller.');
-    } catch (e) {
-      _toast('Could not send: $e');
-    } finally {
-      if (mounted) setState(() => _sendBusy = false);
-    }
-  }
-
   // ----------------------------------------------------------------- Actions
   Widget _actions(IncidentRecord inc) => ListView(padding: const EdgeInsets.all(OT.pad), children: [
     if (!inc.isOpen) ...[
       const EmptyState(icon: Icons.check_circle_outline, title: 'Closed', message: 'No action is possible on a closed incident.'),
       const SizedBox(height: 10),
     ],
-    OpsPanel(
-      title: 'Request more units',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Records the request on the timeline and flags the incident. The planning engine is not changed.', style: TextStyle(fontSize: 12, color: OT.muted)),
-        const SizedBox(height: 10),
-        _MoreUnitsButton(repo: widget.repo, incident: inc, enabled: inc.isOpen, toast: _toast),
-      ]),
-    ),
     const SizedBox(height: 10),
     OpsPanel(
       title: 'Close incident',
@@ -688,54 +575,6 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
   }
 }
 
-class _MoreUnitsButton extends StatefulWidget {
-  const _MoreUnitsButton({required this.repo, required this.incident, required this.enabled, required this.toast});
-  final OpsRepository repo;
-  final IncidentRecord incident;
-  final bool enabled;
-  final void Function(String) toast;
-
-  @override
-  State<_MoreUnitsButton> createState() => _MoreUnitsButtonState();
-}
-
-class _MoreUnitsButtonState extends State<_MoreUnitsButton> {
-  String _role = 'medical_transport';
-  bool _busy = false;
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-    Expanded(
-      child: DropdownButtonFormField<String>(
-        initialValue: _role,
-        decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-        items: [
-          for (final r in kRoleLabels.keys)
-            if (r != 'any_responder') DropdownMenuItem(value: r, child: Text(roleLabel(r), overflow: TextOverflow.ellipsis)),
-        ],
-        onChanged: (v) => setState(() => _role = v ?? _role),
-      ),
-    ),
-    const SizedBox(width: 8),
-    FilledButton(
-      onPressed: !widget.enabled || _busy ? null : _request,
-      child: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Request'),
-    ),
-  ]);
-
-  Future<void> _request() async {
-    setState(() => _busy = true);
-    try {
-      final candidates = await widget.repo.requestMoreUnits(widget.incident.id, _role, 'Dispatcher request');
-      widget.toast(candidates.isEmpty ? 'Recorded. No available unit with that ability was found.' : 'Recorded. ${candidates.length} candidate unit(s) found.');
-    } catch (e) {
-      widget.toast('Could not request: $e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-}
-
 class _SubTitle extends StatelessWidget {
   const _SubTitle(this.text);
   final String text;
@@ -754,8 +593,6 @@ Widget _kv(String k, String v) => Padding(
   ]),
 );
 
-String _replyWord(String r) => switch (r) { 'yes' => 'Yes', 'no' => 'No', _ => 'Not sure' };
-
 String _seconds(int s) => s < 60 ? '$s s' : '${s ~/ 60} m ${s % 60} s';
 
 String _elapsed(DateTime? created) {
@@ -766,11 +603,3 @@ String _elapsed(DateTime? created) {
 String _stamp(DateTime t) => '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')} ${_clock(t)}';
 
 String _clock(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
-String _ago(DateTime? t) {
-  if (t == null) return '';
-  final d = DateTime.now().difference(t);
-  if (d.inSeconds < 60) return '${d.inSeconds}s ago';
-  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
-  return '${d.inHours} h ago';
-}

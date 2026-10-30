@@ -2,11 +2,9 @@
   events      : an append-only per-incident record (who did what, when) written only by Cloud Functions
   attention   : an incident that has waited too long, needs more units or raised an SOS is flagged for a human
   metrics     : the response-time numbers of one incident, written once when it closes
-  check-ins   : fixed questions a dispatcher may send to the caller
 Planning (dispatch/core.py, dispatch/options.py) is NOT touched here.
 """
 import datetime as dt
-import math
 import time
 
 from google.api_core.exceptions import AlreadyExists
@@ -21,27 +19,18 @@ ATTENTION_SECONDS = {"High": 60, "Medium": 120, "Low": 300}
 # Reasons a human has to look. "none" means nothing is wrong.
 ATTENTION_REASONS = ("no_accept_in_time", "extra_resources", "responder_sos", "low_accuracy", "none")
 
-LOW_ACCURACY_M = 150          # above this the resident is asked for a landmark and the dispatcher sees it
+LOW_ACCURACY_M = 150          # above this the resident is asked for a landmark and the administrator sees it
 SOS_COOLDOWN_SECONDS = 60
-
-# Fixed on the server so nobody can type free medical advice to a caller.
-CHECKIN_TEMPLATES = {
-    "can_you_talk": "Can you talk safely right now?",
-    "person_breathing": "Is the person breathing normally?",
-    "still_in_danger": "Are you still in danger?",
-    "location_ok": "Is the street shown on your screen correct?",
-    "stay_put": "Stay where you are. Help is being arranged. Tap OK.",
-}
 
 EVENT_TYPES = (
     "incident_created", "classified", "priority_set", "offer_sent", "offer_seen", "offer_accepted",
     "offer_declined", "offer_expired", "offer_withdrawn", "unit_en_route", "unit_arrived",
     "transport_started", "transport_arrived", "extra_resources_requested", "admin_assigned",
-    "admin_revealed_contact", "admin_message_sent", "checkin_sent", "checkin_replied", "attention_raised",
+    "admin_revealed_contact", "attention_raised",
     "responder_sos", "incident_cancelled", "incident_closed",
 )
 
-ACTOR_ROLES = ("system", "resident", "responder", "admin", "dispatcher")
+ACTOR_ROLES = ("system", "resident", "responder", "admin")
 OPEN_STATUSES = ("Active", "SupportOnly")
 HELD = ("accepted", "enroute", "arrived", "completed")
 
@@ -176,6 +165,67 @@ def raise_attention(db, incident_id, reason, detail=None):
     return True
 
 
+def event_for_status(status, reason):
+    """(event type, who) for an offer that moved. Withdrawals caused by the server are system events."""
+    if status == "accepted":
+        return "offer_accepted", "responder"
+    if status == "declined":
+        return "offer_declined", "responder"
+    if status == "expired":
+        return "offer_expired", "system"
+    if status == "enroute":
+        return "unit_en_route", "responder"
+    if status == "arrived":
+        return "unit_arrived", "responder"
+    if status == "withdrawn":
+        server = ("incident_cancelled", "incident_resolved", "another_unit_accepted", "role_already_filled")
+        return "offer_withdrawn", "system" if reason in server else "responder"
+    return None, None
+
+
+def stamp_offer_times(db, offer_id, new):
+    """The phone keeps only the latest response time; stamp each status once so the completion summary has real timings."""
+    status = new.get("status")
+    if status not in ("accepted", "enroute", "arrived", "completed"):
+        return
+    if status in (new.get("offerTimes") or {}):
+        return
+    db.collection("offers").document(offer_id).update({f"offerTimes.{status}": SERVER_TIMESTAMP})
+
+
+def record_offer_events(db, offer_id, new, old):
+    """Events for one offer change. Deterministic ids: a retried trigger cannot duplicate an event."""
+    iid = new.get("incidentId")
+    if not iid:
+        return
+    if old is None:
+        write_event(db, iid, "offer_sent", "system", "system",
+                    {"role": new.get("role"), "wave": new.get("wave")}, f"offer_sent_{offer_id}")
+        return
+    stamp_offer_times(db, offer_id, new)
+    rid = new.get("responderId")
+    if old.get("seenAt") is None and new.get("seenAt") is not None:
+        write_event(db, iid, "offer_seen", "responder", rid, {}, f"offer_seen_{offer_id}")
+    if old.get("moreUnits") is None and isinstance(new.get("moreUnits"), dict):
+        mu = new["moreUnits"]
+        write_event(db, iid, "extra_resources_requested", "responder", rid,
+                    {"role": mu.get("role"), "count": mu.get("count")}, f"extra_resources_requested_{offer_id}")
+        # The planner derives roles from triage only. Without a planner change the request cannot add a
+        # role, so the incident is flagged for an administrator instead (see the Phase 4D fix report).
+        raise_attention(db, iid, "extra_resources")
+    t_old, t_new = old.get("transport"), new.get("transport")
+    if t_old is None and isinstance(t_new, dict):
+        write_event(db, iid, "transport_started", "responder", rid,
+                    {"destinationId": t_new.get("destinationId")}, f"transport_started_{offer_id}")
+    elif isinstance(t_new, dict) and (t_old or {}).get("arrivedAt") is None and t_new.get("arrivedAt") is not None:
+        write_event(db, iid, "transport_arrived", "responder", rid, {}, f"transport_arrived_{offer_id}")
+    if old.get("status") != new.get("status"):
+        etype, who = event_for_status(new.get("status"), new.get("withdrawReason"))
+        if etype:
+            write_event(db, iid, etype, who, rid if who == "responder" else "system",
+                        {"role": new.get("role")}, f"{etype}_{offer_id}")
+
+
 def sweep_attention(db, now):
     """Called from sweep_dispatch. Raises the SLA flag and clears it once a unit holds the incident.
     Another reason (extra units, SOS) is only cleared when that reason is resolved."""
@@ -192,17 +242,15 @@ def sweep_attention(db, now):
     return changed
 
 
-# ------------------------------------------------------------------ staff actions (the callables wrap these)
+# ------------------------------------------------------------------ administrator actions (the callables wrap these)
 
-def staff_role(token):
-    """('admin'|'dispatcher', uid) or Phase4DError. Administrators and dispatchers only."""
+def admin_role(token):
+    """('admin', uid) or Phase4DError. Administrators only."""
     role = (token or {}).get("role")
     uid = (token or {}).get("uid") or (token or {}).get("user_id")
     if role == "SystemAdmin":
         return "admin", uid
-    if role == "Dispatcher":
-        return "dispatcher", uid
-    raise Phase4DError("permission-denied", "Dispatchers and administrators only.")
+    raise Phase4DError("permission-denied", "Administrators only.")
 
 
 def _open_incident(db, incident_id):
@@ -222,7 +270,7 @@ def _str(value, name, limit=128):
 
 
 def sos_create(db, uid, incident_id, now):
-    """A responder asks for immediate help. One per 60 s. Dispatchers see it first."""
+    """A responder asks for immediate help. One per 60 s. Administrators see it."""
     rs = db.collection("responders").document(uid or "").get()
     if not rs.exists or (rs.to_dict() or {}).get("verificationStatus") != "Verified":
         raise Phase4DError("permission-denied", "Only a verified responder can raise an SOS.")
@@ -244,7 +292,7 @@ def sos_create(db, uid, incident_id, now):
 
 
 def resolve_sos(db, token, sos_id, note, now):
-    role, uid = staff_role(token)
+    role, uid = admin_role(token)
     note = (note or "")[:200]
     ref = db.collection("sos_alerts").document(_str(sos_id, "sosId"))
     snap = ref.get()
@@ -273,8 +321,8 @@ def snapshot_contact(db, incident_id, incident):
 
 
 def reveal_contact(db, token, incident_id):
-    """Staff only. Returns the caller's first name and phone, and records who looked."""
-    role, uid = staff_role(token)
+    """Administrators only. Returns the caller's first name and phone, and records who looked."""
+    role, uid = admin_role(token)
     doc = _open_incident_or_recent(db, incident_id)
     contact = db.collection("incidents").document(incident_id).collection("private").document("contact").get()
     c = (contact.to_dict() or {}) if contact.exists else {}
@@ -294,57 +342,3 @@ def _open_incident_or_recent(db, incident_id):
     return snap.to_dict() or {}
 
 
-def send_checkin(db, token, incident_id, template, now):
-    role, uid = staff_role(token)
-    if template not in CHECKIN_TEMPLATES:
-        raise Phase4DError("invalid-argument", "Unknown check-in question.")
-    _open_incident(db, incident_id)
-    ref = db.collection("incidents").document(incident_id).collection("checkins").document(f"checkin_{int(now * 1000)}")
-    ref.create({"template": template, "text": CHECKIN_TEMPLATES[template], "sentAt": SERVER_TIMESTAMP,
-                "reply": None, "repliedAt": None})
-    write_event(db, incident_id, "checkin_sent", role, uid, {"template": template}, f"checkin_sent_{ref.id}")
-    return ref.id
-
-
-def _caps(r):
-    caps = r.get("capabilities")
-    if isinstance(caps, list) and caps:
-        return [c for c in caps if c in C.ALL_CAPABILITIES]
-    return list(C.CAPS_BY_TYPE.get(r.get("organizationType"), []))
-
-
-def _km(a, b, c, d):
-    r = 6371.0
-    p1, p2 = math.radians(a), math.radians(c)
-    dp, dl = math.radians(c - a), math.radians(d - b)
-    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return round(2 * r * math.asin(math.sqrt(h)), 2)
-
-
-def request_more_units(db, token, incident_id, role, reason):
-    """A unit or a dispatcher asks for another unit of a role. This records the request and returns the
-    ranked candidates; the dispatcher sends the offer with one tap (admin_assign_responder), which is the
-    human check required by the design. The planner is not changed."""
-    staff, uid = staff_role(token)
-    if role not in C.ALL_CAPABILITIES:
-        raise Phase4DError("invalid-argument", "Unknown role.")
-    doc = _open_incident(db, incident_id)
-    write_event(db, incident_id, "extra_resources_requested", staff, uid,
-                {"role": role, "reason": (reason or "")[:60]}, f"extra_resources_requested_{role}_{uid}")
-    raise_attention(db, incident_id, "extra_resources")
-    lat, lng = _latlng(doc)
-    out = []
-    for s in db.collection("responders").where("verificationStatus", "==", "Verified").stream():
-        r = s.to_dict() or {}
-        if r.get("availabilityStatus") != "Available" or role not in _caps(r):
-            continue
-        rl, rg = r.get("currentLatitude"), r.get("currentLongitude")
-        dist = _km(lat, lng, rl, rg) if None not in (lat, lng, rl, rg) else None
-        out.append({"responderId": s.id, "name": r.get("organizationName") or s.id, "distanceKm": dist})
-    out.sort(key=lambda x: (x["distanceKm"] is None, x["distanceKm"] or 0, x["responderId"]))
-    return out[:5]
-
-
-def _latlng(doc):
-    loc = doc.get("location")
-    return getattr(loc, "latitude", None), getattr(loc, "longitude", None)

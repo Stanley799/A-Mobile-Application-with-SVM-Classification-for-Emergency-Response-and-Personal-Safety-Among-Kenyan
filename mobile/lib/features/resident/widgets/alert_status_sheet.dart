@@ -678,6 +678,30 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
 
 
 
+  Widget _buildStageContent() {
+    switch (_stage) {
+      case _Stage.chooseCategory:
+        return _buildChooseCategory();
+      case _Stage.chooseOtherType:
+        return _buildChooseOtherType();
+      case _Stage.safety:
+        return _buildSafetyQuestion();
+      case _Stage.describe:
+        return FreeTextStep(
+          key: const ValueKey('triage-description'),
+          suggestMode: true,
+          initialText: _typedText,
+          initialConsent: _textConsent,
+          canSkip: true,
+          onContinue: _onDescription,
+        );
+      case _Stage.quick:
+        return _buildQuickQuestions();
+      case _Stage.done:
+        return _buildDoneContent();
+    }
+  }
+
   Widget _buildChooseCategory() {
     if (_isFreeTextMode) {
       return FreeTextStep(

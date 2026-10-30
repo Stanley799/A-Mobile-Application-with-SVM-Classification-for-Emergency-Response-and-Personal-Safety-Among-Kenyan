@@ -25,7 +25,7 @@ class PermissionService {
       return;
     }
 
-    if (role == UserRole.resident || role == UserRole.dispatcher) {
+    if (role == UserRole.resident) {
       if (_hasRequestedResidentPermissions) {
         return;
       }

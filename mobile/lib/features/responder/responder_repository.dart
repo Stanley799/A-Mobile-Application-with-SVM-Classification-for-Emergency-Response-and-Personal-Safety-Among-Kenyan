@@ -148,27 +148,9 @@ class ResponderRepository {
       .doc(offerId)
       .update({'note': note, 'noteUpdatedAt': FieldValue.serverTimestamp()});
 
-  // ---- chat with dispatch ----
-
-  Stream<List<JobMessage>> watchMessages(String incidentId) => _db
-      .collection('incidents')
-      .doc(incidentId)
-      .collection('messages')
-      .orderBy('at')
-      .snapshots()
-      .map((q) => [for (final d in q.docs) JobMessage.fromMap(d.id, d.data())]);
-
-  Future<void> sendMessage(String incidentId, String text) =>
-      _db.collection('incidents').doc(incidentId).collection('messages').add({
-        'senderUid': uid,
-        'senderRole': 'responder',
-        'text': text,
-        'at': FieldValue.serverTimestamp(),
-      });
-
   // ---- SOS ----
 
-  /// Creates a server-side SOS alert visible to dispatchers and administrators right away.
+  /// Creates a server-side SOS alert visible to administrators right away.
   Future<void> sendSos({String? incidentId}) => _fn
       .httpsCallable('responder_sos')
       .call<dynamic>({'incidentId': ?incidentId});

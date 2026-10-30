@@ -1,4 +1,4 @@
-// After accepting: who to call, where to go, the three steps, transport, notes, chat and the completion summary.
+// After accepting: who to call, where to go, the three steps, transport, notes and the completion summary.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/dispatch_models.dart';
 import '../resident/status/location_confidence.dart' show accuracyShort;
 import 'incoming_alert_screen.dart' show openInMaps;
-import 'job_chat_screen.dart';
 import 'job_map_screen.dart';
 import 'more_units_sheet.dart';
 import 'responder_repository.dart';
@@ -30,10 +29,6 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
   bool _busy = false;
   bool _stoodDown = false;
   bool _wellbeingDismissed = false;
-  DateTime? _chatOpenedAt;
-  List<JobMessage> _messages = const [];
-  StreamSubscription<List<JobMessage>>? _messagesSub;
-  String _incidentId = '';
 
   final _notes = TextEditingController();
   final _notesFocus = FocusNode();
@@ -53,9 +48,6 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
 
   /// Runs from the one offer stream the screen already listens to.
   void _syncFromOffer(Offer o) {
-    if (o.incidentId.isNotEmpty && o.incidentId != _incidentId) {
-      _watchMessages(o.incidentId);
-    }
     if (!_notesLoaded) {
       _notesLoaded = true;
       _notes.text = o.note;
@@ -63,34 +55,11 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     }
   }
 
-  void _watchMessages(String incidentId) {
-    _incidentId = incidentId;
-    _messagesSub?.cancel();
-    _messagesSub = widget.repo.watchMessages(incidentId).listen(
-      (m) {
-        if (mounted) setState(() => _messages = m);
-      },
-      onError: (Object _) {},
-    );
-  }
-
   @override
   void dispose() {
-    _messagesSub?.cancel();
     _notesFocus.dispose();
     _notes.dispose();
     super.dispose();
-  }
-
-  int get _unread {
-    final since = _chatOpenedAt;
-    return _messages
-        .where(
-          (m) =>
-              m.fromDispatch &&
-              (since == null || (m.at != null && m.at!.isAfter(since))),
-        )
-        .length;
   }
 
   Future<void> _move(String status) async {
@@ -200,20 +169,6 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     if (yes == true) await _move('completed');
   }
 
-  Future<void> _openChat(Offer o) async {
-    setState(() => _chatOpenedAt = DateTime.now());
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => JobChatScreen(
-          incidentId: o.incidentId,
-          repo: widget.repo,
-          systemLine: _moreUnitsLine(o),
-        ),
-      ),
-    );
-    if (mounted) setState(() => _chatOpenedAt = DateTime.now());
-  }
-
   String? _moreUnitsLine(Offer o) {
     final mu = o.moreUnits;
     if (mu == null) return null;
@@ -222,7 +177,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
         ? ''
         : ' at ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
     final count = mu.count == 1 ? '1 unit' : '${mu.count} units';
-    return 'You asked dispatch for $count · ${moreUnitRoleLabel(mu.role)}$when. Dispatch has this request.';
+    return 'Requested: $count · ${moreUnitRoleLabel(mu.role)}$when. Dispatch has this request.';
   }
 
   Future<void> _openMoreUnits() async {
@@ -358,19 +313,6 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
             elevation: 0,
             title: const Text('Active job'),
             actions: [
-              if (o != null && o.isActiveJob)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: IconButton(
-                    tooltip: 'Chat with dispatch',
-                    onPressed: () => _openChat(o),
-                    icon: Badge(
-                      isLabelVisible: _unread > 0,
-                      smallSize: 9,
-                      child: const Icon(Icons.forum_outlined),
-                    ),
-                  ),
-                ),
               PopupMenuButton<String>(
                 tooltip: 'More actions',
                 onSelected: (value) {

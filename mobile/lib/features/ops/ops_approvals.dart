@@ -1,17 +1,15 @@
 // Approvals: responder verification (the screen the administrator already used, now with the abilities in
-// words and a last-seen value) and dispatcher registration decisions. Administrators only; the server
-// re-checks the administrator claim before it changes any account.
+// words and a last-seen value). Administrators only; the server re-checks the administrator claim before
+// it changes any account.
 import 'package:flutter/material.dart';
 
 import '../../core/models/dispatch_models.dart';
 import '../admin/admin_repository.dart';
-import 'ops_repository.dart';
 import 'ops_tokens.dart';
 import 'ops_widgets.dart';
 
 class OpsApprovals extends StatefulWidget {
-  const OpsApprovals({super.key, required this.repo, required this.responders});
-  final OpsRepository repo;
+  const OpsApprovals({super.key, required this.responders});
   final List<ResponderRecord> responders;
 
   @override
@@ -20,15 +18,7 @@ class OpsApprovals extends StatefulWidget {
 
 class _OpsApprovalsState extends State<OpsApprovals> {
   final _admin = AdminRepository();
-  int _tab = 0;
   String _filter = 'Pending';
-  Future<List<StaffApplication>>? _apps;
-
-  @override
-  void initState() {
-    super.initState();
-    _apps = widget.repo.listDispatchers();
-  }
 
   void _toast(String m) {
     if (!mounted) return;
@@ -37,22 +27,7 @@ class _OpsApprovalsState extends State<OpsApprovals> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(OT.pad, 12, OT.pad, 0),
-        child: Row(children: [
-          SegmentedButton<int>(
-            segments: const [ButtonSegment(value: 0, label: Text('Responders')), ButtonSegment(value: 1, label: Text('Dispatchers'))],
-            selected: {_tab},
-            onSelectionChanged: (s) => setState(() => _tab = s.first),
-          ),
-          const Spacer(),
-          if (_tab == 1)
-            IconButton(tooltip: 'Refresh', onPressed: () => setState(() => _apps = widget.repo.listDispatchers()), icon: const Icon(Icons.refresh, size: 19)),
-        ]),
-      ),
-      Expanded(child: _tab == 0 ? _responders() : _dispatchers()),
-    ]);
+    return _responders();
   }
 
   // ------------------------------------------------------------------ responders
@@ -174,101 +149,6 @@ class _OpsApprovalsState extends State<OpsApprovals> {
     }
   }
 
-  // ------------------------------------------------------------------ dispatchers
-  Widget _dispatchers() => FutureBuilder<List<StaffApplication>>(
-    future: _apps,
-    builder: (context, s) {
-      if (s.connectionState != ConnectionState.done) return const OpsSkeleton(rows: 4);
-      if (s.hasError) return ErrorState(message: 'Could not load dispatcher applications: ${s.error}', onRetry: () => setState(() => _apps = widget.repo.listDispatchers()));
-      final list = s.data ?? const <StaffApplication>[];
-      if (list.isEmpty) return const EmptyState(icon: Icons.badge_outlined, title: 'No dispatcher applications', message: 'People who register as a dispatcher appear here for a decision.');
-      return ListView(padding: const EdgeInsets.fromLTRB(OT.pad, 10, OT.pad, 20), children: [
-        for (final a in list) _dispatcherCard(a),
-      ]);
-    },
-  );
-
-  Widget _dispatcherCard(StaffApplication a) {
-    final (bg, fg) = switch (a.status) {
-      'approved' => (const Color(0xFF15352F), const Color(0xFF8FE8D8)),
-      'pending' => (const Color(0xFF33280F), const Color(0xFFFFCF7A)),
-      _ => (const Color(0xFF3A2020), const Color(0xFFFFB8B0)),
-    };
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: OT.panelDecoration(),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text(a.name.isEmpty ? a.email : a.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: OT.text))),
-          OpsTag(a.status, bg: bg, fg: fg),
-        ]),
-        const SizedBox(height: 3),
-        Text(a.email, style: const TextStyle(fontSize: 12, color: OT.muted)),
-        if (a.accountStatus.isNotEmpty) Text('Account: ${a.accountStatus}', style: const TextStyle(fontSize: 12, color: OT.soft)),
-        if (a.reason.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text('Reason: ${a.reason}', style: const TextStyle(fontSize: 12, color: OT.soft)),
-        ],
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          if (a.status != 'approved') FilledButton(onPressed: () => _reviewDispatcher(a, 'approved'), child: Text(a.status == 'pending' ? 'Approve' : 'Approve again')),
-          if (a.status == 'pending') OutlinedButton(onPressed: () => _reviewDispatcher(a, 'rejected'), child: const Text('Reject')),
-          if (a.status == 'approved') OutlinedButton(onPressed: () => _reviewDispatcher(a, 'suspended'), child: const Text('Suspend')),
-        ]),
-      ]),
-    );
-  }
-
-  Future<void> _reviewDispatcher(StaffApplication a, String action) async {
-    final reason = TextEditingController();
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: OT.panel,
-        title: Text('${_verb(action)} ${a.name.isEmpty ? a.email : a.name}?', style: const TextStyle(color: OT.text)),
-        content: SizedBox(
-          width: 420,
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              action == 'approved' ? 'The dispatcher claim is set and their other sessions are signed out.' : 'The dispatcher claim is removed and their sessions are signed out.',
-              style: const TextStyle(fontSize: 12.5, color: OT.muted),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: reason,
-              maxLength: 200,
-              maxLines: 2,
-              decoration: InputDecoration(labelText: action == 'approved' ? 'Note (optional)' : 'Reason (the applicant reads this)', border: const OutlineInputBorder()),
-            ),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (action != 'approved' && reason.text.trim().length < 3) {
-                ScaffoldMessenger.of(c).showSnackBar(const SnackBar(content: Text('Give a reason (at least 3 characters).')));
-                return;
-              }
-              Navigator.pop(c, true);
-            },
-            child: Text(_verb(action)),
-          ),
-        ],
-      ),
-    );
-    if (go != true) return;
-    try {
-      await widget.repo.reviewDispatcher(a.uid, action, reason: reason.text.trim().isEmpty ? null : reason.text.trim());
-      _toast('${a.name.isEmpty ? a.email : a.name}: $action');
-      setState(() => _apps = widget.repo.listDispatchers());
-    } catch (e) {
-      _toast('Could not save: $e');
-    }
-  }
-
-  static String _verb(String action) => switch (action) { 'approved' => 'Approve', 'rejected' => 'Reject', _ => 'Suspend' };
 }
 
 String _ago(DateTime t) {

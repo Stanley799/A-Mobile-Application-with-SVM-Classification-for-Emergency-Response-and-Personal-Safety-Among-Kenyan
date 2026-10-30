@@ -202,15 +202,6 @@ class AuthRepository {
     return AppUserProfile.fromMap(snapshot.data()!);
   }
 
-  /// The administrator's latest decision on a dispatcher application, or null when there is none yet.
-  Future<StaffDecision?> getStaffDecision(String userId) async {
-    final snapshot = await _firestore.collection('staff_approvals').doc(userId).get();
-    if (!snapshot.exists || snapshot.data() == null) {
-      return null;
-    }
-    return StaffDecision.fromMap(snapshot.data()!);
-  }
-
   /// Loads responder verification details, or null when no record exists.
   Future<ResponderProfile?> getResponderProfile(String userId) async {
     final snapshot = await _firestore

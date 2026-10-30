@@ -292,10 +292,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       value: UserRole.responder,
                       label: Text('Responder'),
                     ),
-                    ButtonSegment(
-                      value: UserRole.dispatcher,
-                      label: Text('Dispatcher'),
-                    ),
                   ],
                   selected: {_role},
                   onSelectionChanged: (selection) {
@@ -303,13 +299,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   },
                 ),
               ),
-              if (_role == UserRole.dispatcher) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Dispatcher accounts are reviewed by an administrator before the control room opens.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF5F5F5F)),
-                ),
-              ],
               if (isResponder) ...[
                 const SizedBox(height: 12),
                 _textField(

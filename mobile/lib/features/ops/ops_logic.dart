@@ -1,32 +1,19 @@
-// Pure rules for the staff console: queue order, required roles, contact masking,
-// shortcuts, role visibility, candidate ranking and the analytics maths.
+// Pure rules for the administrator monitor: queue order, required roles, contact masking,
+// role visibility, candidate ranking and the analytics maths.
 // No widgets and no Firebase here, so every rule can be tested directly.
 import 'dart:math' as math;
 
 import '../../core/models/dispatch_models.dart';
 
-/// What the two staff roles may open. Hiding is not security: rules and callables enforce the same split.
-enum OpsSection { controlRoom, incidents, units, passOnNotes, approvals, directory, analytics, audit }
+/// The administrator monitor opens every section.
+enum OpsSection { controlRoom, incidents, units, approvals, directory, analytics, audit }
 
-const Set<OpsSection> kAdminOnlySections = {
-  OpsSection.approvals,
-  OpsSection.directory,
-  OpsSection.analytics,
-  OpsSection.audit,
-};
-
-List<OpsSection> sectionsFor({required bool isAdmin}) => [
-  for (final s in OpsSection.values)
-    if (isAdmin || !kAdminOnlySections.contains(s)) s,
-];
-
-bool canUseSection(OpsSection s, {required bool isAdmin}) => isAdmin || !kAdminOnlySections.contains(s);
+List<OpsSection> sectionsFor() => OpsSection.values;
 
 String sectionTitle(OpsSection s) => switch (s) {
   OpsSection.controlRoom => 'Control room',
   OpsSection.incidents => 'Incidents',
   OpsSection.units => 'Units',
-  OpsSection.passOnNotes => 'Pass-on notes',
   OpsSection.approvals => 'Approvals',
   OpsSection.directory => 'Directory',
   OpsSection.analytics => 'Analytics',
@@ -163,8 +150,8 @@ String maskPhone(String phone) {
   return '${'•' * math.max(0, digits.length - 3)}$tail';
 }
 
-/// Both staff roles may assign; the reason is required by the callable too.
-bool staffCanAssign({required bool isAdmin, required bool isDispatcher}) => isAdmin || isDispatcher;
+/// Only an administrator may assign a unit by hand; the reason is required by the callable too.
+bool staffCanAssign({required bool isAdmin}) => isAdmin;
 
 String? assignReasonError(String raw) {
   final t = raw.trim();
@@ -231,46 +218,52 @@ List<Candidate> rankCandidates({
 }
 
 // ---------------------------------------------------------------------------------------------
-// Keyboard shortcuts (web). They never fire while a text field has focus.
+// Engine tab: what the server asked, per role
 // ---------------------------------------------------------------------------------------------
-enum OpsShortcut { nextIncident, previousIncident, openIncident, candidates, message, search, closePanel, help }
-
-OpsShortcut? shortcutFor(String key, {required bool typing}) {
-  if (typing) return null;
-  return switch (key) {
-    'j' || 'J' => OpsShortcut.nextIncident,
-    'k' || 'K' => OpsShortcut.previousIncident,
-    'Enter' => OpsShortcut.openIncident,
-    'a' || 'A' => OpsShortcut.candidates,
-    'm' || 'M' => OpsShortcut.message,
-    '/' => OpsShortcut.search,
-    'Escape' => OpsShortcut.closePanel,
-    '?' => OpsShortcut.help,
-    _ => null,
-  };
+/// Offers sent for one required role, oldest first (wave and creation time).
+List<Offer> offersForRole(List<Offer> offers, String incidentId, String role) {
+  final out = [
+    for (final o in offers)
+      if (o.incidentId == incidentId && o.role == role) o,
+  ];
+  out.sort((a, b) {
+    final at = a.createdAt, bt = b.createdAt;
+    if (at != null && bt != null && at != bt) return at.compareTo(bt);
+    if (a.wave != b.wave) return a.wave.compareTo(b.wave);
+    return a.id.compareTo(b.id);
+  });
+  return out;
 }
 
-const Map<OpsShortcut, String> kShortcutHelp = {
-  OpsShortcut.nextIncident: 'J — next incident',
-  OpsShortcut.previousIncident: 'K — previous incident',
-  OpsShortcut.openIncident: 'Enter — open the incident',
-  OpsShortcut.candidates: 'A — Candidates tab',
-  OpsShortcut.message: 'M — message box',
-  OpsShortcut.search: '/ — search',
-  OpsShortcut.closePanel: 'Esc — close the panel',
-  OpsShortcut.help: '? — this list',
+/// A unit's answer in words. "No answer yet" is the only state while an offer is still open.
+String offerAnswerWord(Offer o) => switch (o.status) {
+  'offered' => 'No answer yet',
+  'accepted' => 'Accepted',
+  'enroute' => 'Accepted · on the way',
+  'arrived' => 'Accepted · arrived',
+  'completed' => 'Completed',
+  'declined' => 'Declined',
+  'expired' => 'Expired',
+  'withdrawn' => 'Withdrawn',
+  _ => o.status,
 };
 
-// ---------------------------------------------------------------------------------------------
-// Caller check-in: the five fixed questions the server knows (functions/phase4d_core.py).
-// ---------------------------------------------------------------------------------------------
-const Map<String, String> kCheckinTemplates = {
-  'can_you_talk': 'Can you talk safely right now?',
-  'person_breathing': 'Is the person breathing normally?',
-  'still_in_danger': 'Are you still in danger?',
-  'location_ok': 'Is the street shown on your screen correct?',
-  'stay_put': 'Stay where you are. Help is being arranged. Tap OK.',
-};
+/// Why a unit declined, expired or withdrew. Empty when the server recorded no reason.
+String offerReasonWord(Offer o) {
+  final r = (o.withdrawReason ?? '').trim();
+  if (r.isEmpty) return '';
+  return switch (r) {
+    'cannot_reach' => 'Could not reach the scene',
+    'scene_unsafe' => 'Scene unsafe',
+    'unit_broken_down' => 'Unit broke down',
+    'no_longer_available' => 'No longer available',
+    'another_unit_accepted' => 'Another unit accepted',
+    'role_already_filled' => 'Role already filled',
+    'incident_cancelled' => 'Incident cancelled',
+    'incident_resolved' => 'Incident resolved',
+    _ => r.replaceAll('_', ' '),
+  };
+}
 
 // ---------------------------------------------------------------------------------------------
 // Analytics maths

@@ -1,5 +1,5 @@
-// The dispatcher and administrator console. One shell, two roles: the navigation and every write is
-// restricted by the role, and the same split is enforced by Firestore rules and the callables.
+// The administrator monitor. Every screen and write here is administrator-only, and the same split is
+// enforced by Firestore rules and the callables.
 // Wide screens get three columns (queue, map, incident/units); narrow screens get Queue/Map/Units tabs.
 import 'dart:async';
 
@@ -16,7 +16,6 @@ import 'ops_incident_panel.dart';
 import 'ops_incidents_page.dart';
 import 'ops_logic.dart';
 import 'ops_map.dart';
-import 'ops_notes.dart';
 import 'ops_notifications.dart';
 import 'ops_queue.dart';
 import 'ops_repository.dart';
@@ -27,8 +26,7 @@ import 'ops_widgets.dart';
 enum _Kpi { all, attention, today, sos }
 
 class OpsShell extends StatefulWidget {
-  const OpsShell({super.key, required this.isAdmin});
-  final bool isAdmin;
+  const OpsShell({super.key});
 
   @override
   State<OpsShell> createState() => _OpsShellState();
@@ -37,36 +35,29 @@ class OpsShell extends StatefulWidget {
 class _OpsShellState extends State<OpsShell> {
   final _repo = OpsRepository();
   final _search = TextEditingController();
-  final _searchFocus = FocusNode();
 
   late final Stream<List<IncidentRecord>> _incidents = _repo.watchIncidents();
   late final Stream<List<Offer>> _offers = _repo.watchOffers();
   late final Stream<List<ResponderRecord>> _responders = _repo.watchResponders();
   late final Stream<List<SosAlert>> _sos = _repo.watchOpenSos();
-  late final Stream<List<OpsNote>> _notes = _repo.watchNotes();
 
   OpsSection _section = OpsSection.controlRoom;
   String? _incidentId;
   OpsPanelTab _panelTab = OpsPanelTab.overview;
-  int _messageToken = 0;
-  int _cursor = 0;
   _Kpi _kpi = _Kpi.all;
   String? _unitsFilter;
   bool _trayOpen = false;
-  bool _helpOpen = false;
   bool _muted = false;
   bool _bellPulse = false;
   Timer? _bellTimer;
 
   final Set<String> _announced = {};
   bool _primed = false;
-  List<IncidentRecord> _incidentsCache = const [];
 
   @override
   void initState() {
     super.initState();
     _search.addListener(_onSearchChanged);
-    HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   void _onSearchChanged() {
@@ -76,132 +67,9 @@ class _OpsShellState extends State<OpsShell> {
   @override
   void dispose() {
     _bellTimer?.cancel();
-    HardwareKeyboard.instance.removeHandler(_onKey);
     _search.removeListener(_onSearchChanged);
     _search.dispose();
-    _searchFocus.dispose();
     super.dispose();
-  }
-
-  // ------------------------------------------------------------------ shortcuts
-  static String? _keyName(KeyEvent e) {
-    if (e.logicalKey == LogicalKeyboardKey.enter || e.logicalKey == LogicalKeyboardKey.numpadEnter) return 'Enter';
-    if (e.logicalKey == LogicalKeyboardKey.escape) return 'Escape';
-    if (e.logicalKey == LogicalKeyboardKey.slash) return '/';
-    final c = e.character;
-    if (c == null || c.isEmpty) return null;
-    return c;
-  }
-
-  bool get _typing {
-    final c = FocusManager.instance.primaryFocus?.context;
-    if (c == null) return false;
-    return c.findAncestorStateOfType<EditableTextState>() != null;
-  }
-
-  bool _onKey(KeyEvent e) {
-    if (e is! KeyDownEvent) return false;
-    final name = _keyName(e);
-    if (name == null) return false;
-    // While the help sheet is open the dialog owns the keyboard (Escape closes it).
-    if (_helpOpen) return false;
-    final typed = _typing;
-    final s = shortcutFor(name, typing: typed);
-    if (s == null) return false;
-    if (!mounted) return false;
-    switch (s) {
-      case OpsShortcut.help:
-        _showHelp();
-        return true;
-      case OpsShortcut.closePanel:
-        if (_trayOpen) {
-          setState(() => _trayOpen = false);
-          return true;
-        }
-        if (_incidentId != null) {
-          setState(() {
-            _incidentId = null;
-            _panelTab = OpsPanelTab.overview;
-          });
-          return true;
-        }
-        return false;
-      case OpsShortcut.search:
-        _searchFocus.requestFocus();
-        return true;
-      case OpsShortcut.nextIncident:
-      case OpsShortcut.previousIncident:
-      case OpsShortcut.openIncident:
-      case OpsShortcut.candidates:
-      case OpsShortcut.message:
-        // These act on the queue, which only the control room shows.
-        if (_section != OpsSection.controlRoom) return false;
-        return _queueShortcut(s);
-    }
-  }
-
-  bool _queueShortcut(OpsShortcut s) {
-    final rows = _queue(_incidentsCache);
-    if (s == OpsShortcut.nextIncident || s == OpsShortcut.previousIncident) {
-      _moveCursor(rows, s == OpsShortcut.nextIncident ? 1 : -1);
-      return true;
-    }
-    if (rows.isEmpty && _incidentId == null) return false;
-    setState(() {
-      if (_incidentId == null) {
-        _cursor = _cursor.clamp(0, rows.length - 1);
-        _incidentId = rows[_cursor].incident.id;
-        _panelTab = OpsPanelTab.overview;
-      }
-      switch (s) {
-        case OpsShortcut.openIncident:
-          _panelTab = OpsPanelTab.overview;
-          break;
-        case OpsShortcut.candidates:
-          _panelTab = OpsPanelTab.candidates;
-          break;
-        case OpsShortcut.message:
-          _panelTab = OpsPanelTab.messages;
-          _messageToken++;
-          break;
-        default:
-          break;
-      }
-    });
-    return true;
-  }
-
-  /// J/K move the cursor through the visible queue and select that row (row and pin stay in step).
-  void _moveCursor(List<QueueRow> rows, int delta) {
-    if (rows.isEmpty) return;
-    setState(() {
-      if (_incidentId == null) {
-        _cursor = delta > 0 ? 0 : rows.length - 1;
-      } else {
-        final current = rows.indexWhere((r) => r.incident.id == _incidentId);
-        _cursor = (current < 0 ? 0 : current + delta).clamp(0, rows.length - 1);
-      }
-      _incidentId = rows[_cursor].incident.id;
-      _panelTab = OpsPanelTab.overview;
-    });
-  }
-
-  Future<void> _showHelp() async {
-    setState(() => _helpOpen = true);
-    await showDialog<void>(
-      context: context,
-      builder: (d) => AlertDialog(
-        backgroundColor: OT.panel,
-        title: const Text('Keyboard shortcuts', style: TextStyle(color: OT.text, fontWeight: FontWeight.w800)),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          for (final line in kShortcutHelp.values) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(line, style: const TextStyle(color: OT.soft))),
-          const SizedBox(height: 10),
-          const Text('Shortcuts do not fire while a text field has focus.', style: TextStyle(fontSize: 12, color: OT.muted)),
-        ]),
-        actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Close'))],
-      ),
-    );
-    if (mounted) setState(() => _helpOpen = false);
   }
 
   // ------------------------------------------------------------------ sound
@@ -243,9 +111,7 @@ class _OpsShellState extends State<OpsShell> {
             i,
       ];
     }
-    final rows = buildQueue(list);
-    if (_cursor >= rows.length) _cursor = rows.isEmpty ? 0 : rows.length - 1;
-    return rows;
+    return buildQueue(list);
   }
 
   String? get _filterLabel => switch (_kpi) {
@@ -285,23 +151,19 @@ class _OpsShellState extends State<OpsShell> {
               stream: _offers,
               builder: (context, oSnap) => StreamBuilder<List<SosAlert>>(
                 stream: _sos,
-                builder: (context, sSnap) => StreamBuilder<List<OpsNote>>(
-                  stream: _notes,
-                  builder: (context, nSnap) {
-                    final responders = rSnap.data ?? const <ResponderRecord>[];
-                    final offers = oSnap.data ?? const <Offer>[];
-                    final sos = sSnap.data ?? const <SosAlert>[];
-                    final notes = nSnap.data ?? const <OpsNote>[];
-                    _incidentsCache = incidents;
-                    final notices = buildNotices(incidents: incidents, sos: sos);
-                    _maybeSound(notices);
-                    return Stack(children: [
-                      Column(children: [
-                        _topBar(notices.length),
-                        if (rSnap.hasError || oSnap.hasError)
-                          _banner('Some unit data could not be loaded. Showing what is available.'),
-                        Expanded(child: _shellBody(incidents, responders, offers, sos, notes)),
-                      ]),
+                builder: (context, sSnap) {
+                  final responders = rSnap.data ?? const <ResponderRecord>[];
+                  final offers = oSnap.data ?? const <Offer>[];
+                  final sos = sSnap.data ?? const <SosAlert>[];
+                  final notices = buildNotices(incidents: incidents, sos: sos);
+                  _maybeSound(notices);
+                  return Stack(children: [
+                    Column(children: [
+                      _topBar(notices.length),
+                      if (rSnap.hasError || oSnap.hasError)
+                        _banner('Some unit data could not be loaded. Showing what is available.'),
+                      Expanded(child: _shellBody(incidents, responders, offers, sos)),
+                    ]),
                       if (_trayOpen) ...[
                         Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() => _trayOpen = false), child: const SizedBox())),
                         Positioned(
@@ -328,8 +190,7 @@ class _OpsShellState extends State<OpsShell> {
                         ),
                       ],
                     ]);
-                  },
-                ),
+                },
               ),
             ),
           );
@@ -364,20 +225,19 @@ class _OpsShellState extends State<OpsShell> {
         const SizedBox(width: 10),
         Text(sectionTitle(_section), style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: OT.text)),
         const SizedBox(width: 10),
-        OpsTag(widget.isAdmin ? 'ADMINISTRATOR' : 'DISPATCHER', bg: OT.raised, fg: OT.soft),
+        const OpsTag('ADMINISTRATOR', bg: OT.raised, fg: OT.soft),
         const SizedBox(width: 18),
         Expanded(
           child: SizedBox(
             height: 34,
             child: TextField(
               controller: _search,
-              focusNode: _searchFocus,
               style: const TextStyle(fontSize: 13, color: OT.text),
               decoration: InputDecoration(
                 isDense: true,
                 filled: true,
                 fillColor: OT.raised,
-                hintText: 'Search category, place or incident id  ( / )',
+                hintText: 'Search category, place or incident id',
                 hintStyle: const TextStyle(fontSize: 12.5, color: OT.muted),
                 prefixIcon: const Icon(Icons.search, size: 17, color: OT.muted),
                 suffixIcon: _search.text.isEmpty
@@ -411,7 +271,6 @@ class _OpsShellState extends State<OpsShell> {
             ),
           ),
         ),
-        IconButton(tooltip: 'Keyboard shortcuts', onPressed: _showHelp, icon: const Icon(Icons.keyboard_outlined, size: 19, color: OT.soft)),
         const SizedBox(width: 4),
         _profileMenu(),
       ]),
@@ -430,7 +289,7 @@ class _OpsShellState extends State<OpsShell> {
           enabled: false,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(user?.email ?? 'Signed in', style: const TextStyle(fontSize: 12, color: OT.soft)),
-            Text(widget.isAdmin ? 'System administrator' : 'Dispatcher', style: const TextStyle(fontSize: 11, color: OT.muted)),
+            const Text('System administrator', style: TextStyle(fontSize: 11, color: OT.muted)),
           ]),
         ),
         const PopupMenuDivider(),
@@ -504,17 +363,17 @@ class _OpsShellState extends State<OpsShell> {
   }
 
   // ------------------------------------------------------------------ rail + sections
-  Widget _shellBody(List<IncidentRecord> incidents, List<ResponderRecord> responders, List<Offer> offers, List<SosAlert> sos, List<OpsNote> notes) {
+  Widget _shellBody(List<IncidentRecord> incidents, List<ResponderRecord> responders, List<Offer> offers, List<SosAlert> sos) {
     final width = MediaQuery.sizeOf(context).width;
     final wide = width >= 1100;
     return Row(children: [
       _rail(),
-      Expanded(child: _sectionBody(incidents, responders, offers, sos, notes, wide)),
+      Expanded(child: _sectionBody(incidents, responders, offers, sos, wide)),
     ]);
   }
 
   Widget _rail() {
-    final sections = sectionsFor(isAdmin: widget.isAdmin);
+    final sections = sectionsFor();
     return Container(
       width: 76,
       decoration: const BoxDecoration(color: OT.panel, border: Border(right: BorderSide(color: OT.line))),
@@ -548,7 +407,6 @@ class _OpsShellState extends State<OpsShell> {
       OpsSection.controlRoom => Icons.space_dashboard_outlined,
       OpsSection.incidents => Icons.crisis_alert_outlined,
       OpsSection.units => Icons.local_shipping_outlined,
-      OpsSection.passOnNotes => Icons.sticky_note_2_outlined,
       OpsSection.approvals => Icons.verified_user_outlined,
       OpsSection.directory => Icons.location_city_outlined,
       OpsSection.analytics => Icons.insights_outlined,
@@ -581,10 +439,10 @@ class _OpsShellState extends State<OpsShell> {
     );
   }
 
-  Widget _sectionBody(List<IncidentRecord> incidents, List<ResponderRecord> responders, List<Offer> offers, List<SosAlert> sos, List<OpsNote> notes, bool wide) {
+  Widget _sectionBody(List<IncidentRecord> incidents, List<ResponderRecord> responders, List<Offer> offers, List<SosAlert> sos, bool wide) {
     switch (_section) {
       case OpsSection.controlRoom:
-        return _controlRoom(incidents, responders, offers, sos, notes, wide);
+        return _controlRoom(incidents, responders, offers, sos, wide);
       case OpsSection.incidents:
         return OpsIncidentsPage(
           repo: _repo,
@@ -611,10 +469,8 @@ class _OpsShellState extends State<OpsShell> {
           ),
           Expanded(child: OpsUnitsBoard(responders: responders, offers: offers, groupFilter: _unitsFilter)),
         ]);
-      case OpsSection.passOnNotes:
-        return OpsNotesPage(repo: _repo, notes: notes, isAdmin: widget.isAdmin);
       case OpsSection.approvals:
-        return OpsApprovals(repo: _repo, responders: responders);
+        return OpsApprovals(responders: responders);
       case OpsSection.directory:
         return OpsDirectory(repo: _repo);
       case OpsSection.analytics:
@@ -632,16 +488,13 @@ class _OpsShellState extends State<OpsShell> {
   }
 
   // ------------------------------------------------------------------ control room
-  Widget _controlRoom(List<IncidentRecord> incidents, List<ResponderRecord> responders, List<Offer> offers, List<SosAlert> sos, List<OpsNote> notes, bool wide) {
+  Widget _controlRoom(List<IncidentRecord> incidents, List<ResponderRecord> responders, List<Offer> offers, List<SosAlert> sos, bool wide) {
     final rows = _queue(incidents);
     final sel = _find(incidents);
-    final pinned = [for (final n in notes) if (n.pinned) n];
     final strip = _kpiStrip(incidents, responders, offers, sos, rows.length);
-    final banner = pinned.isEmpty ? null : _passOnBanner(pinned, wide);
     if (!wide) {
       return Column(children: [
         strip,
-        if (banner != null) banner,
         Expanded(
           child: sel != null
               ? Padding(padding: const EdgeInsets.all(10), child: _panel(sel, responders, offers))
@@ -678,15 +531,10 @@ class _OpsShellState extends State<OpsShell> {
           child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             SizedBox(
               width: 318,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                if (banner != null) banner,
-                Expanded(
-                  child: Container(
-                    decoration: OT.panelDecoration(),
-                    child: OpsQueue(repo: _repo, rows: rows, selectedId: _incidentId, onSelect: _selectRow, filterLabel: _filterLabel, onClearFilter: () => setState(() => _kpi = _Kpi.all)),
-                  ),
-                ),
-              ]),
+              child: Container(
+                decoration: OT.panelDecoration(),
+                child: OpsQueue(repo: _repo, rows: rows, selectedId: _incidentId, onSelect: _selectRow, filterLabel: _filterLabel, onClearFilter: () => setState(() => _kpi = _Kpi.all)),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(child: _map(incidents, responders, sel)),
@@ -749,7 +597,6 @@ class _OpsShellState extends State<OpsShell> {
     offers: offers,
     readOnly: false,
     initialTab: _panelTab,
-    messageFocusToken: _messageToken,
     onClose: () => setState(() {
       _incidentId = null;
       _panelTab = OpsPanelTab.overview;
@@ -827,35 +674,6 @@ class _OpsShellState extends State<OpsShell> {
     );
   }
 
-  Widget _passOnBanner(List<OpsNote> pinned, bool wide) {
-    return Container(
-      margin: EdgeInsets.fromLTRB(wide ? 0 : 12, wide ? 6 : 8, wide ? 0 : 12, wide ? 8 : 4),
-      padding: const EdgeInsets.fromLTRB(11, 8, 8, 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E2620),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF3C4A3E)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.push_pin_outlined, size: 13, color: Color(0xFFB8D8BD)),
-          const SizedBox(width: 5),
-          const Text('PASS-ON', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.7, color: Color(0xFFB8D8BD))),
-          const Spacer(),
-          TextButton(
-            style: TextButton.styleFrom(visualDensity: VisualDensity.compact, minimumSize: const Size(0, 26), padding: const EdgeInsets.symmetric(horizontal: 8)),
-            onPressed: () => setState(() => _section = OpsSection.passOnNotes),
-            child: const Text('All notes', style: TextStyle(fontSize: 11.5)),
-          ),
-        ]),
-        for (final n in pinned.take(wide ? 2 : 1))
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(n.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: Color(0xFFDDE9DE), height: 1.3)),
-          ),
-      ]),
-    );
-  }
 }
 
 String _shortDuration(int seconds) {

@@ -1,4 +1,4 @@
-"""Phase 4D tests: deterministic events, SLA attention, SOS, contact reveal, check-ins, metrics.
+"""Phase 4D tests: deterministic events, SLA attention, SOS, contact reveal, metrics.
 Run from the functions folder:   .venv\\Scripts\\python.exe tests\\test_phase4d.py
 No network, no Firebase: the in-memory fake only."""
 import os
@@ -90,16 +90,30 @@ def main():
     ok("an unverified responder cannot send SOS", _raises(p4.Phase4DError, lambda: p4.sos_create(db, "r2", None, 2000.0)))
     ok("a missing responder cannot send SOS", _raises(p4.Phase4DError, lambda: p4.sos_create(db, "nobody", None, 2000.0)))
 
-    # 4 contact reveal: staff only, always recorded
+    # 3b more units: a direct moreUnits write, no callable; one event and an attention flag; retries do not duplicate
+    db = DB()
+    incident(db)
+    offer(db, "O1", "INC1", status="accepted")
+    old = {"incidentId": "INC1", "responderId": "r1", "status": "accepted", "seenAt": None, "moreUnits": None}
+    new = {**old, "moreUnits": {"role": "fire_suppression", "count": 2, "note": "fire spreading", "requestedAt": 2000.0}}
+    p4.record_offer_events(db, "O1", new, old)
+    extra = [p for p in db.data if p.endswith("extra_resources_requested_O1")]
+    ok("a moreUnits write records exactly one extra_resources_requested event", len(extra) == 1)
+    ok("the event carries the requested role and count", db.data[extra[0]]["data"] == {"role": "fire_suppression", "count": 2})
+    ok("the incident is flagged for an administrator (the planner is not changed)", db.data["incidents/INC1"]["attentionReason"] == "extra_resources")
+    p4.record_offer_events(db, "O1", new, new)
+    ok("a retried trigger does not duplicate the event", len([p for p in db.data if p.endswith("extra_resources_requested_O1")]) == 1)
+
+    # 4 contact reveal: administrators only (a dispatcher has no access), always recorded
     db = DB()
     incident(db)
     db.put("users/res1", {"firstName": "Test", "phoneNumber": "+254700000000"})
-    out = p4.reveal_contact(db, {"role": "Dispatcher", "uid": "d1"}, "INC1")
-    ok("the dispatcher gets the contact", out == {"firstName": "Test", "phone": "+254700000000"})
-    ok("the reveal is recorded as a dispatcher action", db.data[[p for p in db.data if p.startswith("incidents/INC1/events/admin_revealed_contact_")][0]]["actorRole"] == "dispatcher")
+    out = p4.reveal_contact(db, {"role": "SystemAdmin", "uid": "a1"}, "INC1")
+    ok("the administrator gets the contact", out == {"firstName": "Test", "phone": "+254700000000"})
+    ok("an older dispatcher is refused", _raises(p4.Phase4DError, lambda: p4.reveal_contact(db, {"role": "Dispatcher", "uid": "d1"}, "INC1")))
     ok("a resident is refused", _raises(p4.Phase4DError, lambda: p4.reveal_contact(db, {"role": "Resident", "uid": "x"}, "INC1")))
     ok("a responder is refused", _raises(p4.Phase4DError, lambda: p4.reveal_contact(db, {"role": "Responder", "uid": "x"}, "INC1")))
-    ok("an administrator is allowed", p4.reveal_contact(db, {"role": "SystemAdmin", "uid": "a1"}, "INC1")["phone"] == "+254700000000")
+    ok("the reveal is recorded as an administrator action", db.data[[p for p in db.data if p.startswith("incidents/INC1/events/admin_revealed_contact_")][0]]["actorRole"] == "admin")
 
     # 4b the dispatch contact goes into a Functions-only document at alert creation
     db = DB()
@@ -110,7 +124,7 @@ def main():
     ok("the snapshot holds the caller's first name and phone", snap["firstName"] == "Test" and snap["phone"] == "+254700000000")
     ok("the snapshot is never rewritten", p4.snapshot_contact(db, "INC1", db.data["incidents/INC1"]) is False)
     db.data["users/res1"]["phoneNumber"] = "+254700000099"
-    ok("reveal_contact reads the snapshot, not the profile", p4.reveal_contact(db, {"role": "Dispatcher", "uid": "d1"}, "INC1")["phone"] == "+254700000000")
+    ok("reveal_contact reads the snapshot, not the profile", p4.reveal_contact(db, {"role": "SystemAdmin", "uid": "a1"}, "INC1")["phone"] == "+254700000000")
     ok("a caller with no profile still gets an empty snapshot", p4.snapshot_contact(db, "INC2", {"userId": "missing"}) is True
        and db.data["incidents/INC2/private/contact"]["phone"] == "")
 
@@ -124,16 +138,15 @@ def main():
                           {"id": "INC1", "userId": "res1"})
     ok("the contact is released once", len([p for p in db.data if p.startswith("auditLogs/")]) == released_events)
 
-    # 5 check-ins: fixed questions only
-    db = DB()
-    incident(db)
-    cid = p4.send_checkin(db, {"role": "Dispatcher", "uid": "d1"}, "INC1", "person_breathing", 3000.0)
-    ok("the question text comes from the server template", db.data[f"incidents/INC1/checkins/{cid}"]["text"] == "Is the person breathing normally?")
-    ok("the check-in starts unanswered", db.data[f"incidents/INC1/checkins/{cid}"]["reply"] is None)
-    ok("an unknown question is refused", _raises(p4.Phase4DError, lambda: p4.send_checkin(db, {"role": "Dispatcher", "uid": "d1"}, "INC1", "what_drugs", 3001.0)))
-    ok("a resident cannot send a check-in", _raises(p4.Phase4DError, lambda: p4.send_checkin(db, {"role": "Resident", "uid": "x"}, "INC1", "can_you_talk", 3002.0)))
+    # 4d role gate: administrators only (the pre-4D dispatcher has no access)
+    ok("the role gate accepts an administrator", p4.admin_role({"role": "SystemAdmin", "uid": "a1"}) == ("admin", "a1"))
+    ok("the role gate refuses an older dispatcher", _raises(p4.Phase4DError, lambda: p4.admin_role({"role": "Dispatcher", "uid": "d1"})))
+    ok("the role gate refuses a resident", _raises(p4.Phase4DError, lambda: p4.admin_role({"role": "Resident", "uid": "x"})))
+    db.put("sos_alerts/S1", {"responderId": "r1", "status": "open", "at": 5000.0})
+    ok("a dispatcher cannot close an SOS", _raises(p4.Phase4DError, lambda: p4.resolve_sos(db, {"role": "Dispatcher", "uid": "d1"}, "S1", "seen", 6000.0)))
+    ok("an administrator closes the SOS", p4.resolve_sos(db, {"role": "SystemAdmin", "uid": "a1"}, "S1", "seen", 6000.0) is True)
 
-    # 6 metrics: every step, then with steps missing
+    # 5 metrics: every step, then with steps missing
     full = p4.compute_metrics(1000.0, {"classified": 1064.0, "offer_sent": 1100.0, "offer_accepted": 1145.0, "unit_arrived": 1300.0}, 1600.0)
     ok("metrics: all five numbers", full == {"secondsToClassify": 64, "secondsToFirstOffer": 36, "secondsToFirstAccept": 45, "secondsToFirstArrival": 300, "secondsTotal": 600})
     empty = p4.compute_metrics(1000.0, {}, 1600.0)

@@ -33,18 +33,13 @@ class ResponderHomeScreen extends StatelessWidget {
 
 /// Explains that a responder account is waiting for administrator review.
 class PendingVerificationScreen extends StatelessWidget {
-  const PendingVerificationScreen({super.key, this.staff = false});
-
-  /// Dispatcher applications get staff wording instead of responder wording.
-  final bool staff;
+  const PendingVerificationScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return _BasePlaceholderScreen(
       title: 'Pending Verification',
-      body: staff
-          ? 'Your dispatcher application is awaiting approval by a System Administrator. The control room opens after approval.'
-          : 'Your account is awaiting verification by a System Administrator.',
+      body: 'Your account is awaiting verification by a System Administrator.',
     );
   }
 }
@@ -70,18 +65,13 @@ class RegistrationRejectedScreen extends StatelessWidget {
 
 /// Explains that responder access is suspended and directs the user to support.
 class AccountSuspendedScreen extends StatelessWidget {
-  const AccountSuspendedScreen({super.key, this.staff = false});
-
-  /// Dispatcher wording: staff access is suspended too.
-  final bool staff;
+  const AccountSuspendedScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return _BasePlaceholderScreen(
       title: 'Account Suspended',
-      body: staff
-          ? 'Your dispatcher access has been suspended. Contact a System Administrator for assistance.'
-          : 'Your responder account has been suspended. Contact support for assistance.',
+      body: 'Your responder account has been suspended. Contact support for assistance.',
     );
   }
 }

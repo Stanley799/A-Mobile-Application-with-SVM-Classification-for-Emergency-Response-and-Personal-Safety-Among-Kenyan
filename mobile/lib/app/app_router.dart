@@ -10,7 +10,7 @@ import '../features/responder/responder_shell.dart';
 import '../features/home/screens/placeholder_screens.dart';
 import 'auth_state_controller.dart';
 
-/// Builds role-aware routes and gates responders and dispatchers by approval state.
+/// Builds role-aware routes and gates responders by approval state.
 GoRouter buildRouter(AuthStateController authState) {
   return GoRouter(
     initialLocation: '/sign-in',
@@ -43,22 +43,6 @@ GoRouter buildRouter(AuthStateController authState) {
       final role = profile.role;
       if (role == UserRole.resident) {
         return location == '/home' ? null : '/home';
-      }
-
-      if (role == UserRole.dispatcher) {
-        // The claim, not the profile field, opens the console. Until an administrator
-        // approves the application the person sees the waiting or decision screen.
-        if (!authState.isDispatcher) {
-          final decision = authState.staffDecision;
-          if (decision?.rejected == true) {
-            return location == '/registration-rejected' ? null : '/registration-rejected';
-          }
-          if (decision?.suspended == true) {
-            return location == '/account-suspended' ? null : '/account-suspended';
-          }
-          return location == '/pending-verification' ? null : '/pending-verification';
-        }
-        return location == '/dispatch-console' ? null : '/dispatch-console';
       }
 
       final responder = authState.responderProfile;
@@ -100,26 +84,21 @@ GoRouter buildRouter(AuthStateController authState) {
       ),
       GoRoute(
         path: '/pending-verification',
-        builder: (context, state) =>
-            PendingVerificationScreen(staff: authState.profile?.role == UserRole.dispatcher),
+        builder: (context, state) => const PendingVerificationScreen(),
       ),
       GoRoute(
         path: '/registration-rejected',
-        builder: (context, state) {
-          final notes = authState.profile?.role == UserRole.dispatcher
-              ? authState.staffDecision?.reason
-              : authState.responderProfile?.verificationNotes;
-          return RegistrationRejectedScreen(verificationNotes: notes);
-        },
+        builder: (context, state) => RegistrationRejectedScreen(
+          verificationNotes: authState.responderProfile?.verificationNotes,
+        ),
       ),
       GoRoute(
         path: '/account-suspended',
-        builder: (context, state) =>
-            AccountSuspendedScreen(staff: authState.profile?.role == UserRole.dispatcher),
+        builder: (context, state) => const AccountSuspendedScreen(),
       ),
       GoRoute(
         path: '/dispatch-console',
-        builder: (context, state) => OpsShell(isAdmin: authState.isSystemAdmin),
+        builder: (context, state) => const OpsShell(),
       ),
       GoRoute(
         path: '/admin-dashboard',

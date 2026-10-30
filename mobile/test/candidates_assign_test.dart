@@ -24,10 +24,9 @@ ResponderRecord responder({
 });
 
 void main() {
-  test('a reason is required and both staff roles may assign', () {
-    expect(staffCanAssign(isAdmin: true, isDispatcher: false), isTrue);
-    expect(staffCanAssign(isAdmin: false, isDispatcher: true), isTrue);
-    expect(staffCanAssign(isAdmin: false, isDispatcher: false), isFalse);
+  test('a reason is required and only an administrator may assign', () {
+    expect(staffCanAssign(isAdmin: true), isTrue);
+    expect(staffCanAssign(isAdmin: false), isFalse);
 
     expect(assignReasonError(''), isNotNull);
     expect(assignReasonError('ab'), isNotNull);

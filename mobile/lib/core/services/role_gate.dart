@@ -6,16 +6,17 @@ import 'package:flutter/material.dart';
 import '../../features/ops/ops_shell.dart';
 import '../../features/responder/responder_shell.dart';
 
-enum AppRole { admin, dispatcher, responder, resident }
+enum AppRole { admin, responder, resident }
+
+/// Only the server-set SystemAdmin claim opens the monitor. No profile field can.
+bool opensMonitor(Object? claimRole) => claimRole == 'SystemAdmin';
 
 Future<AppRole> resolveRole() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return AppRole.resident;
   try {
     final token = await user.getIdTokenResult(true);
-    final claim = token.claims?['role'];
-    if (claim == 'SystemAdmin') return AppRole.admin;
-    if (claim == 'Dispatcher') return AppRole.dispatcher;
+    if (opensMonitor(token.claims?['role'])) return AppRole.admin;
   } catch (_) {}
   try {
     final s = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -42,8 +43,7 @@ class _RoleGateState extends State<RoleGate> {
     builder: (context, snap) {
       if (!snap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
       return switch (snap.data!) {
-        AppRole.admin => const OpsShell(isAdmin: true),
-        AppRole.dispatcher => const OpsShell(isAdmin: false),
+        AppRole.admin => const OpsShell(),
         AppRole.responder => const ResponderGate(),
         AppRole.resident => widget.residentBuilder(context),
       };

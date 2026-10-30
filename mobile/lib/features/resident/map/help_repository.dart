@@ -83,34 +83,6 @@ class HelpRepository {
         );
       }).handleError((_) {});
 
-  /// The newest question from dispatch that has not been answered. null when there is none.
-  Stream<CheckinQuestion?> watchCheckin(String incidentId) => _incident(incidentId)
-      .collection('checkins')
-      .orderBy('sentAt', descending: true)
-      .limit(5)
-      .snapshots()
-      .map((q) {
-        for (final d in q.docs) {
-          final m = d.data();
-          if (m['reply'] == null) return CheckinQuestion(id: d.id, text: (m['text'] ?? '').toString());
-        }
-        return null;
-      })
-      .handleError((_) {});
-
-  /// The caller answers a dispatcher's question. firestore.rules allow ONLY reply + repliedAt, once.
-  Future<bool> replyCheckin(String incidentId, String checkinId, String reply) async {
-    try {
-      await _incident(incidentId).collection('checkins').doc(checkinId).update({
-        'reply': reply,
-        'repliedAt': FieldValue.serverTimestamp(),
-      });
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Landmark (in words) and how precise the fix was. firestore.rules allow ONLY these three keys, while the alert is open.
   Future<bool> saveContext(String incidentId, {String? landmark, double? accuracyM, String? source}) async {
     try {

@@ -1,0 +1,61 @@
+(node:17392) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[36m[1mi  emulators:[22m[39m Starting emulators: firestore
+[36m[1mi  emulators:[22m[39m Detected demo project ID "demo-ers", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+[36m[1mi  firestore:[22m[39m Firestore Emulator logging to [1mfirestore-debug.log[22m
+[32m[1m+  firestore:[22m[39m Firestore Emulator was started in standard edition.
+[32m[1m+  firestore:[22m[39m Firestore Emulator UI websocket is running on 9150.
+[36m[1mi [22m[39m Running script: [1mnode rules_tests/rules_emulator_test.mjs[22m
+PASS  1a resident reads own incident  (expected 200, got 200)
+PASS  1b resident reads another resident's incident  (expected 403, got 403)
+PASS  2 resident reads incidents/i1/private/contact  (expected 403, got 403)
+PASS  2 responder reads incidents/i1/private/contact  (expected 403, got 403)
+PASS  2 admin reads incidents/i1/private/contact  (expected 403, got 403)
+PASS  3a responder writes seenAt on own offer  (expected 200, got 200)
+PASS  3b responder writes seenAt on another responder's offer  (expected 403, got 403)
+PASS  4a responder writes transport after arrival with a real facility  (expected 200, got 200)
+PASS  4b responder writes transport before arrival  (expected 403, got 403)
+PASS  4c responder writes transport with an extra key  (expected 403, got 403)
+PASS  5a responder writes moreUnits count 2 once  (expected 200, got 200)
+PASS  5b responder writes moreUnits count 4  (expected 403, got 403)
+PASS  5c responder writes moreUnits a second time  (expected 403, got 403)
+PASS  6a responder skips offered -> arrived  (expected 403, got 403)
+PASS  6b responder writes a routing field on an offer  (expected 403, got 403)
+PASS  6c responder writes route on an offer  (expected 403, got 403)
+PASS  7a resident writes landmark of 120 chars while Active  (expected 200, got 200)
+PASS  7b resident writes landmark of 121 chars  (expected 403, got 403)
+PASS  7c resident writes landmark after the incident closed  (expected 403, got 403)
+PASS  8a resident writes residentFeedback once when Resolved  (expected 200, got 200)
+PASS  8b resident writes residentFeedback twice  (expected 403, got 403)
+PASS  8c resident writes residentFeedback while Active  (expected 403, got 403)
+PASS  9a admin reads incidents/i1/events/E1  (expected 200, got 200)
+PASS  9b admin reads sos_alerts/S1  (expected 200, got 200)
+PASS  9c resident reads incidents/i1/events/E1  (expected 403, got 403)
+PASS  9d resident reads sos_alerts/S1  (expected 403, got 403)
+PASS  9c responder reads incidents/i1/events/E1  (expected 403, got 403)
+PASS  9d responder reads sos_alerts/S1  (expected 403, got 403)
+PASS  9c older Dispatcher reads incidents/i1/events/E1  (expected 403, got 403)
+PASS  9d older Dispatcher reads sos_alerts/S1  (expected 403, got 403)
+PASS  10a resident writes an event  (expected 403, got 403)
+PASS  10b admin writes an event  (expected 403, got 403)
+PASS  10c responder writes a sos_alert  (expected 403, got 403)
+PASS  10d admin writes a sos_alert  (expected 403, got 403)
+PASS  10e resident writes needsAttention on own incident  (expected 403, got 403)
+PASS  10f admin writes needsAttention on an incident  (expected 403, got 403)
+PASS  11a resident sets preferredLanguage sw  (expected 200, got 200)
+PASS  11b resident sets preferredLanguage en  (expected 200, got 200)
+PASS  11c resident sets preferredLanguage fr  (expected 403, got 403)
+PASS  12a resident writes their own track while Active  (expected 200, got 200)
+PASS  12b holding responder writes their own track  (expected 200, got 200)
+PASS  12c non-holding responder writes a track  (expected 403, got 403)
+PASS  12d resident writes the responder's track  (expected 403, got 403)
+PASS  12e responder deletes their own track  (expected 403, got 403)
+PASS  12f resident deletes their own track  (expected 403, got 403)
+
+45 passed, 0 failed
+[32m[1m+ [22m[39m Script exited successfully (code 0)
+[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  firestore:[22m[39m Stopping Firestore Emulator
+[33m[1m! [22m[39m Firestore Emulator has exited upon receiving signal: SIGINT
+[36m[1mi  hub:[22m[39m Stopping emulator hub
+[36m[1mi  logging:[22m[39m Stopping Logging Emulator

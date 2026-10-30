@@ -18,25 +18,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.role == "SystemAdmin";
     }
 
-    // A dispatcher runs the live control room. Same rule: the claim is set by the server after an administrator approves.
-    function isDispatcher() {
-      return isSignedIn() && request.auth.token.role == "Dispatcher";
-    }
-
-    function isStaff() {
-      return isSystemAdmin() || isDispatcher();
-    }
-
-    function isIncidentOwner(incidentId) {
-      return isSignedIn() && get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid;
-    }
-
-    // The responder currently holding this incident (contact and messages are shared with them only).
-    function holdsIncident(incidentId) {
-      return isSignedIn()
-        && get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"];
-    }
-
     function validPhoneNumber(phoneNumber) {
       return phoneNumber is string && phoneNumber.matches('^\\+[1-9]\\d{1,14}$');
     }
@@ -46,7 +27,7 @@ service cloud.firestore {
     }
 
     function validPublicRole(role) {
-      return role in ["Resident", "Responder", "Dispatcher"];
+      return role in ["Resident", "Responder"];
     }
 
     function validAccountStatus(status) {
@@ -461,9 +442,6 @@ service cloud.firestore {
           (request.resource.data.role == "Resident" && request.resource.data.accountStatus == "Active")
           ||
           (request.resource.data.role == "Responder" && request.resource.data.accountStatus == "PendingVerification")
-          ||
-          // A dispatcher registers, then waits: staff access requires a server-set claim, never this field.
-          (request.resource.data.role == "Dispatcher" && request.resource.data.accountStatus == "PendingVerification")
         );
 
       // Owners may edit profile fields, but cannot change their identity, role, or creation time.
@@ -478,8 +456,8 @@ service cloud.firestore {
     }
 
     match /responders/{responderId} {
-      // Live locations are private: only the responder and staff can read a responder record.
-      allow read: if isOwner(responderId) || isStaff();
+      // Live locations are private: only the responder and administrators can read a responder record.
+      allow read: if isOwner(responderId) || isSystemAdmin();
 
       allow create: if isOwner(responderId)
         && !exists(/databases/$(database)/documents/responders/$(responderId))
@@ -573,8 +551,8 @@ service cloud.firestore {
     }
 
     match /incidents/{incidentId} {
-      // A resident sees only their own alerts. Dispatchers and administrators see all of them.
-      allow read: if isOwner(resource.data.userId) || isStaff();
+      // A resident sees only their own alerts. Administrators see all of them.
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
 
       allow create: if isOwner(request.resource.data.userId)
         && validIncidentCreate();
@@ -594,9 +572,9 @@ service cloud.firestore {
     }
 
     match /offers/{offerId} {
-      // A responder reads only the offers addressed to them. Dispatchers and administrators read all.
+      // A responder reads only the offers addressed to them. Administrators read all.
       allow read: if isSignedIn()
-        && (resource.data.responderId == request.auth.uid || isStaff());
+        && (resource.data.responderId == request.auth.uid || isSystemAdmin());
 
       // Offers are created and removed only by the dispatch Cloud Function.
       allow create, delete: if false;
@@ -636,7 +614,7 @@ service cloud.firestore {
     // The resident of this alert, a unit holding this job, and administrators can read these documents.
     match /incidents/{incidentId}/tracks/{trackOwnerId} {
       allow read: if isSignedIn()
-        && (isStaff() || trackOwnerId == request.auth.uid
+        && (isSystemAdmin() || trackOwnerId == request.auth.uid
             || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid
             || get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"]);
 
@@ -654,39 +632,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ---- Phase 4D: the record, the two-way channels, and alerts for help ----
+    // ---- Phase 4D: the record and alerts for help ----
     // Everything that happened on one alert. Written only by Cloud Functions (the Admin SDK bypasses these rules).
     match /incidents/{incidentId}/events/{eventId} {
-      allow read: if isStaff();
+      allow read: if isSystemAdmin();
       allow write: if false;
-    }
-
-    // Responder <-> dispatch chat for one alert. Only the unit holding the job and staff can read or write.
-    match /incidents/{incidentId}/messages/{messageId} {
-      allow read: if isStaff() || holdsIncident(incidentId);
-      allow create: if isSignedIn()
-        && request.resource.data.keys().hasOnly(["senderUid", "senderRole", "text", "at"])
-        && request.resource.data.senderUid == request.auth.uid
-        && (
-          (request.resource.data.senderRole == "responder" && holdsIncident(incidentId))
-          || (request.resource.data.senderRole == "admin" && isStaff())
-        )
-        && request.resource.data.text is string
-        && request.resource.data.text.size() >= 1
-        && request.resource.data.text.size() <= 500
-        && request.resource.data.at == request.time;
-      allow update, delete: if false;
-    }
-
-    // Fixed questions a dispatcher sends to the caller. The caller answers once; nothing else can change.
-    match /incidents/{incidentId}/checkins/{checkinId} {
-      allow read: if isStaff() || isIncidentOwner(incidentId);
-      allow create, delete: if false;
-      allow update: if isIncidentOwner(incidentId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["reply", "repliedAt"])
-        && resource.data.get("reply", null) == null
-        && request.resource.data.reply in ["yes", "no", "unsure"]
-        && request.resource.data.repliedAt == request.time;
     }
 
     // Caller contact used for dispatch. Cloud Functions only; clients reach it through reveal_contact (logged).
@@ -694,14 +644,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // A responder's SOS. Dispatchers and administrators see it first; no client writes it.
+    // A responder's SOS. Administrators see it; no client writes it.
     match /sos_alerts/{sosId} {
-      allow read: if isStaff();
+      allow read: if isSystemAdmin();
       allow write: if false;
     }
 
     // Push tokens: a signed-in user stores ONLY their own device token. The dispatch function reads it with the Admin SDK.
-    match /deviceTokens/{userId} {      allow read: if isOwner(userId);
+    match /deviceTokens/{userId} {
+      allow read: if isOwner(userId);
       allow create, update: if isOwner(userId)
         && request.resource.data.keys().hasOnly(["token", "platform", "updatedAt"])
         && request.resource.data.token is string && request.resource.data.token.size() > 20 && request.resource.data.token.size() < 400
@@ -713,30 +664,6 @@ service cloud.firestore {
     // Training messages are written only by the save_text_feedback_fn Cloud Function.
     match /text_feedback/{feedbackId} {
       allow read, write: if false;
-    }
-
-    // The record of a dispatcher application and the administrator's decision. The applicant reads their own
-    // (so a rejection reason can be shown); only Cloud Functions write it.
-    match /staff_approvals/{uid} {
-      allow read: if isOwner(uid) || isSystemAdmin();
-      allow write: if false;
-    }
-
-    // Shift pass-on notes. The whole control room reads them; only an administrator writes them.
-    function validOpsNote() {
-      return request.resource.data.keys().hasOnly(["text", "authorUid", "at", "pinned"])
-        && request.resource.data.text is string
-        && request.resource.data.text.size() >= 1
-        && request.resource.data.text.size() <= 500
-        && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.pinned is bool
-        && request.resource.data.at == request.time;
-    }
-
-    match /ops_notes/{noteId} {
-      allow read: if isStaff();
-      allow create, update: if isSystemAdmin() && validOpsNote();
-      allow delete: if false;
     }
 
     match /auditLogs/{logId} {

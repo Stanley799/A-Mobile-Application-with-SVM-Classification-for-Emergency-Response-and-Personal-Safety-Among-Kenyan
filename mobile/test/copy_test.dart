@@ -29,9 +29,6 @@ class _FakeRepo extends HelpRepository {
 
   @override
   Stream<HelpState> watchOptions(String incidentId) => Stream<HelpState>.value(help);
-
-  @override
-  Stream<CheckinQuestion?> watchCheckin(String incidentId) => Stream<CheckinQuestion?>.value(null);
 }
 
 Widget _host(HelpRepository repo, {bool sending = false, String dispatchState = 'dispatching'}) => MaterialApp(

@@ -22,8 +22,6 @@ class _JobRepository extends ResponderRepository {
       );
 
   final StreamController<Offer?> offers = StreamController<Offer?>.broadcast();
-  final StreamController<List<JobMessage>> messages =
-      StreamController<List<JobMessage>>.broadcast();
   final List<(String, String)> transportStarts = [];
   final List<String> savedNotes = [];
   final List<String> responses = [];
@@ -54,9 +52,6 @@ class _JobRepository extends ResponderRepository {
 
   @override
   Stream<Offer?> watchOffer(String id) => offers.stream;
-
-  @override
-  Stream<List<JobMessage>> watchMessages(String incidentId) => messages.stream;
 
   @override
   Future<void> respond(
@@ -159,15 +154,12 @@ Future<_JobRepository> _pump(WidgetTester tester, Offer offer) async {
   addTearDown(tester.view.reset);
   final repo = _JobRepository();
   addTearDown(repo.offers.close);
-  addTearDown(repo.messages.close);
   await tester.pumpWidget(
     MaterialApp(
       home: ActiveJobScreen(offerId: offer.id, repo: repo),
     ),
   );
   repo.offers.add(offer);
-  await tester.pump();
-  repo.messages.add(const []);
   await tester.pump();
   return repo;
 }
@@ -311,7 +303,7 @@ void main() {
     );
     expect(find.text('Request more units'), findsNothing);
     expect(
-      find.textContaining('You asked dispatch for 2 units'),
+      find.textContaining('Requested: 2 units'),
       findsWidgets,
     );
     // Let the confirmation snack bar expire so only the card's own line remains.

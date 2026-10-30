@@ -59,26 +59,6 @@ class MoreUnitsRequest {
   );
 }
 
-/// One chat message between a unit and dispatch (incidents/{id}/messages).
-class JobMessage {
-  const JobMessage({required this.id, required this.senderUid, required this.senderRole, required this.text, this.at});
-  final String id;
-  final String senderUid;
-  final String senderRole; // responder | admin
-  final String text;
-  final DateTime? at;
-
-  bool get fromDispatch => senderRole == 'admin';
-
-  factory JobMessage.fromMap(String id, Map<String, dynamic> m) => JobMessage(
-    id: id,
-    senderUid: (m['senderUid'] ?? '').toString(),
-    senderRole: (m['senderRole'] ?? 'admin').toString(),
-    text: (m['text'] ?? '').toString(),
-    at: _dt(m['at']),
-  );
-}
-
 /// One request sent to one responder (collection `offers`).
 class Offer {
   const Offer({
