@@ -7,6 +7,7 @@ import 'package:intl_phone_number_input/intl_phone_number_input.dart'
 import 'package:provider/provider.dart';
 
 import '../../../app/auth_state_controller.dart';
+import '../../../core/auth/auth_error_text.dart';
 import '../../../core/constants/kenya_counties.dart';
 import '../../../core/services/phone_number_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -167,8 +168,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() {
-          _submitError =
-              e.message ?? 'Unable to create account. Please try again.';
+          _submitError = friendlyAuthError(e);
         });
       }
     } catch (_) {

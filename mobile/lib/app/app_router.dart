@@ -4,6 +4,7 @@ import '../features/admin/admin_shell.dart';
 import '../features/auth/models/auth_models.dart';
 import '../features/auth/screens/create_account_screen.dart';
 import '../features/auth/screens/sign_in_screen.dart';
+import '../features/auth/screens/unsupported_role_screen.dart';
 import '../features/ops/ops_shell.dart';
 import '../features/resident/screens/home_screen.dart';
 import '../features/responder/responder_shell.dart';
@@ -43,6 +44,11 @@ GoRouter buildRouter(AuthStateController authState) {
       final role = profile.role;
       if (role == UserRole.resident) {
         return location == '/home' ? null : '/home';
+      }
+
+      // A role this app does not support gets a clear screen, never a blank page or a redirect loop.
+      if (role != UserRole.resident && role != UserRole.responder) {
+        return location == '/unsupported-role' ? null : '/unsupported-role';
       }
 
       final responder = authState.responderProfile;
@@ -103,6 +109,10 @@ GoRouter buildRouter(AuthStateController authState) {
       GoRoute(
         path: '/admin-dashboard',
         builder: (context, state) => const AdminShell(),
+      ),
+      GoRoute(
+        path: '/unsupported-role',
+        builder: (context, state) => const UnsupportedRoleScreen(),
       ),
     ],
   );

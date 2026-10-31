@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'app/app_router.dart';
 import 'app/auth_state_controller.dart';
 import 'app/permission_service.dart';
+import 'core/diagnostics/firebase_diagnostics.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/services/auth_repository.dart';
 import 'firebase_options.dart';
@@ -15,6 +16,7 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  logFirebaseDiagnostics(); // debug builds only; never throws
   if (kIsWeb && Uri.base.queryParameters['multiAccount'] == 'true') {
     await FirebaseAuth.instance.setPersistence(Persistence.SESSION);
   }

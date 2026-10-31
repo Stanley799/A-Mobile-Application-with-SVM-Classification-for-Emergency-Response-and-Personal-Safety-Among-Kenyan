@@ -34,7 +34,7 @@ AlertPhase alertPhase({
   return AlertPhase.sending;
 }
 
-enum _Stage { chooseCategory, chooseOtherType, safety, describe, quick, done }
+enum _Stage { chooseOtherType, safety, quick, done }
 
 class AlertStatusSheet extends StatefulWidget {
   const AlertStatusSheet({
@@ -47,6 +47,7 @@ class AlertStatusSheet extends StatefulWidget {
     this.onRaiseAlert,
     this.repo,
     this.dispatch,
+    this.initialDescription,
   });
 
   final DocumentReference<Map<String, dynamic>> incidentRef;
@@ -57,6 +58,9 @@ class AlertStatusSheet extends StatefulWidget {
   final VoidCallback? onRaiseAlert;
   final HelpRepository? repo;
   final Stream<DispatchInfo>? dispatch;
+
+  /// What the person typed in the SOS picker, if anything. Opens the sheet on the right question.
+  final FreeTextResult? initialDescription;
 
   @override
   State<AlertStatusSheet> createState() => _AlertStatusSheetState();
@@ -80,7 +84,6 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
 
   DateTime? _recordedAt;
   int _quickIndex = 0;
-  bool _isFreeTextMode = false;
   String _typedText = '';
   bool _textConsent = false;
   List<String> _textFlags = const [];
@@ -92,17 +95,19 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
   @override
   void initState() {
     super.initState();
+    // The category was already chosen and confirmed before this sheet opened. Go straight to the quick questions.
+    // 'SOS' is the old name for "nothing chosen yet" and still means Other / General.
     _category = widget.category == 'SOS' ? 'Other / General' : widget.category;
-
-    if (widget.category == 'SOS') {
-      _stage = _Stage.chooseCategory;
-      _isFreeTextMode = false;
-    } else if (widget.category == 'Other / General') {
-      _stage = _Stage.chooseCategory;
-      _isFreeTextMode = true;
-    } else {
-      _stage = _Stage.describe;
+    _stage = _Stage.quick;
+    final described = widget.initialDescription;
+    if (described != null) {
+      _applyDescription(described);
+      _saveDescriptionFeedback();
+      _saveQuickProgress();
+    } else if (_category == 'Other / General') {
+      _stage = _Stage.chooseOtherType;
     }
+    _classified = described != null || _category != 'Other / General';
 
     _stopwatch.start();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -266,56 +271,30 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     );
   }
 
-  void _onSelectCategoryTile(String cat) {
-    _classified = true;
-    if (cat == 'Other / General') {
-      setState(() {
-        _category = cat;
-        _subtype = null;
-        _stage = _Stage.describe;
-      });
-    } else {
-      setState(() {
-        _category = cat;
-        _subtype = null;
-        _answers.clear();
-        _stage = _Stage.describe;
-        _quickIndex = 0;
-      });
-    }
-  }
-
-  void _onDescription(FreeTextResult result) {
-    // Skipping with an empty box classifies nothing: cancelling must still end the alert.
-    if (result.text.trim().isNotEmpty || result.chosenCategory != null) {
-      _classified = true;
-    }
+  /// Applies what was typed in the SOS picker. No setState: only called from initState.
+  void _applyDescription(FreeTextResult result) {
     final category = result.chosenCategory;
     final suggestion = result.suggestion;
-    setState(() {
-      _typedText = result.text;
-      _textConsent = result.consent;
-      _textFlags = suggestion?.flags ?? const [];
-      if (category != null) {
-        _category = category;
-        _subtype =
-            suggestion?.category == category &&
-                (kCategorySubtypes[category] ?? const <String>[]).contains(
-                  suggestion?.subtype,
-                )
-            ? suggestion?.subtype
-            : null;
-      }
-      _answers.clear();
-      _quickIndex = 0;
-      _stage = _subtype == 'emotional_distress'
-          ? _Stage.safety
-          : _category == 'Other / General' && _subtype == null
-          ? _Stage.chooseOtherType
-          : _Stage.quick;
-    });
-    _saveDescriptionFeedback();
-    _saveQuickProgress();
+    _typedText = result.text;
+    _textConsent = result.consent;
+    _textFlags = suggestion?.flags ?? const [];
+    if (category != null) {
+      _category = category;
+      _subtype =
+          suggestion?.category == category &&
+              (kCategorySubtypes[category] ?? const <String>[]).contains(
+                suggestion?.subtype,
+              )
+          ? suggestion?.subtype
+          : null;
+    }
+    _answers.clear();
+    _quickIndex = 0;
+    _stage = _subtype == 'emotional_distress'
+        ? _Stage.safety
+        : _category == 'Other / General' && _subtype == null
+        ? _Stage.chooseOtherType
+        : _Stage.quick;
   }
 
   void _onSelectOtherSubtype(String sub) {
@@ -658,20 +637,39 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             ),
             child: _createFailed
                 ? _buildFailureBanner()
-                : AlertStatusBody(
-                    incidentId: widget.incidentRef.id,
-                    categoryLabel: _category,
-                    priorityLabel: 'High',
-                    reference: refStr,
-                    receivedAt: _recordedAt ?? DateTime.now(),
-                    detailsPending: !_detailsCompleted,
-                    onAddDetails: _openMoreDetailsSheet,
-                    repo: widget.repo,
-                    dispatch: widget.dispatch,
-                    sending:
-                        phase == AlertPhase.sending ||
-                        phase == AlertPhase.savedOffline,
-                    onRaiseAlert: widget.onRaiseAlert,
+                : _supportMode
+                ? _buildSupportContent()
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // The quick questions sit above the status while the alert goes out.
+                      if (_stage != _Stage.done) ...[
+                        _buildStageContent(),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      KeyedSubtree(
+                        key: const ValueKey('alert-status-body'),
+                        child: AlertStatusBody(
+                        incidentId: widget.incidentRef.id,
+                        categoryLabel: _category,
+                        priorityLabel: 'High',
+                        reference: refStr,
+                        receivedAt: _recordedAt ?? DateTime.now(),
+                        detailsPending: !_detailsCompleted,
+                        onAddDetails: _openMoreDetailsSheet,
+                        repo: widget.repo,
+                        dispatch: widget.dispatch,
+                        sending:
+                            phase == AlertPhase.sending ||
+                            phase == AlertPhase.savedOffline,
+                        onRaiseAlert: widget.onRaiseAlert,
+                        ),
+                      ),
+                      if (_stage == _Stage.done) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        _buildHotlines(),
+                      ],
+                    ],
                   ),
           ),
         ),
@@ -684,136 +682,15 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
 
   Widget _buildStageContent() {
     switch (_stage) {
-      case _Stage.chooseCategory:
-        return _buildChooseCategory();
       case _Stage.chooseOtherType:
         return _buildChooseOtherType();
       case _Stage.safety:
         return _buildSafetyQuestion();
-      case _Stage.describe:
-        return FreeTextStep(
-          key: const ValueKey('triage-description'),
-          suggestMode: true,
-          initialText: _typedText,
-          initialConsent: _textConsent,
-          canSkip: true,
-          onContinue: _onDescription,
-        );
       case _Stage.quick:
         return _buildQuickQuestions();
       case _Stage.done:
-        return _buildDoneContent();
+        return const SizedBox.shrink();
     }
-  }
-
-  Widget _buildChooseCategory() {
-    if (_isFreeTextMode) {
-      return FreeTextStep(
-        suggestMode: true,
-        initialText: _typedText,
-        initialConsent: _textConsent,
-        onContinue: _onDescription,
-      );
-    }
-
-    final categories = <String>[
-      'Medical Emergency',
-      'Road Accident',
-      'Fire & Rescue',
-      'Security Threat',
-      'Abduction',
-      'Other / General',
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'What is happening?',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Tap the closest match. Help does not wait for this.',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: categories.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: AppSpacing.md,
-              mainAxisSpacing: AppSpacing.md,
-              mainAxisExtent: 72,
-            ),
-            itemBuilder: (context, index) {
-              final cat = categories[index];
-              final style = categoryStyle(cat);
-
-              return Material(
-                color: style.background,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  onTap: () => _onSelectCategoryTile(cat),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: AppColors.surface.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            style.icon,
-                            size: 18,
-                            color: style.foreground,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            cat,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Center(
-            child: TextButton(
-              onPressed: () => setState(() => _isFreeTextMode = true),
-              child: const Text('Describe it in words instead'),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildChooseOtherType() {
@@ -1055,45 +932,8 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
     );
   }
 
-  Widget _buildDoneContent() {
-    if (_supportMode) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: AppShadows.card,
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'You are not alone. Support is below.',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Reach out anytime to speak with someone who can help.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          for (final h in hotlinesFor('emotional_distress')) ...[
-            HotlineCard(hotline: h),
-            const SizedBox(height: AppSpacing.md),
-          ],
-        ],
-      );
-    }
-
+  /// Shown instead of the dispatch status when the person said they are not thinking of harming themselves.
+  Widget _buildSupportContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1108,92 +948,41 @@ class _AlertStatusSheetState extends State<AlertStatusSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'What to do now',
+                'You are not alone. Support is below.',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
               SizedBox(height: 4),
               Text(
-                'If you need an ambulance, call 922. For police or fire, call 999.',
+                'Reach out anytime to speak with someone who can help.',
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        for (final h in hotlinesFor(_subtype)) ...[
+        for (final h in hotlinesFor('emotional_distress')) ...[
           HotlineCard(hotline: h),
           const SizedBox(height: AppSpacing.md),
         ],
-        if (!_detailsCompleted)
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: AppShadows.card,
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Add more details',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Optional. Helps responders prepare. About 30 seconds.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                OutlinedButton(
-                  onPressed: _openMoreDetailsSheet,
-                  child: const Text('Add'),
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.successLight,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.check_circle, color: AppColors.success, size: 20),
-                SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Details added',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.success,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: AppSpacing.md),
-        OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
+      ],
+    );
+  }
+
+  /// Extra helplines for this kind of emergency (for example the GBV or child helpline).
+  /// The 999 and 922 buttons are already part of the status above.
+  Widget _buildHotlines() {
+    final extra = [
+      for (final h in hotlinesFor(_subtype))
+        if (h.showWhen != 'always') h,
+    ];
+    if (extra.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final h in extra) ...[
+          HotlineCard(hotline: h),
+          const SizedBox(height: AppSpacing.md),
+        ],
       ],
     );
   }

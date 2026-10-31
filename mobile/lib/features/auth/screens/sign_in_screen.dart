@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/auth_state_controller.dart';
+import '../../../core/auth/auth_error_text.dart';
 import '../services/auth_repository.dart';
 import 'password_reset_screen.dart';
 
@@ -57,7 +58,7 @@ class _SignInScreenState extends State<SignInScreen> {
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = authRepository.mapSignInError(e);
+          _errorMessage = friendlyAuthError(e);
         });
       }
     } catch (_) {

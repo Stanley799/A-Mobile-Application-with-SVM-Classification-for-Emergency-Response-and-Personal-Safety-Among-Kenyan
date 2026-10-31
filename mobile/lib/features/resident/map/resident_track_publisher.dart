@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class ResidentTrackPublisher {
@@ -48,19 +49,35 @@ class ResidentTrackPublisher {
   Future<void> _write(Position? pos) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (pos == null || uid == null || _holders.isEmpty) return;
-    for (final iid in _holders) {
+    await _forEachHolder((iid) async {
+      await FirebaseFirestore.instance.collection('incidents').doc(iid).collection('tracks').doc(uid).set({
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'heading': pos.heading,
+        'speed': pos.speed,
+        'accuracy': pos.accuracy,
+        'at': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Runs [action] for each open alert. It walks a COPY of the holders, because
+  /// release() can remove one while an earlier write is still in flight
+  /// (that crashed with "Concurrent modification during iteration").
+  Future<void> _forEachHolder(Future<void> Function(String incidentId) action) async {
+    for (final iid in List<String>.of(_holders)) {
+      if (!_holders.contains(iid)) continue; // released while we were busy: its alert is closed
       try {
-        await FirebaseFirestore.instance.collection('incidents').doc(iid).collection('tracks').doc(uid).set({
-          'lat': pos.latitude,
-          'lng': pos.longitude,
-          'heading': pos.heading,
-          'speed': pos.speed,
-          'accuracy': pos.accuracy,
-          'at': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {/* offline, or the alert just closed: rules rejected it, which is fine */}
+        await action(iid);
+      } catch (e) {
+        // offline, or the alert just closed: rules rejected it, which is fine
+        if (kDebugMode) debugPrint('track write skipped for $iid: ${e.runtimeType}');
+      }
     }
   }
+
+  @visibleForTesting
+  Future<void> forEachHolderForTest(Future<void> Function(String incidentId) action) => _forEachHolder(action);
 
   void stop() {
     _sub?.cancel();

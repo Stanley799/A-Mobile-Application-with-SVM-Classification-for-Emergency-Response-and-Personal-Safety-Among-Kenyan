@@ -13,12 +13,14 @@ import '../widgets/activity_record.dart';
 import '../widgets/alert_status_sheet.dart';
 import '../widgets/category_chip.dart';
 import '../widgets/live_location_pill.dart';
+import '../widgets/other_free_text_sheet.dart';
 import '../widgets/sos_button.dart';
 import '../widgets/sos_halo.dart';
 import '../widgets/status_card.dart';
 import 'activity_history_screen.dart';
 import 'safety_checkin_screen.dart';
 import 'sos_confirmation_sheet.dart';
+import 'sos_picker_sheet.dart';
 import 'trusted_contacts_screen.dart';
 import '../../shared/screens/profile_screen.dart';
 
@@ -362,8 +364,7 @@ class _ResidentDashboard extends StatelessWidget {
                       label: 'Report an emergency',
                       hint: 'Opens the SOS alert and shares your location with responders.',
                       child: SosButton(
-                        onPressed: () =>
-                            _confirmEmergency(context, 'SOS'),
+                        onPressed: () => _startSos(context),
                       ),
                     ),
                   ),
@@ -461,8 +462,9 @@ class _ResidentDashboard extends StatelessWidget {
                         icon: category.icon,
                         background: category.background,
                         foreground: category.foreground,
-                        onTap: () =>
-                            _confirmEmergency(context, category.category),
+                        onTap: () => category.category == 'Other / General'
+                            ? _startSos(context)
+                            : _confirmAndSend(context, category.category),
                       );
                     }, childCount: _categories.length),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -510,20 +512,55 @@ class _ResidentDashboard extends StatelessWidget {
     return trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
   }
 
-  Future<void> _confirmEmergency(BuildContext context, String category) async {
-    final confirmCat = category == 'SOS' ? 'Other / General' : category;
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    final actualCategory = category == 'SOS' ? 'Other / General' : category;
+  /// SOS button and the Other / General tile: pick one of five categories or describe it, then confirm.
+  /// Nothing is written until the person taps "Send alert" on the confirmation.
+  Future<void> _startSos(BuildContext context) async {
+    final choice = await showModalBottomSheet<SosChoice>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (_) => const SosPickerSheet(),
+    );
+    if (choice == null || !context.mounted) return;
+    await _confirmAndSend(
+      context,
+      choice.category,
+      description: choice.description,
+    );
+  }
 
-    final id = newIncidentId(category: actualCategory);
-    final ref = FirebaseFirestore.instance.collection('incidents').doc(id);
-
-    // 1. Fetch location robustly (Web + Mobile) in parallel with sheet
+  /// Asks "Send alert for the category?", and only on Send creates the alert and opens the status sheet.
+  Future<void> _confirmAndSend(
+    BuildContext context,
+    String category, {
+    FreeTextResult? description,
+  }) async {
+    // Start looking for the location now, so it is usually ready by the time Send is tapped.
     final locationFuture = _getCurrentLocationRobust();
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (_) => SosConfirmationSheet(category: category),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final id = newIncidentId(category: category);
+    final ref = FirebaseFirestore.instance.collection('incidents').doc(id);
 
     final initialData = <String, Object?>{
       'userId': userId,
-      'category': actualCategory,
+      'category': category,
       'status': 'Active',
       'location': null,
       'priority': 'High',
@@ -554,40 +591,13 @@ class _ResidentDashboard extends StatelessWidget {
       }),
     );
 
-    // 2. Show 5-second diagnostic confirmation sheet
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      useSafeArea: true,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
-      builder: (context) => SosConfirmationSheet(
-        category: confirmCat,
-        incidentRef: ref,
-      ),
+    // Never hold the status sheet back for the GPS fix.
+    final location = await locationFuture.timeout(
+      const Duration(milliseconds: 400),
+      onTimeout: () => null,
     );
+    if (!context.mounted) return;
 
-    if (confirmed == false) {
-      unawaited(
-        ref.update({
-          'status': 'Cancelled',
-          'cancelledAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }).catchError((e) {
-          debugPrint('Cancel incident error: $e');
-        }),
-      );
-      return;
-    }
-
-    if (confirmed != true || !context.mounted) return;
-
-    final location = await locationFuture;
-
-    // 3. Proceed seamlessly to AlertStatusSheet with the SAME createFuture
     unawaited(
       showModalBottomSheet<void>(
         context: context,
@@ -606,11 +616,12 @@ class _ResidentDashboard extends StatelessWidget {
             createFuture: createFuture,
             retryCreate: () => ref.set(initialData),
             category: category,
+            initialDescription: description,
             locationShared: location != null,
             onRaiseAlert: () {
               Navigator.of(context).pop();
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (context.mounted) _confirmEmergency(context, 'SOS');
+                if (context.mounted) _startSos(context);
               });
             },
           ),

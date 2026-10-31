@@ -1,0 +1,1228 @@
+=== GIT ===
+ M mobile/lib/features/resident/screens/home_screen.dart
+ M mobile/lib/features/resident/screens/sos_confirmation_sheet.dart
+ M mobile/lib/features/resident/widgets/alert_status_sheet.dart
+?? .idea/
+?? followup_report.txt
+?? mobile/lib/features/resident/screens/sos_picker_sheet.dart
+?? mobile/test/alert_status_sheet_stages_test.dart
+?? mobile/test/sos_flow_test.dart
+
+master
+
+25a399d sucessful run of the app in android device and fixing sign in error
+aef3fe5 fix RenderFlex horizontal overflow in alert_status_sheet header Row
+cc0eed2 fix RenderFlex horizontal overflow in alert_status_body location card
+473fac6 complete phase 4d: dispatch backbone, ops console, and guided first aid
+7bc1ed1 implementing the first aid guidance and error handling
+
+=== pubspec name/deps ===
+name: mobile
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  cloud_firestore: ^5.4.0
+  cloud_functions: ^5.1.0
+  go_router: ^14.2.0
+  provider: ^6.1.2
+  geolocator: ^13.0.2
+  firebase_storage: ^12.4.10
+  firebase_messaging: ^15.2.10
+  firebase_auth_mocks: ^0.14.2
+  firebase_storage_mocks: ^0.7.0
+
+=== ANDROID PACKAGE ===
+(no mobile/android/app/build.gradle)
+mobile/android/app/build.gradle.kts:11: namespace = "com.example.mobile"
+mobile/android/app/build.gradle.kts:22: applicationId = "com.example.mobile"
+mobile/android/app/google-services.json:10: "mobilesdk_app_id": "1:209706329218:android:3ea556fe5bb62f5b65809b",
+mobile/android/app/google-services.json:12: "package_name": "com.example.mobile"
+mobile/android/app/google-services.json:29: "mobilesdk_app_id": "1:209706329218:android:2d8abcafb5ef6a3c65809b",
+mobile/android/app/google-services.json:31: "package_name": "emergency.response.system166601"
+mobile/lib/firebase_options.dart:45: appId: '1:209706329218:web:b52d6706d8f0224f65809b',
+mobile/lib/firebase_options.dart:54: appId: '1:209706329218:android:3ea556fe5bb62f5b65809b',
+mobile/lib/firebase_options.dart:62: appId: '1:209706329218:ios:c3c40d384819f05865809b',
+mobile/lib/firebase_options.dart:71: appId: '1:209706329218:ios:c3c40d384819f05865809b',
+mobile/lib/firebase_options.dart:80: appId: '1:209706329218:web:65876e4bd5759aa165809b',
+MainActivity files: mobile\android\app\src\main\kotlin\com\example\mobile\MainActivity.kt
+AndroidManifest package lines:
+  mobile\android\app\src\main\AndroidManifest.xml:15: android:label="Emergency Response"
+
+##### FILE: mobile\lib\core\diagnostics\firebase_diagnostics.dart  (CRLF=True, 633 chars)
+<<<BEGIN>>>
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+
+/// Prints which Firebase app and key this build uses. Debug builds only.
+/// Shows only the LAST 4 characters of the key so nothing secret leaks.
+void logFirebaseDiagnostics() {
+  if (!kDebugMode) return;
+  try {
+    final o = Firebase.app().options;
+    final key = o.apiKey;
+    final end = key.length >= 4 ? key.substring(key.length - 4) : '????';
+    debugPrint('FIREBASE project=${o.projectId} appId=${o.appId} apiKeyEnds=$end');
+  } catch (e) {
+    debugPrint('FIREBASE diagnostics failed: ${e.runtimeType}');
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\core\auth\auth_error_text.dart  (CRLF=True, 1798 chars)
+<<<BEGIN>>>
+import 'package:firebase_auth/firebase_auth.dart';
+
+/// Turns any sign-in or sign-up error into a short, plain sentence.
+/// Never show raw exception text to a person.
+String friendlyAuthError(Object error) {
+  if (error is FirebaseAuthException) {
+    switch (error.code) {
+      case 'invalid-email':
+        return 'That email address does not look right. Please check it.';
+      case 'user-disabled':
+        return 'This account has been disabled. Please contact support.';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+      case 'invalid-login-credentials':
+        return 'The email or password is not correct. Please try again.';
+      case 'email-already-in-use':
+        return 'An account with this email already exists. Try signing in.';
+      case 'weak-password':
+        return 'Please choose a stronger password (at least 8 characters).';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a few minutes and try again.';
+      case 'network-request-failed':
+        return 'No internet connection. Please check your data or Wi-Fi.';
+      case 'operation-not-allowed':
+        return 'Sign-in with email is not switched on yet. Please contact support.';
+      case 'internal-error':
+      case 'invalid-api-key':
+      case 'app-not-authorized':
+        return 'We could not reach the sign-in service. Please try again in a moment.';
+      default:
+        return 'Something went wrong while signing in. Please try again.';
+    }
+  }
+  return 'Something went wrong. Please try again.';
+}
+
+/// Short code for support, safe to show in small grey text under the message.
+String authErrorCode(Object error) =>
+    error is FirebaseAuthException ? error.code : 'unknown';
+
+<<<END>>>
+
+##### FILE: mobile\lib\features\auth\screens\unsupported_role_screen.dart  (CRLF=True, 1747 chars)
+<<<BEGIN>>>
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class UnsupportedRoleScreen extends StatelessWidget {
+  const UnsupportedRoleScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.block, size: 64, color: Colors.orange),
+              const SizedBox(height: 16),
+              const Text(
+                'This account type is not available',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Please contact the system administrator.',
+                style: TextStyle(fontSize: 16, color: Color(0xFF4A4A4A)),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F766E),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+                child: const Text('Sign Out', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\features\resident\map\resident_track_publisher.dart  (CRLF=False, 2681 chars)
+<<<BEGIN>>>
+// Shares the resident's live position with the unit that took their alert (Uber-style mutual tracking).
+// Runs only while the alert is open. firestore.rules stop accepting writes the moment the alert closes.
+// Tracking is a bonus, never a blocker: any failure here is silent.
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
+
+class ResidentTrackPublisher {
+  ResidentTrackPublisher._();
+  static final ResidentTrackPublisher instance = ResidentTrackPublisher._();
+
+  final Set<String> _holders = {};
+  StreamSubscription<Position>? _sub;
+  Timer? _keepAlive;
+  Position? _last;
+
+  bool get running => _sub != null;
+
+  /// True while this incident's position is being shared.
+  bool holds(String incidentId) => _holders.contains(incidentId);
+
+  /// The resident shell holds one reference per open alert; the help map keeps none of its own.
+  void acquire(String incidentId) {
+    _holders.add(incidentId);
+    if (_sub == null) _start();
+  }
+
+  void release(String incidentId) {
+    _holders.remove(incidentId);
+    if (_holders.isEmpty) stop();
+  }
+
+  Future<void> _start() async {
+    try {
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+      if (p == LocationPermission.denied || p == LocationPermission.deniedForever || !await Geolocator.isLocationServiceEnabled()) return;
+      _sub = Geolocator.getPositionStream(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 15)).listen((pos) {
+        _last = pos;
+        _write(pos);
+      });
+      _keepAlive = Timer.periodic(const Duration(seconds: 20), (_) => _write(_last)); // standing still still counts as "live"
+    } catch (_) {/* never block the alert on tracking */}
+  }
+
+  Future<void> _write(Position? pos) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (pos == null || uid == null || _holders.isEmpty) return;
+    for (final iid in _holders) {
+      try {
+        await FirebaseFirestore.instance.collection('incidents').doc(iid).collection('tracks').doc(uid).set({
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'heading': pos.heading,
+          'speed': pos.speed,
+          'accuracy': pos.accuracy,
+          'at': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {/* offline, or the alert just closed: rules rejected it, which is fine */}
+    }
+  }
+
+  void stop() {
+    _sub?.cancel();
+    _sub = null;
+    _keepAlive?.cancel();
+    _keepAlive = null;
+    _holders.clear();
+    _last = null;
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\main.dart  (CRLF=True, 1838 chars)
+<<<BEGIN>>>
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
+
+import 'app/app_router.dart';
+import 'app/auth_state_controller.dart';
+import 'app/permission_service.dart';
+import 'core/theme/app_theme.dart';
+import 'features/auth/services/auth_repository.dart';
+import 'firebase_options.dart';
+
+/// Initializes Flutter and Firebase before starting the provider-backed app.
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (kIsWeb && Uri.base.queryParameters['multiAccount'] == 'true') {
+    await FirebaseAuth.instance.setPersistence(Persistence.SESSION);
+  }
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        Provider<AuthRepository>(create: (_) => AuthRepository()),
+        Provider<PermissionService>(create: (_) => PermissionService()),
+        ChangeNotifierProvider<AuthStateController>(
+          create: (context) => AuthStateController(
+            authRepository: context.read<AuthRepository>(),
+            permissionService: context.read<PermissionService>(),
+          ),
+        ),
+      ],
+      child: Builder(
+        builder: (context) {
+          final authState = context.watch<AuthStateController>();
+          final router = buildRouter(authState);
+          return MaterialApp.router(
+            title: 'Emergency Response System',
+            theme: AppTheme.data,
+            routerConfig: router,
+          );
+        },
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\app\app_router.dart  (CRLF=True, 3661 chars)
+<<<BEGIN>>>
+import 'package:go_router/go_router.dart';
+
+import '../features/admin/admin_shell.dart';
+import '../features/auth/models/auth_models.dart';
+import '../features/auth/screens/create_account_screen.dart';
+import '../features/auth/screens/sign_in_screen.dart';
+import '../features/ops/ops_shell.dart';
+import '../features/resident/screens/home_screen.dart';
+import '../features/responder/responder_shell.dart';
+import '../features/home/screens/placeholder_screens.dart';
+import 'auth_state_controller.dart';
+
+/// Builds role-aware routes and gates responders by approval state.
+GoRouter buildRouter(AuthStateController authState) {
+  return GoRouter(
+    initialLocation: '/sign-in',
+    refreshListenable: authState,
+    redirect: (context, state) {
+      final isLoading = authState.isLoading;
+      if (isLoading) {
+        return state.matchedLocation == '/loading' ? null : '/loading';
+      }
+
+      final user = authState.firebaseUser;
+      final location = state.matchedLocation;
+
+      if (user == null) {
+        if (location == '/sign-in' || location == '/create-account') {
+          return null;
+        }
+        return '/sign-in';
+      }
+
+      if (authState.isSystemAdmin) {
+        return location == '/dispatch-console' ? null : '/dispatch-console';
+      }
+
+      final profile = authState.profile;
+      if (profile == null) {
+        return '/loading';
+      }
+
+      final role = profile.role;
+      if (role == UserRole.resident) {
+        return location == '/home' ? null : '/home';
+      }
+
+      final responder = authState.responderProfile;
+      if (responder == null) {
+        return '/pending-verification';
+      }
+
+      switch (responder.verificationStatus) {
+        case ResponderVerificationStatus.verified:
+          return location == '/responder-home' ? null : '/responder-home';
+        case ResponderVerificationStatus.pending:
+          return location == '/pending-verification' ? null : '/pending-verification';
+        case ResponderVerificationStatus.rejected:
+          return location == '/registration-rejected' ? null : '/registration-rejected';
+        case ResponderVerificationStatus.suspended:
+          return location == '/account-suspended' ? null : '/account-suspended';
+      }
+    },
+    routes: [
+      GoRoute(
+        path: '/loading',
+        builder: (context, state) => const LoadingScreen(),
+      ),
+      GoRoute(
+        path: '/sign-in',
+        builder: (context, state) => const SignInScreen(),
+      ),
+      GoRoute(
+        path: '/create-account',
+        builder: (context, state) => const CreateAccountScreen(),
+      ),
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const ResidentHomeScreen(),
+      ),
+      GoRoute(
+        path: '/responder-home',
+        builder: (context, state) => const ResponderGate(),
+      ),
+      GoRoute(
+        path: '/pending-verification',
+        builder: (context, state) => const PendingVerificationScreen(),
+      ),
+      GoRoute(
+        path: '/registration-rejected',
+        builder: (context, state) => RegistrationRejectedScreen(
+          verificationNotes: authState.responderProfile?.verificationNotes,
+        ),
+      ),
+      GoRoute(
+        path: '/account-suspended',
+        builder: (context, state) => const AccountSuspendedScreen(),
+      ),
+      GoRoute(
+        path: '/dispatch-console',
+        builder: (context, state) => const OpsShell(),
+      ),
+      GoRoute(
+        path: '/admin-dashboard',
+        builder: (context, state) => const AdminShell(),
+      ),
+    ],
+  );
+}
+
+<<<END>>>
+
+=== files that show FirebaseAuthException or auth error text ===
+mobile\lib\core\auth\auth_error_text.dart:5: String friendlyAuthError(Object error) {
+mobile\lib\core\auth\auth_error_text.dart:6: if (error is FirebaseAuthException) {
+mobile\lib\core\auth\auth_error_text.dart:40: error is FirebaseAuthException ? error.code : 'unknown';
+mobile\lib\core\ui\feedback.dart:74: final m = e.message;
+mobile\lib\features\admin\admin_admins.dart:36: String _msg(Object e) => e is FirebaseFunctionsException ? (e.message ?? e.code) : 'Something went wrong. Check your connection and try again.';
+mobile\lib\features\auth\screens\create_account_screen.dart:167: } on FirebaseAuthException catch (e) {
+mobile\lib\features\auth\screens\create_account_screen.dart:171: e.message ?? 'Unable to create account. Please try again.';
+mobile\lib\features\auth\screens\password_reset_screen.dart:72: } on FirebaseAuthException catch (error) {
+mobile\lib\features\auth\screens\sign_in_screen.dart:57: } on FirebaseAuthException catch (e) {
+mobile\lib\features\auth\services\auth_repository.dart:75: throw FirebaseAuthException(code: 'too-many-requests');
+mobile\lib\features\auth\services\auth_repository.dart:80: } on FirebaseAuthException catch (error) {
+mobile\lib\features\auth\services\auth_repository.dart:101: throw FirebaseAuthException(
+mobile\lib\features\auth\services\auth_repository.dart:179: throw FirebaseAuthException(
+mobile\lib\features\auth\services\auth_repository.dart:218: String mapSignInError(FirebaseAuthException e) {
+mobile\lib\features\resident\map\help_map_screen.dart:424: if (mounted) _snack(e.message ?? 'Could not send the request. Try another option or call.');
+mobile\lib\features\shared\screens\profile_screen.dart:270: _notify(error.message);
+mobile\test\profile_screen_test.dart:185: isA<FirebaseAuthException>().having(
+mobile\test\profile_screen_test.dart:204: throwsA(isA<FirebaseAuthException>()),
+mobile\test\profile_screen_test.dart:356: throw FirebaseAuthException(code: 'network-request-failed');
+mobile\test\profile_screen_test.dart:446: if (errorCode != null) throw FirebaseAuthException(code: errorCode!);
+
+=== who imports the three unused files ===
+mobile\lib\features\resident\screens\home_screen.dart:11: import '../map/resident_track_publisher.dart';
+mobile\lib\features\resident\status\alert_status_body.dart:21: import '../map/resident_track_publisher.dart';
+
+=== sign-in / create-account / auth screens ===
+mobile\lib\features\auth\screens\create_account_screen.dart
+mobile\lib\features\auth\screens\sign_in_screen.dart
+
+##### FILE: mobile\lib\features\auth\screens\create_account_screen.dart  (CRLF=True, 21011 chars)
+<<<BEGIN>>>
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart'
+    as intl_phone;
+import 'package:provider/provider.dart';
+
+import '../../../app/auth_state_controller.dart';
+import '../../../core/constants/kenya_counties.dart';
+import '../../../core/services/phone_number_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../models/auth_models.dart';
+import '../services/auth_repository.dart';
+
+/// Collects resident or responder details and submits a validated registration.
+class CreateAccountScreen extends StatefulWidget {
+  const CreateAccountScreen({super.key});
+
+  @override
+  State<CreateAccountScreen> createState() => _CreateAccountScreenState();
+}
+
+class _CreateAccountScreenState extends State<CreateAccountScreen> {
+  final _phoneNumberService = PhoneNumberService();
+
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _dobController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _organizationNameController = TextEditingController();
+  final _registrationNumberController = TextEditingController();
+
+  UserRole _role = UserRole.resident;
+  OrganizationType _organizationType = OrganizationType.ambulance;
+  PreferredLanguage _preferredLanguage = PreferredLanguage.en;
+  String _selectedCountryCode = 'KE';
+  String? _selectedCounty;
+  String? _gender;
+  bool _consent = false;
+  bool _isSubmitting = false;
+  String? _submitError;
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _dobController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _organizationNameController.dispose();
+    _registrationNumberController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: now,
+    );
+    if (selected == null) {
+      return;
+    }
+    _dobController.text =
+        '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+  }
+
+  String? _validateRegistrationNumber(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Organization registration number is required';
+    }
+    final trimmed = value.trim();
+    if (trimmed.length < 5) {
+      return 'Registration number must be at least 5 characters';
+    }
+    if (trimmed.length > 30) {
+      return 'Registration number is too long';
+    }
+    final validPattern = RegExp(r'^[A-Za-z0-9/.\-]+$');
+    if (!validPattern.hasMatch(trimmed)) {
+      return 'Only letters, numbers, slashes, dots, and hyphens are allowed';
+    }
+    return null;
+  }
+
+  String? _validatePhoneNumber(String? value) {
+    return _phoneNumberService.validate(value, _selectedCountryCode);
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final formattedPhoneNumber = _phoneNumberService.formatToE164(
+      _phoneController.text.trim(),
+      _selectedCountryCode,
+    );
+
+    // Consent and gender are stored outside the Form fields, so validate them here.
+    if (!_consent) {
+      setState(() {
+        _submitError =
+            'You must provide KDPA cross-border consent to continue.';
+      });
+      return;
+    }
+
+    if (_gender == null) {
+      setState(() {
+        _submitError = 'Please select Male or Female for gender.';
+      });
+      return;
+    }
+
+    setState(() {
+      _submitError = null;
+      _isSubmitting = true;
+    });
+
+    final authRepository = context.read<AuthRepository>();
+    final authStateController = context.read<AuthStateController>();
+
+    try {
+      final dateOfBirth = DateTime.parse(_dobController.text.trim());
+      final input = RegistrationInput(
+        firstName: _firstNameController.text,
+        lastName: _lastNameController.text,
+        dateOfBirth: dateOfBirth,
+        gender: _gender!,
+        phoneNumber: formattedPhoneNumber,
+        email: _emailController.text,
+        password: _passwordController.text,
+        role: _role,
+        preferredLanguage: _preferredLanguage,
+        consentCrossBorderTransfer: _consent,
+        organizationName: _role == UserRole.responder
+            ? _organizationNameController.text
+            : null,
+        organizationType: _role == UserRole.responder
+            ? _organizationType
+            : null,
+        registrationNumber: _role == UserRole.responder
+            ? _registrationNumberController.text
+            : null,
+        serviceArea: _role == UserRole.responder ? _selectedCounty : null,
+      );
+
+      await authRepository.register(input);
+      // Load the new Firestore profile before role-based routing continues.
+      await authStateController.refresh();
+
+      if (!mounted) {
+        return;
+      }
+
+      context.go('/loading');
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _submitError =
+              e.message ?? 'Unable to create account. Please try again.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _submitError = 'Unable to create account. Please verify your details and try again.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isResponder = _role == UserRole.responder;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Create Account')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Public Registration',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 16),
+              _textField(
+                controller: _firstNameController,
+                label: '1. First Name',
+              ),
+              const SizedBox(height: 12),
+              _textField(
+                controller: _lastNameController,
+                label: '2. Last Name',
+              ),
+              const SizedBox(height: 12),
+              intl_phone.InternationalPhoneNumberInput(
+                textFieldController: _phoneController,
+                initialValue: intl_phone.PhoneNumber(isoCode: 'KE'),
+                maxLength: 25,
+                selectorConfig: const intl_phone.SelectorConfig(
+                  selectorType: intl_phone.PhoneInputSelectorType.BOTTOM_SHEET,
+                  useEmoji: true,
+                ),
+                autoValidateMode: AutovalidateMode.onUserInteraction,
+                ignoreBlank: false,
+                inputDecoration: const InputDecoration(
+                  labelText: '3. Phone Number',
+                  border: OutlineInputBorder(),
+                ),
+                onInputChanged: (number) {
+                  final countryCode = number.isoCode ?? 'KE';
+                  if (_selectedCountryCode != countryCode) {
+                    setState(() => _selectedCountryCode = countryCode);
+                  }
+                },
+                validator: _validatePhoneNumber,
+              ),
+              const SizedBox(height: 12),
+              _textField(
+                controller: _emailController,
+                label: '4. Email',
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '5. Password',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Password is required.';
+                  }
+                  if (value.length < 8) {
+                    return 'Password must be at least 8 characters.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '6. Confirm Password',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please confirm your password.';
+                  }
+                  if (value != _passwordController.text) {
+                    return 'Passwords do not match.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              Text('7. Role', style: Theme.of(context).textTheme.titleMedium),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<UserRole>(
+                  segments: const [
+                    ButtonSegment(
+                      value: UserRole.resident,
+                      label: Text('Resident'),
+                    ),
+                    ButtonSegment(
+                      value: UserRole.responder,
+                      label: Text('Responder'),
+                    ),
+                  ],
+                  selected: {_role},
+                  onSelectionChanged: (selection) {
+                    setState(() => _role = selection.first);
+                  },
+                ),
+              ),
+              if (isResponder) ...[
+                const SizedBox(height: 12),
+                _textField(
+                  controller: _organizationNameController,
+                  label: '8. Organization Name',
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _registrationNumberController,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.characters,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  decoration: const InputDecoration(
+                    labelText: 'Organization Registration Number',
+                    helperText: 'Enter the official registration number from your Certificate of Incorporation or NGO registration certificate.',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _validateRegistrationNumber,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<OrganizationType>(
+                  initialValue: _organizationType,
+                  decoration: const InputDecoration(
+                    labelText: '8. Organization Type',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: OrganizationType.values
+                      .map(
+                        (type) => DropdownMenuItem(
+                          value: type,
+                          child: Text(type.firestoreValue),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _organizationType = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownSearch<String>(
+                  items: (filter, loadProps) => kenyaCounties,
+                  selectedItem: _selectedCounty,
+                  autoValidateMode: AutovalidateMode.onUserInteraction,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: 'Service Area (County)',
+                      hintText: 'Search for your county',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                  popupProps: PopupProps.bottomSheet(
+                    showSearchBox: true,
+                    searchDelay: Duration.zero,
+                    searchFieldProps: const TextFieldProps(
+                      decoration: InputDecoration(
+                        hintText: 'Type to search...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    bottomSheetProps: const BottomSheetProps(
+                      backgroundColor: AppColors.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                      ),
+                    ),
+                    itemBuilder: (context, item, isDisabled, isSelected) =>
+                        ListTile(
+                          title: Text(item),
+                          trailing: isSelected
+                              ? const Icon(
+                                  Icons.check,
+                                  color: AppColors.success,
+                                )
+                              : null,
+                        ),
+                  ),
+                  suffixProps: const DropdownSuffixProps(
+                    clearButtonProps: ClearButtonProps(isVisible: true),
+                  ),
+                  onChanged: (value) {
+                    setState(() => _selectedCounty = value);
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select your service area';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<PreferredLanguage>(
+                initialValue: _preferredLanguage,
+                decoration: const InputDecoration(
+                  labelText: '9. Preferred Language',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: PreferredLanguage.en,
+                    child: Text('English'),
+                  ),
+                  DropdownMenuItem(
+                    value: PreferredLanguage.sw,
+                    child: Text('Kiswahili'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _preferredLanguage = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _dobController,
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: 'Date of Birth',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.calendar_today),
+                    onPressed: _pickDate,
+                  ),
+                ),
+                onTap: _pickDate,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Date of birth is required.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              Text('Gender', style: Theme.of(context).textTheme.titleMedium),
+              FormField<String>(
+                validator: (_) =>
+                    _gender == null ? 'Gender is required.' : null,
+                builder: (field) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RadioGroup<String>(
+                      groupValue: _gender,
+                      onChanged: (value) {
+                        setState(() => _gender = value);
+                        field.didChange(value);
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Male'),
+                            value: 'Male',
+                          ),
+                          RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Female'),
+                            value: 'Female',
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (field.hasError)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Text(
+                          field.errorText!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _consent,
+                onChanged: (value) {
+                  setState(() => _consent = value ?? false);
+                },
+                title: const Text('10. KDPA Consent (Required)'),
+                subtitle: const Text(
+                  'I consent to my data being transferred to and processed on servers located outside Kenya for the purpose of emergency response, as per the Kenya Data Protection Act, 2019.',
+                ),
+              ),
+              if (_submitError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _submitError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _isSubmitting ? null : _submit,
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Create Account'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          context.go('/sign-in');
+                        },
+                  child: const Text('Already have an account? Sign in'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    TextInputType? keyboardType,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return '$label is required.';
+        }
+        return null;
+      },
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\features\auth\screens\sign_in_screen.dart  (CRLF=True, 5733 chars)
+<<<BEGIN>>>
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../../app/auth_state_controller.dart';
+import '../services/auth_repository.dart';
+import 'password_reset_screen.dart';
+
+/// Authenticates an existing user and hands routing back to auth state.
+class SignInScreen extends StatefulWidget {
+  const SignInScreen({super.key});
+
+  @override
+  State<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final authRepository = context.read<AuthRepository>();
+    final authStateController = context.read<AuthStateController>();
+    try {
+      await authRepository.signIn(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      // Wait for the Firestore role profile before the router resolves the destination.
+      await authStateController.refresh();
+      if (!mounted) {
+        return;
+      }
+      context.go('/loading');
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = authRepository.mapSignInError(e);
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Unable to sign in at the moment. Please try again.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Sign In')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Emergency Response and Personal Safety System',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Email is required.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Password is required.';
+                  }
+                  return null;
+                },
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _isSubmitting ? null : _submit,
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Sign In'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PasswordResetScreen(
+                              initialEmail: _emailController.text.trim(),
+                            ),
+                          ),
+                        ),
+                  child: const Text('Forgot password?'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          context.go('/create-account');
+                        },
+                  child: const Text('Create an account'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+=== existing tests for these files ===
+
+=== firestore.rules: incidents + tracks sections ===
+firestore.rules:139:     function validIncidentCreate() {
+firestore.rules:422:     function validTrackPoint() {
+firestore.rules:553:     match /incidents/{incidentId} {
+firestore.rules:558:         && validIncidentCreate();
+firestore.rules:601:     match /incidents/{incidentId}/options/{optionId} {
+firestore.rules:608:     match /incidents/{incidentId}/routes/{responderId} {
+firestore.rules:615:     match /incidents/{incidentId}/tracks/{trackOwnerId} {
+firestore.rules:621:       allow create, update: if isSignedIn() && validTrackPoint()
+firestore.rules:637:     match /incidents/{incidentId}/events/{eventId} {
+firestore.rules:643:     match /incidents/{incidentId}/private/{docId} {
+
+=== firebase.json / .firebaserc ===
+--- firebase.json
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "python312",
+      "ignore": [
+        "venv",
+        ".git",
+        "tests",
+        "__pycache__",
+        "*.pyc"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
+
+--- .firebaserc
+(missing)
