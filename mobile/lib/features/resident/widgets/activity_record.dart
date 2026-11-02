@@ -90,7 +90,11 @@ class ActivityRecord {
         break;
     }
 
-    final priority = data['priority'] as String?;
+    // The server's decision (dispatch.priority) wins once it exists; the phone's own value is the starting point.
+    final dispatchMap = data['dispatch'];
+    final priority =
+        (dispatchMap is Map ? dispatchMap['priority'] as String? : null) ??
+            data['priority'] as String?;
     final triageStatus = data['triageStatus'] as String? ?? 'pending';
 
     return ActivityRecord(

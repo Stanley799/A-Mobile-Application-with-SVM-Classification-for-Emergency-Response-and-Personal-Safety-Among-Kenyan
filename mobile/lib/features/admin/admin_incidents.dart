@@ -58,7 +58,7 @@ class _AdminIncidentsState extends State<AdminIncidents> {
                       child: Padding(
                         padding: const EdgeInsets.all(14),
                         child: Row(children: [
-                          PriorityPill(i.priority),
+                          PriorityPill(i.priorityShown),
                           const SizedBox(width: 12),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text('${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}', style: const TextStyle(fontWeight: FontWeight.w800, color: AC.ink)),
@@ -202,7 +202,7 @@ class _IncidentDetailPageState extends State<IncidentDetailPage> {
 
   Widget _header(IncidentRecord i) => Panel(
     title: '${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}',
-    trailing: PriorityPill(i.priority),
+    trailing: PriorityPill(i.priorityShown),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SelectableText(i.id, style: const TextStyle(fontSize: 13, color: AC.mute)),
       const SizedBox(height: 10),

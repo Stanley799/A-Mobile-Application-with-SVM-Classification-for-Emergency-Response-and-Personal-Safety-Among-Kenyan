@@ -183,7 +183,7 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _header(),
+                            _header(info),
                             const SizedBox(height: 14),
                             _locationCard(inc),
                             const SizedBox(height: 12),
@@ -195,7 +195,7 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
                             if (inc.category != null) ...[const SizedBox(height: 12), _firstAidButton(inc)],
                             if (widget.detailsPending && widget.onAddDetails != null) ...[const SizedBox(height: 12), _detailsRow()],
                             const SizedBox(height: 12),
-                            _quickDetails(),
+                            _quickDetails(info),
                           ],
                         ),
                       ),
@@ -263,12 +263,14 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
     ),
   );
 
-  Widget _header() {
-    final p = widget.priorityLabel;
+  Widget _header(DispatchInfo info) {
+    // The SERVER's priority, live. While it is only the fail-safe default the resident sees "Awaiting details", never a false "High".
+    final p = widget.sending ? null : info.priorityShown;
     final (pbg, pfg) = switch (p) {
       'High' => (Tk.dangerTint, Tk.danger),
       'Medium' => (Tk.warnTint, Tk.warnInk),
-      _ => (Tk.okTint, Tk.okInk),
+      'Low' => (Tk.okTint, Tk.okInk),
+      _ => (const Color(0xFFEDEBE6), Tk.mute),
     };
     final motion = MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 600);
     return Container(
@@ -300,7 +302,7 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
             if (!widget.sending && widget.receivedAt != null) Text('Received at ${_clock(widget.receivedAt!)}', style: const TextStyle(fontSize: 13, color: Tk.mute)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              if (p != null) _chip('$p priority', pbg, pfg),
+              if (p != null) _chip(p == kAwaitingDetails ? p : '$p priority', pbg, pfg),
               _chip(widget.categoryLabel, Tk.brandTint, Tk.brandDeep),
               if (widget.reference != null) _chip('Ref ${widget.reference}', const Color(0xFFEDEBE6), Tk.mute),
             ]),
@@ -536,7 +538,7 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
     ]),
   );
 
-  Widget _quickDetails() {
+  Widget _quickDetails(DispatchInfo info) {
     Widget row(String k, String v) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [Text(k, style: const TextStyle(fontSize: 14, color: Tk.mute)), const Spacer(), Flexible(child: Text(v, textAlign: TextAlign.right, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Tk.ink)))]),
@@ -546,7 +548,7 @@ class _AlertStatusBodyState extends State<AlertStatusBody> {
       decoration: _card,
       child: Column(children: [
         row('Type', widget.categoryLabel),
-        if (widget.priorityLabel != null) row('Priority', widget.priorityLabel!),
+        if (!widget.sending) row('Priority', info.priorityShown),
         if (widget.reference != null) row('Reference', widget.reference!),
         if (widget.receivedAt != null) row('Received', _clock(widget.receivedAt!)),
       ]),

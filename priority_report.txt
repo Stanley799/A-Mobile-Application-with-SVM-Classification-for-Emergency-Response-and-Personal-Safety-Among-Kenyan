@@ -1,0 +1,2547 @@
+=== A. every line that WRITES or DECIDES priority (functions, ml, tools, mobile/lib) ===
+functions\main.py:55: if old.get("triageStatus") != new.get("triageStatus") and new.get("triageStatus") in ("quick", "complete"):
+functions\main.py:57: {"triageStatus": new.get("triageStatus"), "priority": new.get("priority")},
+functions\main.py:58: f"classified_{new.get('triageStatus')}")
+functions\main.py:60: p4.write_event(db, iid, "priority_set", "resident", uid,
+functions\main.py:61: {"priority": new.get("priority"), "source": new.get("prioritySource")},
+functions\main.py:62: f"priority_set_{new.get('priority')}")
+functions\main.py:162: "createdAt": now, "expiresAt": now + config.MANUAL_OFFER_SECONDS, "distanceKm": dist if dist is not None else 0, "priority": pr["priority"],
+functions\main.py:164: "location": {"lat": inc["lat"], "lng": inc["lng"]}, **core.briefing_fields(inc, pr["priority"], required, n or {})}
+functions\phase4d_core.py:26: "incident_created", "classified", "priority_set", "offer_sent", "offer_seen", "offer_accepted",
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py:234: 'priority': _Validators.check_string(
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py:235: 'AndroidConfig.priority', android.priority, non_empty=True),
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py:250: raise ValueError('AndroidConfig.priority must be "high" or "normal".')
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py:348: 'AndroidNotification.priority', notification.priority, non_empty=True),
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py:385: raise ValueError('AndroidNotification.priority must be "default", "min", "low", '
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_utils.py:77: self.priority = priority
+functions\.venv\Lib\site-packages\firebase_admin\_messaging_utils.py:200: self.priority = priority
+functions\.venv\Lib\site-packages\gunicorn\asgi\protocol.py:1347: "http.response.priority": {
+functions\.venv\Lib\site-packages\gunicorn\asgi\protocol.py:1982: extensions["http.response.priority"] = {
+functions\.venv\Lib\site-packages\gunicorn\http2\async_connection.py:369: def _handle_priority_updated(self, event):
+functions\.venv\Lib\site-packages\gunicorn\http2\connection.py:405: def _handle_priority_updated(self, event):
+functions\.venv\Lib\site-packages\gunicorn\http2\stream.py:254: def update_priority(self, weight=None, depends_on=None, exclusive=None):
+functions\.venv\Lib\site-packages\h2\connection.py:1868: def _receive_priority_frame(self, frame: HeadersFrame | PriorityFrame) -> tuple[list[Frame], list[Event]]:
+functions\.venv\Lib\site-packages\h2\connection.py:2057: def _add_frame_priority(frame: PriorityFrame | HeadersFrame,
+functions\.venv\Lib\site-packages\httpx\_utils.py:206: def priority(self) -> tuple[int, int, int]:
+functions\.venv\Lib\site-packages\httpx\_utils.py:223: return self.priority < other.priority
+functions\.venv\Lib\site-packages\hyperframe\frame.py:260: def serialize_priority_data(self) -> bytes:
+functions\.venv\Lib\site-packages\hyperframe\frame.py:266: def parse_priority_data(self, data: memoryview) -> int:
+functions\.venv\Lib\site-packages\jinja2\environment.py:464: return iter(sorted(self.extensions.values(), key=lambda x: x.priority))
+functions\.venv\Lib\site-packages\pip\_vendor\pygments\lexers\__init__.py:204: return cls.priority + bonus, cls.__name__
+functions\.venv\Lib\site-packages\pip\_vendor\pygments\lexers\__init__.py:298: return (t[0], primary[t[1]], t[1].priority, t[1].__name__)
+functions\.venv\Lib\site-packages\pygments\lexers\c_like.py:706: 'assert', 'get_priority', 'printf', 'printm', 'set_priority'),
+functions\.venv\Lib\site-packages\pygments\lexers\special.py:38: return TextLexer.priority
+functions\.venv\Lib\site-packages\pygments\lexers\__init__.py:204: return cls.priority + bonus, cls.__name__
+functions\.venv\Lib\site-packages\pygments\lexers\__init__.py:298: return (t[0], primary[t[1]], t[1].priority, t[1].__name__)
+functions\.venv\Lib\site-packages\werkzeug\wsgi.py:145: safe_fallback: bool = True,
+functions\.venv\Lib\site-packages\werkzeug\wsgi.py:170: :param safe_fallback: Return an empty stream when ``Content-Length`` is not set.
+functions\.venv\Lib\site-packages\werkzeug\wsgi.py:208: return io.BytesIO() if safe_fallback else stream
+functions\dispatch\core.py:4: incident  : {id, code, status, category, subtype, triageStatus, answers{}, lat, lng, createdAt(epoch s), freeText}
+functions\dispatch\core.py:39: def server_priority(incident, table):
+functions\dispatch\core.py:41: if incident.get("triageStatus", "pending") == "pending":
+functions\dispatch\core.py:42: return {"priority": "High", "source": "safe_fallback", "reasons": ["Alert just received, details not given yet"]}
+functions\dispatch\core.py:49: return {"priority": final, "source": "rule_floor" if t.RANK[floor] > t.RANK[e["p"]] else "model_table", "reasons": reasons}
+functions\dispatch\core.py:51: return {"priority": "High", "source": "safe_fallback", "reasons": [f"Could not assess ({type(ex).__name__})"]}
+functions\dispatch\core.py:61: if incident.get("triageStatus", "pending") == "pending":      # unanswered "Unknown" must not invent extra roles
+functions\dispatch\core.py:70: def rank_candidates(incident, responders, role, preferred, now, priority, exclude_ids):
+functions\dispatch\core.py:94: def briefing_fields(incident, priority, required, n):
+functions\dispatch\core.py:96: inc = {"id": incident["id"], "lat": incident["lat"], "lng": incident["lng"], "priority": priority, "answers": n,
+functions\dispatch\core.py:125: priority = pr["priority"]
+functions\dispatch\core.py:127: if incident["category"] == "Other / General" and incident.get("triageStatus", "pending") == "pending" and age < C.OTHER_HOLD_SECONDS:
+functions\dispatch\core.py:129: if incident["category"] == "Other / General" and priority == "Low" and incident.get("triageStatus") == "complete":
+functions\dispatch\core.py:163: "distanceKm": c["distance_km"], "priority": priority, "category": incident["category"], "subtype": incident.get("subtype"),
+functions\dispatch\core.py:170: want = {"priority": priority, "location": {"lat": incident["lat"], "lng": incident["lng"]}}
+functions\dispatch\core.py:200: return {"state": state, "escalate922": bool(escalate), "reason": reason, "priority": pr["priority"] if pr else None,
+functions\dispatch\core.py:201: "prioritySource": pr["source"] if pr else None, "priorityReasons": (pr or {}).get("reasons", []), "unfilled": unfilled, "units": units}
+functions\dispatch\notify.py:13: notification=messaging.Notification(title=f"NEW ALERT · {offer['priority'].upper()} PRIORITY", body=f"{label} · {offer['distanceKm']} km away"),
+functions\dispatch\options.py:96: def build(inc, priority, avail, assigned, offers, facilities, state, now, minutes=None):
+functions\dispatch\options_store.py:121: pr = core.server_priority(inc, store.table())["priority"]
+functions\dispatch\resident_requests.py:50: "status": "offered", "createdAt": now, "expiresAt": now + C.OFFER_SECONDS, "distanceKm": dist, "priority": pr["priority"], "category": inc["category"],
+functions\dispatch\resident_requests.py:52: "location": {"lat": inc["lat"], "lng": inc["lng"]}, **core.briefing_fields(inc, pr["priority"], required, n or {})}
+functions\dispatch\store.py:22: with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ml", "models", "decision_table.json"), encoding="utf-8") as f:
+functions\dispatch\store.py:45: "category": d.get("category"), "subtype": d.get("subtype"), "triageStatus": d.get("triageStatus", "pending"),
+functions\ml\scripts\dispatch_logic.py:26: n, subtype, pr = incident["answers"], incident.get("subtype"), incident["priority"]
+functions\ml\scripts\dispatch_logic.py:76: b = {"incident_id": incident["id"], "category": n["category"], "subtype": subtype, "priority": incident["priority"],
+functions\ml\scripts\dispatch_logic.py:79: "summary_text": f"{n['category']}{' (' + subtype + ')' if subtype else ''} | {incident['priority'].upper()} | {n['people_count']} {'person' if n['people_count'] == 1 else 'people'} | " + ("; ".join(fl
+functions\ml\scripts\triage_core.py:128: def reference_priority(n, subtype=None):
+functions\tests\test_dispatch_core.py:8: TABLE = json.load(open(os.path.join(FN, "ml", "models", "decision_table.json")))
+functions\tests\test_dispatch_core.py:13: return dict(id="INC1", code="20261021-120000-FIRE-AB12", status=status, category=cat, subtype=sub, triageStatus=ts, answers=answers or {},
+functions\tests\test_dispatch_core.py:39: assert all(o["priority"] == "High" and o["expiresAt"] == NOW + C.OFFER_SECONDS for o in creates(r)); assert r["dispatch"]["state"] == "dispatching"
+functions\tests\test_dispatch_core.py:88: assert core.server_priority(inc, TABLE)["priority"] == "High"; ok("not conscious => High from the server whatever the phone says")
+functions\tests\test_dispatch_core.py:90: low = core.server_priority(inc, TABLE)["priority"]; print("   (all fine ->", low, ")")
+functions\tests\test_dispatch_core.py:91: assert core.server_priority(INC("Medical Emergency", ts="complete", answers={"conscious": "Yes", "breathing": "Yes", "severe_bleeding": "No", "chest_pain": "Yes"}), TABLE)["priority"] == "High"; ok("c
+functions\tests\test_dispatch_core.py:92: bad = INC("Nonsense", ts="complete"); assert core.server_priority(bad, TABLE)["priority"] == "High"; ok("broken data fails SAFE to High")
+functions\tests\test_dispatch_core.py:97: pr = core.server_priority(inc, TABLE)["priority"]
+functions\tests\test_dispatch_core.py:109: inc = INC("Other / General", "mental_health_crisis", ts="complete", answers={"conscious": "Yes", "breathing": "Yes", "severe_bleeding": "No"}); r = core.reconcile(inc, POOL, [], NOW, TABLE); assert cr
+functions\tests\test_lookup.py:38: inc = {"lat": -1.2921, "lng": 36.8219, "category": "Other / General", "subtype": None, "triageStatus": "pending", "userId": "u"}
+functions\tests\test_options.py:32: priority="High", triageStatus=ts, subtype=sub))
+functions\tests\test_phase4d.py:28: def incident(db, iid="INC1", status="Active", priority="High", accuracy=None, user="res1"):
+functions\tests\test_phase4d.py:29: d = {"userId": user, "status": status, "category": "Medical Emergency", "priority": priority,
+functions\tests\test_phase4d.py:30: "dispatch": {"priority": priority}, "createdAt": 1000.0, "location": None}
+functions\tests\test_store_lifecycle.py:54: updatedAt=now_dt(), priority="High", prioritySource="safe_fallback", needsHumanReview=True, triageStatus=ts, subtype=sub)
+ml\docs\safety_nets_and_error_handling.md:14: | 3 | **Protocol guard** | The SVM *lowering* the protocol's own answer | `build_decision_table.py` |
+ml\docs\safety_nets_and_error_handling.md:15: | 4 | SVM-RBF with safety bias (P(High) ≥ 0.35) | Borderline cases drifting to Medium | `build_decision_table.py` |
+ml\docs\safety_nets_and_error_handling.md:16: | 5 | Monotone repair | A worse answer giving a lower priority | `build_decision_table.py` |
+ml\docs\safety_nets_and_error_handling.md:42: | `decision_table.json` missing, corrupt or older than the schema | Load check at start-up | Same fail-safe; reason logged in `fallback_reason` | Over-alert until fixed |
+ml\docs\VSCODE_AGENT_BRIEF.md:15: generate_synthetic_data -> train_classifier -> build_decision_table -> test_combinations (16,740 combinations, must PASS)
+ml\docs\VSCODE_AGENT_BRIEF.md:19: Runtime uses the compiled `models/decision_table.json` (offline, inspectable). Python model is for training/audit.
+ml\integration\functions_main.py:33: def triage_priority_fn(req: https_fn.CallableRequest):
+ml\integration\INTEGRATION_CHECKLIST.md:3: Rule: **the `ml` folder is the single source of truth.** Never edit `lib\core\triage\*` or `assets\decision_table.json` by hand.
+ml\integration\INTEGRATION_CHECKLIST.md:9: with `priority: High`, `prioritySource: safe_fallback`, `needsHumanReview: true`, `triageStatus: pending` (the fail-safe).
+ml\integration\INTEGRATION_CHECKLIST.md:12: 3. The same incident is **updated** with subtype, answers, priority (from the decision table, works offline), `triageStatus: complete`.
+ml\integration\INTEGRATION_CHECKLIST.md:23: | A3 | `copy ml\models\decision_table.json mobile\assets\` | |
+ml\integration\INTEGRATION_CHECKLIST.md:28: | A8 | Tests: `copy ml\models\decision_table.json mobile\test\assets\` and `copy ml\integration\test_vectors.json mobile\test\assets\`, then `flutter test test\triage_parity_test.dart`. Must pass. | |
+ml\integration\INTEGRATION_CHECKLIST.md:30: | A10 | In the Firebase console open `incidents`: the incident has `priority`, `triage.answers`, `triageStatus: complete`. Tap Skip on a second one: it stays `pending`, `High`. | |
+ml\integration\INTEGRATION_CHECKLIST.md:55: - `triageStatus: pending` means "treat as High". If it is still pending after about 60 seconds, dispatch as High.
+ml\scripts\build_decision_table.py:3: py scripts\\build_decision_table.py"""
+ml\scripts\build_decision_table.py:43: path = os.path.join(t.ROOT, "models", "decision_table.json")
+ml\scripts\dispatch_logic.py:26: n, subtype, pr = incident["answers"], incident.get("subtype"), incident["priority"]
+ml\scripts\dispatch_logic.py:76: b = {"incident_id": incident["id"], "category": n["category"], "subtype": subtype, "priority": incident["priority"],
+ml\scripts\dispatch_logic.py:79: "summary_text": f"{n['category']}{' (' + subtype + ')' if subtype else ''} | {incident['priority'].upper()} | {n['people_count']} {'person' if n['people_count'] == 1 else 'people'} | " + ("; ".join(fl
+ml\scripts\explore_data.py:10: ct = pd.crosstab(R.category, R.priority)[ORDER]
+ml\scripts\explore_data.py:16: s = R[R[f] != "NotAsked"].groupby(f).priority.apply(lambda x: (x == "High").mean()); a.bar(s.index, s.values, color="#0F766E"); a.set_title(f); a.set_ylim(0, 1)
+ml\scripts\feature_importance.py:28: X, y = R[t.FEATURES].copy(), R["priority"]
+ml\scripts\generate_dart.py:43: LOOK = f'''// GENERATED FILE - DO NOT EDIT BY HAND (version {S['version']}). Looks up the priority in models/decision_table.json,
+ml\scripts\generate_dart.py:44: // which you add to the app as an asset (pubspec.yaml: assets: - assets/decision_table.json).
+ml\scripts\generate_dart.py:51: const TriageResult(this.priority, this.confidence, this.needsHumanReview);
+ml\scripts\generate_dart.py:62: final raw = jsonDecode(await rootBundle.loadString('assets/decision_table.json')) as Map<String, dynamic>;
+ml\scripts\generate_dart.py:64: throw StateError('decision_table.json (${{raw['schema_version']}}) does not match the app schema ($kTriageSchemaVersion).');
+ml\scripts\generate_synthetic_data.py:86: rows.append({**n, "priority": t.reference_priority(n), "sample_source": "coverage", "risk_score": round(s, 2), "label_was_noised": 0})
+ml\scripts\generate_synthetic_data.py:100: rows.append({**n, "priority": lab, "sample_source": "realistic", "risk_score": round(s, 2), "label_was_noised": noised})
+ml\scripts\generate_synthetic_data.py:110: print(f"\n{src}: {len(d)} rows  ", d.priority.value_counts(normalize=True).round(3).to_dict())
+ml\scripts\generate_synthetic_data.py:112: print(pd.crosstab(df[df.sample_source == "realistic"].category, df[df.sample_source == "realistic"].priority))
+ml\scripts\make_test_vectors.py:18: "expected_priority": r["priority"], "expected_review": r["needs_human_review"]})
+ml\scripts\make_test_vectors.py:25: "expected_priority": r["priority"], "expected_review": r["needs_human_review"]})
+ml\scripts\make_test_vectors.py:44: if mirror(cat, a, sub) != (r["priority"], r["needs_human_review"]):
+ml\scripts\predict_priority.py:10: _TABLE = json.load(open(os.path.join(t.ROOT, "models", "decision_table.json")))
+ml\scripts\predict_priority.py:11: assert _TABLE["schema_version"] == t.SCHEMA["version"], "Decision table is out of date. Run build_decision_table.py."
+ml\scripts\predict_priority.py:22: def suggest_priority(payload, subtype=None):
+ml\scripts\predict_priority.py:29: return {"priority": final, "priority_source": "rule_floor" if t.RANK[floor] > t.RANK[e["p"]] else "model_table",
+ml\scripts\predict_priority.py:33: def suggest_priority_safe(payload, subtype=None):
+ml\scripts\predict_priority.py:44: return {"priority": "High", "priority_source": "safe_fallback", "rule_floor": "High", "rule_reasons": [],
+ml\scripts\predict_priority.py:47: def suggest_priority_raw_model(payload, subtype=None):
+ml\scripts\predict_priority.py:63: return {"priority": final, "priority_source": source, "rule_floor": floor, "rule_reasons": reasons,
+ml\scripts\predict_priority.py:80: print(f"{name:45s} -> {r['priority']:6s} (source {r['priority_source']}, confidence {r['model_confidence']}, review={r['needs_human_review']})")
+ml\scripts\predict_priority.py:82: print(f"{'Sexual violence, no other danger signs':45s} -> {r['priority']:6s} (floor {r['rule_floor']}: {r['rule_reasons']})")
+ml\scripts\run_all.py:14: ("3/13 Compile the decision table", "build_decision_table.py"),
+ml\scripts\test_combinations.py:6: T = json.load(open(os.path.join(t.ROOT, "models", "decision_table.json")))
+ml\scripts\test_combinations.py:7: assert T["schema_version"] == t.SCHEMA["version"], "Table out of date: run build_decision_table.py"
+ml\scripts\test_dispatch_logic.py:7: def inc(cat, sub=None, priority="High", **kw):
+ml\scripts\test_robustness.py:91: if t.RANK[pr["priority"]] < t.RANK[minimum]:
+ml\scripts\test_robustness.py:92: floor_bad.append((msg, pr["priority"]))
+ml\scripts\test_robustness.py:99: check(f"7. safe fallback on {name}: High + human review + reason", r["priority"] == "High" and r["needs_human_review"] and r["fallback_reason"])
+ml\scripts\test_robustness.py:101: check("7b. a valid request is not turned into a fallback", good["fallback_reason"] is None and good["priority_source"] != "safe_fallback")
+ml\scripts\test_robustness.py:103: pp._LOAD_ERROR = "FileNotFoundError: decision_table.json"
+ml\scripts\test_robustness.py:106: check("7c. decision table missing/out of date -> High + human review", r["priority"] == "High" and r["needs_human_review"])
+ml\scripts\test_robustness.py:112: check("7d. SVM file missing/incompatible on the server: table still answers (no needless High)", r["priority_source"] != "safe_fallback")
+ml\scripts\test_robustness.py:115: t.RANK[r["priority"]] >= 1 and pp.suggest_priority_safe({**BASE, "category": "Other / General"}, "mental_health_crisis")["priority"] == "High")
+ml\scripts\train_classifier.py:21: boundary = pd.concat([C[C.priority != "High"], C[C.priority == "High"].sample(HIGH_KEEP, random_state=SEED)]).reset_index(drop=True)
+ml\scripts\train_classifier.py:22: print(f"realistic rows: {len(R)} | boundary sample from coverage: {len(boundary)} {boundary.priority.value_counts().to_dict()}")
+ml\scripts\train_classifier.py:51: for tr, te in cv.split(R, R.priority):
+ml\scripts\train_classifier.py:55: m = build(n).fit(train[t.FEATURES], train.priority)
+ml\scripts\train_classifier.py:59: report[n]["model_only"].append(scores(test.priority, pred))
+ml\scripts\train_classifier.py:60: report[n]["hybrid"].append(scores(test.priority, np.maximum(biased, fl)))
+ml\scripts\train_classifier.py:80: final = build(best).fit(final_train[t.FEATURES], final_train.priority)
+ml\scripts\triage_core.py:128: def reference_priority(n, subtype=None):
+mobile\lib\core\models\dispatch_models.dart:71: required this.priority,
+mobile\lib\core\models\dispatch_models.dart:179: priority: (m['priority'] ?? 'High') as String,
+mobile\lib\core\models\dispatch_models.dart:367: const IncidentRecord({required this.id, required this.userId, required this.category, required this.subtype, required this.status, required this.priority, required this.prioritySource, required this.t
+mobile\lib\core\models\dispatch_models.dart:375: final String prioritySource;
+mobile\lib\core\models\dispatch_models.dart:376: final String triageStatus;
+mobile\lib\core\models\dispatch_models.dart:419: priority: ((d['priority'] ?? m['priority']) ?? 'High') as String,
+mobile\lib\core\models\dispatch_models.dart:420: prioritySource: ((d['prioritySource'] ?? m['prioritySource']) ?? '') as String,
+mobile\lib\core\models\dispatch_models.dart:421: triageStatus: (m['triageStatus'] ?? 'pending') as String,
+mobile\lib\core\models\triage_outcome.dart:9: required this.priority,
+mobile\lib\core\models\triage_outcome.dart:46: /// 'decision_table', 'safe_fallback' (High because something was missing) or 'support_only'.
+mobile\lib\core\models\triage_outcome.dart:65: 'priority': priority,
+mobile\lib\core\models\triage_outcome.dart:66: 'prioritySource': source,
+mobile\lib\core\models\triage_outcome.dart:68: 'triageStatus': 'complete',
+mobile\lib\core\services\priority_classifier.dart:8: required this.priority,
+mobile\lib\core\services\priority_classifier.dart:20: source = 'safe_fallback',
+mobile\lib\core\services\priority_classifier.dart:30: /// Looks up the priority in the compiled decision table (assets/decision_table.json).
+mobile\lib\core\services\priority_classifier.dart:69: priority: result.priority,
+mobile\lib\core\services\priority_classifier.dart:72: source: reason == null ? 'decision_table' : 'safe_fallback',
+mobile\lib\core\triage\triage_lookup.dart:1: // GENERATED FILE - DO NOT EDIT BY HAND (version 3.1.0). Looks up the priority in models/decision_table.json,
+mobile\lib\core\triage\triage_lookup.dart:2: // which you add to the app as an asset (pubspec.yaml: assets: - assets/decision_table.json).
+mobile\lib\core\triage\triage_lookup.dart:9: const TriageResult(this.priority, this.confidence, this.needsHumanReview);
+mobile\lib\core\triage\triage_lookup.dart:20: final raw = jsonDecode(await rootBundle.loadString('assets/decision_table.json')) as Map<String, dynamic>;
+mobile\lib\core\triage\triage_lookup.dart:22: throw StateError('decision_table.json (${raw['schema_version']}) does not match the app schema ($kTriageSchemaVersion).');
+mobile\lib\features\admin\admin_incidents.dart:61: PriorityPill(i.priority),
+mobile\lib\features\admin\admin_incidents.dart:205: trailing: PriorityPill(i.priority),
+mobile\lib\features\admin\admin_incidents.dart:209: Wrap(spacing: 8, runSpacing: 8, children: [StatePill(i.dispatchState), Pill(i.status, const Color(0xFFEDEDED), const Color(0xFF444444)), Pill('Triage: ${i.triageStatus}', const Color(0xFFEDEDED), cons
+mobile\lib\features\admin\admin_incidents.dart:223: Text('${i.priority} · decided by: ${i.prioritySource.isEmpty ? 'pending' : i.prioritySource.replaceAll('_', ' ')}', style: const TextStyle(fontWeight: FontWeight.w700, color: AC.ink)),
+mobile\lib\features\admin\admin_incidents.dart:232: if (i.needsHumanReview && i.triageStatus == 'complete') const Padding(padding: EdgeInsets.only(top: 10), child: Text('The classifier was not confident. Please review.', style: TextStyle(color: AC.medi
+mobile\lib\features\admin\admin_overview.dart:51: child: s.byPriority.isEmpty ? const Text('No alerts today.', style: TextStyle(color: AC.mute)) : Column(children: [for (final p in const ['High', 'Medium', 'Low']) if (s.byPriority[p] != null) BarRow(
+mobile\lib\features\admin\admin_overview.dart:67: PriorityPill(i.priority),
+mobile\lib\features\admin\admin_stats.dart:23: static bool needsAttention(IncidentRecord i) => i.isOpen && (_attentionStates.contains(i.dispatchState) || i.escalate922 || (i.needsHumanReview && i.triageStatus == 'complete'));
+mobile\lib\features\admin\admin_stats.dart:35: byPri[i.priority] = (byPri[i.priority] ?? 0) + 1;
+mobile\lib\features\admin\admin_widgets.dart:69: const PriorityPill(this.priority, {super.key});
+mobile\lib\features\admin\admin_widgets.dart:72: Widget build(BuildContext context) => Pill(priority.toUpperCase(), AC.priority(priority), Colors.white);
+mobile\lib\features\ops\ops_analytics.dart:128: for (final e in entries) OpsBarRow(label: e.key, value: e.value, max: max, color: OT.priority('Medium')),
+mobile\lib\features\ops\ops_incidents_page.dart:55: if (_priority == 'All' || i.priority == _priority)
+mobile\lib\features\ops\ops_incidents_page.dart:246: PriorityTag(i.priority),
+mobile\lib\features\ops\ops_incidents_page.dart:278: out.writeln([q(i.id), q(i.createdAt?.toIso8601String() ?? ''), q(i.category), q(i.subtype ?? ''), q(i.priority), q(i.status), q(i.dispatchState), q(i.landmark)].join(','));
+mobile\lib\features\ops\ops_incident_panel.dart:17: 'priority_set': 'Priority set',
+mobile\lib\features\ops\ops_incident_panel.dart:193: PriorityTag(inc.priority),
+mobile\lib\features\ops\ops_logic.dart:128: final ra = kPriorityRank[a.$2.incident.priority] ?? 3;
+mobile\lib\features\ops\ops_logic.dart:129: final rb = kPriorityRank[b.$2.incident.priority] ?? 3;
+mobile\lib\features\ops\ops_map.dart:78: wanted['p_${i.priority}_${i.category}'] = (OT.priority(i.priority), _categoryIcon(i.category));
+mobile\lib\features\ops\ops_map.dart:127: icon: _pins['p_${i.priority}_${i.category}'] ?? BitmapDescriptor.defaultMarkerWithHue(_hue(i.priority)),
+mobile\lib\features\ops\ops_map.dart:129: infoWindow: InfoWindow(title: '${i.priority} · ${i.category}', snippet: 'Tap to open'),
+mobile\lib\features\ops\ops_notifications.dart:59: if (i.priority == 'High') {
+mobile\lib\features\ops\ops_queue.dart:136: final accent = OT.priority(i.priority);
+mobile\lib\features\ops\ops_queue.dart:159: PriorityTag(i.priority),
+mobile\lib\features\ops\ops_tokens.dart:18: static Color priority(String p) => RC.priority(p);
+mobile\lib\features\ops\ops_units_board.dart:100: final c = switch (group) { 'Available' => OT.accent, 'On a job' => OT.priority('Medium'), 'Stale GPS' => const Color(0xFF8A939B), _ => OT.muted };
+mobile\lib\features\ops\ops_widgets.dart:48: const PriorityTag(this.priority, {super.key});
+mobile\lib\features\ops\ops_widgets.dart:53: final c = OT.priority(priority);
+mobile\lib\features\resident\screens\home_screen.dart:566: 'priority': 'High',
+mobile\lib\features\resident\screens\home_screen.dart:567: 'prioritySource': 'safe_fallback',
+mobile\lib\features\resident\screens\home_screen.dart:569: 'triageStatus': 'pending',
+mobile\lib\features\resident\widgets\activity_record.dart:20: this.priority,
+mobile\lib\features\resident\widgets\activity_record.dart:23: required this.triageStatus,
+mobile\lib\features\resident\widgets\activity_record.dart:35: final String triageStatus;
+mobile\lib\features\resident\widgets\activity_record.dart:93: final priority = data['priority'] as String?;
+mobile\lib\features\resident\widgets\activity_record.dart:94: final triageStatus = data['triageStatus'] as String? ?? 'pending';
+mobile\lib\features\resident\widgets\activity_record.dart:105: triageStatus: triageStatus,
+mobile\lib\features\resident\widgets\activity_record.dart:166: triageStatus: 'complete',
+mobile\lib\features\resident\widgets\activity_record.dart:221: final isComplete = record.triageStatus == 'complete';
+mobile\lib\features\resident\widgets\activity_record.dart:225: String priorityLabel = record.priority ?? 'High';
+mobile\lib\features\resident\widgets\activity_record.dart:233: switch (record.priority) {
+mobile\lib\features\resident\widgets\alert_status_sheet.dart:223: 'triageStatus': 'quick',
+mobile\lib\features\resident\widgets\alert_status_sheet.dart:370: priority: result.priority,
+mobile\lib\features\resident\widgets\triage_question_sheet.dart:183: priority: r.priority,
+mobile\lib\features\responder\active_job_screen.dart:403: color: RC.priority(o.priority),
+mobile\lib\features\responder\active_job_screen.dart:407: '${o.priority.toUpperCase()} PRIORITY · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}',
+mobile\lib\features\responder\active_job_screen.dart:483: if (o.priority == 'High' && !_wellbeingDismissed) ...[
+mobile\lib\features\responder\incoming_alert_screen.dart:171: PriorityTag(priority: o.priority),
+mobile\lib\features\responder\responder_offer_queue.dart:12: final priority = (_priorityRank[a.priority] ?? 3).compareTo(
+mobile\lib\features\responder\responder_offer_queue.dart:13: _priorityRank[b.priority] ?? 3,
+mobile\lib\features\responder\responder_shell.dart:733: PriorityTag(priority: offer.priority),
+mobile\lib\features\responder\responder_shell.dart:798: label: '${hhmm(offer.createdAt)} · ${offer.priority}',
+mobile\lib\features\responder\responder_shell.dart:846: left: BorderSide(color: RC.priority(o.priority), width: 5),
+mobile\lib\features\responder\responder_shell.dart:865: '${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km · ${_statusLabel(o.status)}',
+mobile\lib\features\responder\responder_shell.dart:919: '${hhmm(o.createdAt)} · ${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km',
+mobile\lib\features\responder\responder_widgets.dart:6: const PriorityTag({super.key, required this.priority});
+
+=== B. files with the most priority lines ===
+  17  functions\dispatch\core.py
+  10  ml\scripts\predict_priority.py
+  10  mobile\lib\features\resident\widgets\activity_record.dart
+   9  functions\tests\test_dispatch_core.py
+   8  functions\main.py
+   8  ml\scripts\test_robustness.py
+   8  mobile\lib\core\models\dispatch_models.dart
+   7  ml\integration\INTEGRATION_CHECKLIST.md
+   7  ml\scripts\train_classifier.py
+   5  functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py
+   5  ml\scripts\generate_dart.py
+   5  mobile\lib\core\models\triage_outcome.dart
+
+=== C. full text of the server files that touch priority (functions only) ===
+
+##### FILE: functions\dispatch\core.py (13204 chars)
+<<<BEGIN>>>
+"""The dispatch brain. PURE: no Firebase, no network, no clock. Everything comes in as plain dicts and goes out as a list of actions,
+so every rule can be tested here on a laptop. store.py applies the actions to Firestore.
+
+incident  : {id, code, status, category, subtype, triageStatus, answers{}, lat, lng, createdAt(epoch s), freeText}
+responder : {id, name, type, phone, lat, lng, status('available'..), capabilities[], last_seen(epoch s), verified(bool)}
+offer     : {id, responderId, role, status, createdAt, expiresAt, wave, covers[], priority, location{lat,lng}, flags[], summary}
+"""
+from . import config as C
+from . import labels
+import triage_core as t
+import dispatch_logic as dl
+
+R = t.SCHEMA["routing"]
+
+
+def effective_caps(responder):
+    caps = responder.get("capabilities")
+    if isinstance(caps, list) and caps:
+        return [c for c in caps if c in C.ALL_CAPABILITIES]
+    return list(C.CAPS_BY_TYPE.get(responder.get("type"), []))
+
+
+def filled_answers(incident):
+    """The answers saved so far; every question not answered yet is 'Unknown' (the safe reading)."""
+    cat = incident["category"]
+    given = incident.get("answers") or {}
+    payload = {"category": cat}
+    for q in t.SCHEMA["categories"][cat]["questions"]:
+        spec = t.QUESTIONS[q]
+        if spec["type"] == "int":
+            v = given.get(q)
+            payload[q] = int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 1
+        else:
+            v = given.get(q)
+            payload[q] = v if v in spec["values"] else "Unknown"
+    return t.normalize(payload)
+
+
+def server_priority(incident, table):
+    """The priority the SERVER trusts. While nothing has been answered yet the fail-safe is High. Never raises."""
+    if incident.get("triageStatus", "pending") == "pending":
+        return {"priority": "High", "source": "safe_fallback", "reasons": ["Alert just received, details not given yet"]}
+    try:
+        n = filled_answers(incident)
+        sub = incident.get("subtype")
+        floor, reasons = t.rule_floor(n, sub)
+        e = table["entries"]["|".join(str(n[f]) for f in t.FEATURES)]
+        final = e["p"] if t.RANK[e["p"]] >= t.RANK[floor] else floor
+        return {"priority": final, "source": "rule_floor" if t.RANK[floor] > t.RANK[e["p"]] else "model_table", "reasons": reasons}
+    except Exception as ex:  # noqa: BLE001 - any problem fails SAFE
+        return {"priority": "High", "source": "safe_fallback", "reasons": [f"Could not assess ({type(ex).__name__})"]}
+
+
+def needs(incident):
+    """(required roles, preferred roles, normalized answers). With no details yet: the category's base needs only."""
+    cat = incident["category"]
+    sub = incident.get("subtype")
+    try:
+        n = filled_answers(incident)
+        req, pref = t.required_capabilities(n, sub)
+        if incident.get("triageStatus", "pending") == "pending":      # unanswered "Unknown" must not invent extra roles
+            base = t.SCHEMA["routing"]["base"][cat]
+            req, pref = list(base["required"]), list(base["preferred"])
+        return req, pref, n
+    except Exception:  # noqa: BLE001
+        base = t.SCHEMA["routing"]["base"].get(cat, {"required": [], "preferred": []})
+        return list(base["required"]), list(base["preferred"]), None
+
+
+def rank_candidates(incident, responders, role, preferred, now, priority, exclude_ids):
+    """Available + verified + fresh + inside the radius, best first. Straight-line distance."""
+    radius = R["max_radius_km"][priority]
+    out = []
+    for r in responders:
+        if r["id"] in exclude_ids or not r.get("verified") or r.get("status") != "available":
+            continue
+        if r.get("lat") is None or r.get("lng") is None or now - (r.get("last_seen") or 0) > R["heartbeat_max_age_seconds"]:
+            continue
+        caps = effective_caps(r)
+        if role is not None and role not in caps:
+            continue
+        d = dl.haversine_km(incident["lat"], incident["lng"], r["lat"], r["lng"])
+        if d > radius:
+            continue
+        bonus = R["preferred_bonus_km"] * len(set(preferred) & set(caps))
+        out.append({**r, "caps": caps, "distance_km": round(d, 2), "effective": max(0.0, d - bonus)})
+    return sorted(out, key=lambda r: (r["effective"], r["distance_km"], r["id"]))
+
+
+def _offer_covers(offer, role):
+    return role in (offer.get("covers") or []) or offer.get("role") == role
+
+
+def briefing_fields(incident, priority, required, n):
+    """The minimal briefing stored on an offer (see schema 'briefing'). Resident contact is NOT here: it is added on accept."""
+    inc = {"id": incident["id"], "lat": incident["lat"], "lng": incident["lng"], "priority": priority, "answers": n,
+           "subtype": incident.get("subtype"), "free_text": incident.get("freeText", "") or ""}
+    b = dl.build_briefing(inc)
+    return {"flags": b["flags"], "summary": b["summary_text"], "peopleCount": b["people_count"], "confidential": bool(b.get("confidential")),
+            "freeText": b.get("free_text", ""), "needs": list(required)}
+
+
+def reconcile(incident, responders, offers, now, table):
+    """Decide what to do right now. Returns {'actions': [...], 'dispatch': {...}}. Idempotent: running it twice changes nothing."""
+    actions, status = [], incident.get("status")
+    live = [o for o in offers if o["status"] in ("offered", "accepted", "enroute", "arrived")]
+    # 1 closed incident: pull everything back
+    if status in ("Cancelled", "Resolved"):
+        for o in live:
+            actions.append({"type": "withdraw_offer", "id": o["id"], "reason": "incident_cancelled" if status == "Cancelled" else "incident_resolved"})
+        done = status == "Cancelled"
+        keep = [] if done else [{"role": o.get("role"), "responderId": o["responderId"], "status": o["status"], "distanceKm": o.get("distanceKm")}
+                                for o in offers if o["status"] in ("accepted", "enroute", "arrived", "completed")]
+        return {"actions": actions, "dispatch": _summary("cancelled" if done else "completed", offers, False, "", None, keep, [])}
+    # 2 expire offers that ran out of time
+    expired = {o["id"] for o in offers if o["status"] == "offered" and o.get("expiresAt") is not None and o["expiresAt"] <= now}
+    for oid in sorted(expired):
+        actions.append({"type": "expire_offer", "id": oid})
+    view = [({**o, "status": "expired"} if o["id"] in expired else o) for o in offers]
+    # 3 emotional distress etc: support only
+    if t.SCHEMA["subtype_rules"].get(incident.get("subtype"), {}).get("dispatch_responder", True) is False:
+        return {"actions": actions, "dispatch": _summary("support_only", view, False, "Support resources only. No responder is sent.", None, [], [])}
+    age = now - (incident.get("createdAt") or now)
+    pr = server_priority(incident, table)
+    priority = pr["priority"]
+    # 4 "Other" alerts wait briefly for the category to be confirmed
+    if incident["category"] == "Other / General" and incident.get("triageStatus", "pending") == "pending" and age < C.OTHER_HOLD_SECONDS:
+        return {"actions": actions, "dispatch": _summary("awaiting_details", view, False, "", pr, [], [])}
+    if incident["category"] == "Other / General" and priority == "Low" and incident.get("triageStatus") == "complete":
+        return {"actions": actions, "dispatch": _summary("needs_review", view, False, "Low priority, no danger signs. A dispatcher will review.", pr, [], [])}
+    # 5 location
+    if incident.get("lat") is None or incident.get("lng") is None:
+        if age > C.LOCATION_WAIT_SECONDS:
+            return {"actions": actions, "dispatch": _summary("no_location", view, True, "We could not get your location. Call 922 or 999 and say where you are.", pr, [], [])}
+        return {"actions": actions, "dispatch": _summary("waiting_location", view, False, "", pr, [], [])}
+    required, preferred, n = needs(incident)
+    roles = required if required else [None]
+    resp_by_id = {r["id"]: r for r in responders}
+    asked = {o["responderId"] for o in view}                                  # one offer per responder per incident, ever
+    wave_size = C.WAVE_SIZE[priority]
+    unfilled, far = [], False
+    creates = []
+    for role in roles:
+        label = role or "any_responder"
+        have = [o for o in view if o["status"] in C.ACCEPTED_OFFER and (role is None or _offer_covers(o, role))]
+        flight = [o for o in view if o["status"] == "offered" and (role is None or _offer_covers(o, role))]
+        if have or flight:
+            continue
+        tried = len([o for o in view if o.get("role") == label])
+        if tried >= C.MAX_OFFERS_PER_ROLE:
+            unfilled.append(label); continue
+        cands = rank_candidates(incident, responders, role, preferred, now, priority, asked)
+        if not cands:
+            unfilled.append(label); continue
+        wave = 1 + max([o.get("wave", 0) for o in view if o.get("role") == label] or [0])
+        for c in cands[: max(1, min(wave_size, C.MAX_OFFERS_PER_ROLE - tried))]:
+            far = far or (priority == "High" and c["distance_km"] > R["far_warning_km"])
+            asked.add(c["id"])
+            covers = sorted(set(c["caps"]) & set(required + preferred))
+            creates.append({"type": "create_offer", "offer": {
+                "id": f"{incident['id']}_{c['id']}", "incidentId": incident["id"], "incidentCode": incident.get("code") or incident["id"],
+                "responderId": c["id"], "role": label, "wave": wave, "status": "offered", "createdAt": now, "expiresAt": now + C.OFFER_SECONDS,
+                "distanceKm": c["distance_km"], "priority": priority, "category": incident["category"], "subtype": incident.get("subtype"),
+                "covers": covers, "location": {"lat": incident["lat"], "lng": incident["lng"]}, **briefing_fields(incident, priority, required, n or {})}})
+    actions += creates
+    # 6 keep open offers up to date (location, priority, new answers)
+    fresh = briefing_fields(incident, priority, required, n or {}) if n else None
+    for o in view:
+        if o["status"] in ("offered", "accepted", "enroute", "arrived"):
+            want = {"priority": priority, "location": {"lat": incident["lat"], "lng": incident["lng"]}}
+            if fresh:
+                want.update({"flags": fresh["flags"], "summary": fresh["summary"], "peopleCount": fresh["peopleCount"], "needs": fresh["needs"]})
+            diff = {k: v for k, v in want.items() if o.get(k) != v}
+            if diff:
+                actions.append({"type": "update_offer", "id": o["id"], "fields": diff})
+    after = view + [c["offer"] for c in creates]
+    state = _state(required, after)
+    esc = bool(unfilled) or far
+    reason = labels.unfilled_reason(unfilled) if unfilled else ("The nearest responder is far away. Call 922 or 999 as well." if far else "")
+    units = [{"role": o.get("role"), "responderId": o["responderId"], "status": o["status"], "distanceKm": o.get("distanceKm")}
+             for o in after if o["status"] in ("offered", "accepted", "enroute", "arrived", "completed")]
+    if unfilled and state in ("dispatching", "partially_assigned") and not any(o["status"] == "offered" for o in after):
+        state = "unfilled"
+    return {"actions": actions, "dispatch": _summary(state, after, esc, reason, pr, units, unfilled)}
+
+
+def _state(required, offers):
+    roles = required if required else [None]
+    stages = []
+    for role in roles:
+        got = [o for o in offers if o["status"] in C.ACCEPTED_OFFER and (role is None or _offer_covers(o, role))]
+        if not got:
+            return "partially_assigned" if stages else "dispatching"
+        order = ["accepted", "enroute", "arrived", "completed"]
+        stages.append(min(order.index(o["status"]) for o in got))
+    return ["assigned", "enroute", "arrived", "completed"][min(stages)]
+
+
+def _summary(state, offers, escalate, reason, pr, units, unfilled):
+    return {"state": state, "escalate922": bool(escalate), "reason": reason, "priority": pr["priority"] if pr else None,
+            "prioritySource": pr["source"] if pr else None, "priorityReasons": (pr or {}).get("reasons", []), "unfilled": unfilled, "units": units}
+
+
+def resolve_acceptance(incident_roles, offers):
+    """After an accept: a role can have only ONE accepted unit (the earliest). Later ones and waiting siblings are withdrawn.
+    offers: all offers of the incident. Returns actions."""
+    actions, taken = [], {}
+    acc = sorted([o for o in offers if o["status"] in C.ACCEPTED_OFFER], key=lambda o: (o.get("respondedAt") or 0, o["id"]))
+    for o in acc:
+        role = o.get("role")
+        if role in taken and o["status"] == "accepted":
+            actions.append({"type": "withdraw_offer", "id": o["id"], "reason": "role_already_filled"})
+        else:
+            taken.setdefault(role, o["id"])
+            for c in o.get("covers") or []:
+                taken.setdefault(c, o["id"])
+    for o in offers:
+        if o["status"] == "offered" and (o.get("role") in taken or any(c in taken for c in (o.get("covers") or []) if c in (incident_roles or []))):
+            actions.append({"type": "withdraw_offer", "id": o["id"], "reason": "another_unit_accepted"})
+    return actions
+
+<<<END>>>
+
+##### FILE: functions\main.py (13582 chars)
+<<<BEGIN>>>
+"""Cloud Functions (2nd gen, Python) for the Emergency Response System.
+  on_incident_written   : an alert is created/changed  -> decide who to ask (dispatch engine)
+  on_offer_written      : a responder answered         -> resolve who won, release contact, ask the next one if declined
+  sweep_dispatch        : every minute                 -> expire unanswered offers, escalate, set silent responders Offline
+  admin_assign_responder / admin_close_incident        -> manual actions for administrators (callable)
+  save_text_feedback_fn : saves resident-CONFIRMED labels for retraining (consent only; sensitive messages never)
+All decisions live in dispatch/core.py (tested). This file only connects them to Firebase."""
+import hashlib
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml", "scripts"))
+
+from firebase_admin import auth as fb_auth, initialize_app, firestore
+from firebase_functions import firestore_fn, https_fn, options, scheduler_fn
+
+import dispatch  # noqa: F401  (path set-up)
+from dispatch import admin_accounts as acct, config as C, core, notify, store
+
+from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
+from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
+from phase4d_functions import responder_sos, admin_resolve_sos, reveal_contact  # noqa: F401,E402  (Phase 4D)
+import phase4d_core as p4
+initialize_app()
+OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
+_db = None
+
+
+def db():
+    global _db
+    if _db is None:
+        _db = firestore.client()
+    return _db
+
+
+def _strip(d):
+    return {k: v for k, v in (d or {}).items() if k not in ("dispatch", "updatedAt")}
+
+
+def _quiet(fn, label):
+    """An event or metric failure must never stop dispatch."""
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001
+        print(f"[events] {label}: {type(e).__name__}")
+
+
+def _record_incident_events(db, iid, old, new, now):
+    """Who opened the call, when it was classified, what priority was set, when it closed."""
+    uid = new.get("userId") or "system"
+    if old is None:
+        p4.write_event(db, iid, "incident_created", "resident", uid, {"category": new.get("category")}, "incident_created")
+    else:
+        if old.get("triageStatus") != new.get("triageStatus") and new.get("triageStatus") in ("quick", "complete"):
+            p4.write_event(db, iid, "classified", "resident", uid,
+                           {"triageStatus": new.get("triageStatus"), "priority": new.get("priority")},
+                           f"classified_{new.get('triageStatus')}")
+        if old.get("priority") != new.get("priority"):
+            p4.write_event(db, iid, "priority_set", "resident", uid,
+                           {"priority": new.get("priority"), "source": new.get("prioritySource")},
+                           f"priority_set_{new.get('priority')}")
+        if old.get("status") != "Cancelled" and new.get("status") == "Cancelled":
+            p4.write_event(db, iid, "incident_cancelled", "resident", uid, {"from": old.get("status")}, "incident_cancelled")
+        if old.get("status") != "Resolved" and new.get("status") == "Resolved":
+            p4.write_event(db, iid, "incident_closed", "system", "system", {}, "incident_closed")
+    acc = new.get("locationAccuracyM")
+    if isinstance(acc, (int, float)) and acc > p4.LOW_ACCURACY_M and (old is None or old.get("locationAccuracyM") != acc):
+        p4.raise_attention(db, iid, "low_accuracy")
+    if new.get("status") in ("Cancelled", "Resolved"):
+        p4.close_metrics(db, iid, new, now)
+
+
+def _share_caller_feedback(db, iid, old, new):
+    """The unit that closed the job hears 'safe / still needs help', never who said it."""
+    fb = new.get("residentFeedback")
+    if not isinstance(fb, dict) or not isinstance(fb.get("safe"), bool):
+        return
+    if old is not None and old.get("residentFeedback") == new.get("residentFeedback"):
+        return
+    for s in db.collection("offers").where("incidentId", "==", iid).where("status", "==", "completed").stream():
+        if (s.to_dict().get("callerFeedback") or {}).get("safe") == fb["safe"]:
+            continue
+        s.reference.update({"callerFeedback": {"safe": fb["safe"], "at": firestore.SERVER_TIMESTAMP}})
+
+
+@firestore_fn.on_document_written(document="incidents/{incidentId}", **OPTS)
+def on_incident_written(event: firestore_fn.Event[firestore_fn.Change]):
+    after = event.data.after
+    if after is None or not after.exists:
+        return
+    before = event.data.before
+    new = after.to_dict() or {}
+    old = before.to_dict() if before is not None and before.exists else None
+    if old is not None and _strip(old) == _strip(new):
+        return                                               # only our own dispatch write changed: stop (no loops)
+    iid = event.params["incidentId"]
+    _quiet(lambda: _record_incident_events(db(), iid, old, new, time.time()), f"incident {iid}")
+    if old is None:
+        _quiet(lambda: p4.snapshot_contact(db(), iid, new), f"contact {iid}")
+    _quiet(lambda: _share_caller_feedback(db(), iid, old, new), f"feedback {iid}")
+    store.reconcile_incident(db(), iid, time.time(), notify.send_offer_push)
+
+
+@firestore_fn.on_document_written(document="offers/{offerId}", **OPTS)
+def on_offer_written(event: firestore_fn.Event[firestore_fn.Change]):
+    after = event.data.after
+    if after is None or not after.exists:
+        return
+    before = event.data.before
+    new = after.to_dict()
+    old = before.to_dict() if before is not None and before.exists else None
+    _quiet(lambda: p4.record_offer_events(db(), after.id, new, old), f"offer {after.id}")
+    if old is None:
+        return                                               # a new offer: the push was sent when it was created
+    if old.get("status") == new.get("status"):
+        return
+    store.handle_offer_status_change(db(), after.id, new, time.time(), notify.send_offer_push)
+
+
+@scheduler_fn.on_schedule(schedule="every 1 minutes", **OPTS)
+def sweep_dispatch(event: scheduler_fn.ScheduledEvent) -> None:
+    store.sweep(db(), time.time(), notify.send_offer_push)
+    _quiet(lambda: p4.sweep_attention(db(), time.time()), "attention sweep")
+
+
+def _require_admin(req):
+    if req.auth is None or (req.auth.token or {}).get("role") != "SystemAdmin":
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.PERMISSION_DENIED, "Administrators only.")
+
+
+@https_fn.on_call(**OPTS)
+def admin_assign_responder(req: https_fn.CallableRequest):
+    """Manually asks one responder to attend an incident (administrators only). A reason is required."""
+    _require_admin(req)
+    actor = "admin"
+    d = req.data if isinstance(req.data, dict) else {}
+    iid, rid = d.get("incidentId"), d.get("responderId")
+    reason = str(d.get("reason") or "").strip()[:140]
+    if len(reason) < 3:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Give a reason for the manual assignment (at least 3 characters).")
+    if not isinstance(iid, str) or not isinstance(rid, str):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "incidentId and responderId are required.")
+    snap = db().collection("incidents").document(iid).get()
+    rs = db().collection("responders").document(rid).get()
+    if not snap.exists or not rs.exists:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.NOT_FOUND, "Incident or responder not found.")
+    inc = store.incident_view(iid, snap.to_dict())
+    if inc["status"] not in ("Active", "SupportOnly") or inc["lat"] is None:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.FAILED_PRECONDITION, "The incident is closed or has no location.")
+    resp = store.responder_view(db(), rid, rs.to_dict())
+    if not resp["verified"]:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.FAILED_PRECONDITION, "Responder is not verified.")
+    pr = core.server_priority(inc, store.table())
+    required, preferred, n = core.needs(inc)
+    now = time.time()
+    caps = core.effective_caps(resp)
+    role = d.get("role") if d.get("role") in C.ALL_CAPABILITIES else (required[0] if required else "any_responder")
+    from dispatch import config
+    dist = round(core.dl.haversine_km(inc["lat"], inc["lng"], resp["lat"], resp["lng"]), 2) if resp["lat"] is not None else None
+    offer = {"id": f"{iid}_{rid}", "incidentId": iid, "incidentCode": inc["code"], "responderId": rid, "role": role, "wave": 0, "status": "offered",
+             "createdAt": now, "expiresAt": now + config.MANUAL_OFFER_SECONDS, "distanceKm": dist if dist is not None else 0, "priority": pr["priority"],
+             "category": inc["category"], "subtype": inc["subtype"], "covers": sorted(set(caps) & set(required + preferred)), "manual": True,
+             "location": {"lat": inc["lat"], "lng": inc["lng"]}, **core.briefing_fields(inc, pr["priority"], required, n or {})}
+    ref = db().collection("offers").document(offer["id"])
+    doc = store._offer_doc(offer)
+    ref.set(doc)                                              # an administrator may re-ask a responder who declined before
+    store.audit(db(), "offer_created_manual", iid, responderId=rid, by=req.auth.uid)
+    _quiet(lambda: p4.write_event(db(), iid, "admin_assigned", actor, req.auth.uid,
+                                  {"role": role, "reason": reason}, f"admin_assigned_{offer['id']}"), f"assign {iid}")
+    notify.send_offer_push(db(), offer)
+    return {"ok": True, "offerId": offer["id"]}
+
+
+@https_fn.on_call(**OPTS)
+def admin_close_incident(req: https_fn.CallableRequest):
+    """Administrators close an incident with a required outcome note."""
+    _require_admin(req)
+    actor = "admin"
+    d = req.data if isinstance(req.data, dict) else {}
+    iid, note = d.get("incidentId"), str(d.get("note") or "").strip()[:280]
+    if not isinstance(iid, str):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "incidentId is required.")
+    if len(note) < 3:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Write the outcome (at least 3 characters).")
+    ref = db().collection("incidents").document(iid)
+    snap = ref.get()
+    if not snap.exists:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.NOT_FOUND, "Incident not found.")
+    if snap.to_dict().get("status") not in ("Active", "SupportOnly"):
+        return {"ok": True, "already": True}
+    ref.update({"status": "Resolved", "resolvedAt": firestore.SERVER_TIMESTAMP, "resolution": {"by": req.auth.uid, "note": note, "byRole": actor}})
+    store.audit(db(), "incident_closed_by_admin", iid, by=req.auth.uid, note=note)
+    _quiet(lambda: p4.write_event(db(), iid, "incident_closed", actor, req.auth.uid, {"by": actor}, "incident_closed"), f"close {iid}")
+    return {"ok": True}
+
+
+# ---- administrator accounts (only an existing administrator may call these) ----
+_CODES = {"invalid-argument": https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "failed-precondition": https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
+          "not-found": https_fn.FunctionsErrorCode.NOT_FOUND}
+
+
+def _admin_call(fn):
+    try:
+        return fn()
+    except acct.AdminError as e:
+        raise https_fn.HttpsError(_CODES.get(e.code, https_fn.FunctionsErrorCode.INTERNAL), e.message)
+
+
+@https_fn.on_call(**OPTS)
+def admin_list_admins(req: https_fn.CallableRequest):
+    _require_admin(req)
+    return {"admins": [{**a, "createdAt": a["createdAt"], "lastSignInAt": a["lastSignInAt"]} for a in _admin_call(lambda: acct.list_admins(fb_auth))], "me": req.auth.uid}
+
+
+@https_fn.on_call(**OPTS)
+def admin_grant_admin(req: https_fn.CallableRequest):
+    """Adds an administrator by e-mail. New people get a one-time link to set their own password (no password is ever chosen for them)."""
+    _require_admin(req)
+    d = req.data if isinstance(req.data, dict) else {}
+    res = _admin_call(lambda: acct.grant(fb_auth, d.get("email")))
+    store.audit(db(), "admin_granted", "-", by=req.auth.uid, target=res["uid"], email=res["email"], created=res["created"])
+    return res
+
+
+@https_fn.on_call(**OPTS)
+def admin_revoke_admin(req: https_fn.CallableRequest):
+    _require_admin(req)
+    d = req.data if isinstance(req.data, dict) else {}
+    res = _admin_call(lambda: acct.revoke(fb_auth, req.auth.uid, d.get("uid")))
+    store.audit(db(), "admin_revoked", "-", by=req.auth.uid, target=res["uid"], email=res["email"])
+    return {"ok": True}
+
+
+# ---- resident-confirmed text feedback (optional: needs ml/scripts/feedback_store.py) ----
+try:
+    import feedback_store as fb
+
+    @https_fn.on_call(**OPTS)
+    def save_text_feedback_fn(req: https_fn.CallableRequest):
+        """Never blocks an emergency: the app ignores the answer."""
+        try:
+            uid = req.auth.uid if req.auth else None
+            record, why = fb.prepare_record(req.data, uid, os.environ.get("FEEDBACK_SALT", ""))
+            if record is None:
+                return {"stored": False, "reason": why}
+            doc_id = hashlib.sha256((record["contributor"] + record["text"].lower()).encode()).hexdigest()[:24]
+            record["created"] = firestore.SERVER_TIMESTAMP
+            db().collection("text_feedback").document(doc_id).set(record)
+            return {"stored": True}
+        except Exception as e:  # noqa: BLE001
+            return {"stored": False, "reason": f"error: {type(e).__name__}"}
+except ImportError:
+    pass
+
+<<<END>>>
+
+##### FILE: functions\.venv\Lib\site-packages\firebase_admin\_messaging_encoder.py (35208 chars)
+<<<BEGIN>>>
+# Copyright 2019 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Encoding and validation utils for the messaging (FCM) module."""
+
+import datetime
+import json
+import math
+import numbers
+import re
+import warnings
+
+from firebase_admin import _messaging_utils
+
+
+class Message:
+    """A message that can be sent via Firebase Cloud Messaging.
+
+    Contains payload information as well as recipient information. In particular, the message must
+    contain exactly one of fid, token, topic or condition fields.
+
+    Args:
+        data: A dictionary of data fields (optional). All keys and values in the dictionary must be
+            strings.
+        notification: An instance of ``messaging.Notification`` (optional).
+        android: An instance of ``messaging.AndroidConfig`` (optional).
+        webpush: An instance of ``messaging.WebpushConfig`` (optional).
+        apns: An instance of ``messaging.ApnsConfig`` (optional).
+        fcm_options: An instance of ``messaging.FCMOptions`` (optional).
+        fid: The Firebase installation ID of an FCM registered app instance to which the
+            message should be sent (optional).
+        token: Deprecated. Use ``fid`` instead.
+        topic: Name of the FCM topic to which the message should be sent (optional). Topic name
+            may contain the ``/topics/`` prefix.
+        condition: The FCM condition to which the message should be sent (optional).
+    """
+
+    def __init__(self, data=None, notification=None, android=None, webpush=None, apns=None,
+                 fcm_options=None, token=None, topic=None, condition=None, fid=None):
+        if token is not None:
+            warnings.warn(
+                "Message.token is deprecated. Use Message.fid instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+        self.data = data
+        self.notification = notification
+        self.android = android
+        self.webpush = webpush
+        self.apns = apns
+        self.fcm_options = fcm_options
+        self.fid = fid
+        self.token = token
+        self.topic = topic
+        self.condition = condition
+
+    def __str__(self):
+        return json.dumps(self, cls=MessageEncoder, sort_keys=True)
+
+
+class MulticastMessage:
+    """A message that can be sent to multiple tokens or fids via Firebase Cloud Messaging.
+
+    Args:
+        tokens: Deprecated. Use ``fids`` instead (optional).
+        data: A dictionary of data fields (optional). All keys and values in the dictionary must be
+            strings.
+        notification: An instance of ``messaging.Notification`` (optional).
+        android: An instance of ``messaging.AndroidConfig`` (optional).
+        webpush: An instance of ``messaging.WebpushConfig`` (optional).
+        apns: An instance of ``messaging.ApnsConfig`` (optional).
+        fcm_options: An instance of ``messaging.FCMOptions`` (optional).
+        fids: A list of Firebase Installation IDs of targeted app instances (optional).
+    """
+    def __init__(
+            self, tokens=None, data=None, notification=None, android=None,
+            webpush=None, apns=None, fcm_options=None, fids=None):
+        if tokens is not None:
+            warnings.warn(
+                "MulticastMessage.tokens is deprecated. Use MulticastMessage.fids instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+
+        if tokens is None and fids is None:
+            raise ValueError(
+                "Must specify at least one of MulticastMessage.tokens or MulticastMessage.fids.")
+
+        if tokens is not None:
+            _Validators.check_string_list('MulticastMessage.tokens', tokens)
+        if fids is not None:
+            _Validators.check_string_list('MulticastMessage.fids', fids)
+
+        tokens_len = len(tokens) if tokens is not None else 0
+        fids_len = len(fids) if fids is not None else 0
+        if tokens_len + fids_len > 500:
+            raise ValueError(
+                'Total number of tokens and fids must not exceed 500.')
+
+        self.tokens = tokens
+        self.fids = fids
+        self.data = data
+        self.notification = notification
+        self.android = android
+        self.webpush = webpush
+        self.apns = apns
+        self.fcm_options = fcm_options
+
+
+class _Validators:
+    """A collection of data validation utilities.
+
+    Methods provided in this class raise ``ValueErrors`` if any validations fail.
+    """
+
+    @classmethod
+    def check_string(cls, label, value, non_empty=False):
+        """Checks if the given value is a string."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            if non_empty:
+                raise ValueError(f'{label} must be a non-empty string.')
+            raise ValueError(f'{label} must be a string.')
+        if non_empty and not value:
+            raise ValueError(f'{label} must be a non-empty string.')
+        return value
+
+    @classmethod
+    def check_number(cls, label, value):
+        if value is None:
+            return None
+        if not isinstance(value, numbers.Number):
+            raise ValueError(f'{label} must be a number.')
+        return value
+
+    @classmethod
+    def check_string_dict(cls, label, value):
+        """Checks if the given value is a dictionary comprised only of string keys and values."""
+        if value is None or value == {}:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError(f'{label} must be a dictionary.')
+        non_str = [k for k in value if not isinstance(k, str)]
+        if non_str:
+            raise ValueError(f'{label} must not contain non-string keys.')
+        non_str = [v for v in value.values() if not isinstance(v, str)]
+        if non_str:
+            raise ValueError(f'{label} must not contain non-string values.')
+        return value
+
+    @classmethod
+    def check_string_list(cls, label, value):
+        """Checks if the given value is a list comprised only of strings."""
+        if value is None or value == []:
+            return None
+        if not isinstance(value, list):
+            raise ValueError(f'{label} must be a list of strings.')
+        non_str = [k for k in value if not isinstance(k, str)]
+        if non_str:
+            raise ValueError(f'{label} must not contain non-string values.')
+        return value
+
+    @classmethod
+    def check_number_list(cls, label, value):
+        """Checks if the given value is a list comprised only of numbers."""
+        if value is None or value == []:
+            return None
+        if not isinstance(value, list):
+            raise ValueError(f'{label} must be a list of numbers.')
+        non_number = [k for k in value if not isinstance(k, numbers.Number)]
+        if non_number:
+            raise ValueError(f'{label} must not contain non-number values.')
+        return value
+
+    @classmethod
+    def check_analytics_label(cls, label, value):
+        """Checks if the given value is a valid analytics label."""
+        value = _Validators.check_string(label, value)
+        if value is not None and not re.match(r'^[a-zA-Z0-9-_.~%]{1,50}$', value):
+            raise ValueError(f'Malformed {label}.')
+        return value
+
+    @classmethod
+    def check_boolean(cls, label, value):
+        """Checks if the given value is boolean."""
+        if value is None:
+            return None
+        if not isinstance(value, bool):
+            raise ValueError(f'{label} must be a boolean.')
+        return value
+
+    @classmethod
+    def check_datetime(cls, label, value):
+        """Checks if the given value is a datetime."""
+        if value is None:
+            return None
+        if not isinstance(value, datetime.datetime):
+            raise ValueError(f'{label} must be a datetime.')
+        return value
+
+
+class MessageEncoder(json.JSONEncoder):
+    """A custom ``JSONEncoder`` implementation for serializing Message instances into JSON."""
+
+    @classmethod
+    def remove_null_values(cls, dict_value):
+        return {k: v for k, v in dict_value.items() if v not in [None, [], {}]}
+
+    @classmethod
+    def encode_android(cls, android):
+        """Encodes an ``AndroidConfig`` instance into JSON."""
+        if android is None:
+            return None
+        if not isinstance(android, _messaging_utils.AndroidConfig):
+            raise ValueError('Message.android must be an instance of AndroidConfig class.')
+        result = {
+            'collapse_key': _Validators.check_string(
+                'AndroidConfig.collapse_key', android.collapse_key),
+            'data': _Validators.check_string_dict(
+                'AndroidConfig.data', android.data),
+            'notification': cls.encode_android_notification(android.notification),
+            'priority': _Validators.check_string(
+                'AndroidConfig.priority', android.priority, non_empty=True),
+            'restricted_package_name': _Validators.check_string(
+                'AndroidConfig.restricted_package_name', android.restricted_package_name),
+            'ttl': cls.encode_ttl(android.ttl),
+            'fcm_options': cls.encode_android_fcm_options(android.fcm_options),
+            'direct_boot_ok': _Validators.check_boolean(
+                'AndroidConfig.direct_boot_ok', android.direct_boot_ok),
+            'bandwidth_constrained_ok': _Validators.check_boolean(
+                'AndroidConfig.bandwidth_constrained_ok', android.bandwidth_constrained_ok),
+            'restricted_satellite_ok': _Validators.check_boolean(
+                'AndroidConfig.restricted_satellite_ok', android.restricted_satellite_ok),
+        }
+        result = cls.remove_null_values(result)
+        priority = result.get('priority')
+        if priority and priority not in ('high', 'normal'):
+            raise ValueError('AndroidConfig.priority must be "high" or "normal".')
+        return result
+
+    @classmethod
+    def encode_android_fcm_options(cls, fcm_options):
+        """Encodes an ``AndroidFCMOptions`` instance into JSON."""
+        if fcm_options is None:
+            return None
+        if not isinstance(fcm_options, _messaging_utils.AndroidFCMOptions):
+            raise ValueError('AndroidConfig.fcm_options must be an instance of '
+                             'AndroidFCMOptions class.')
+        result = {
+            'analytics_label': _Validators.check_analytics_label(
+                'AndroidFCMOptions.analytics_label', fcm_options.analytics_label),
+        }
+        result = cls.remove_null_values(result)
+        return result
+
+    @classmethod
+    def encode_ttl(cls, ttl):
+        """Encodes an ``AndroidConfig`` ``TTL`` duration into a string."""
+        if ttl is None:
+            return None
+        if isinstance(ttl, numbers.Number):
+            ttl = datetime.timedelta(seconds=ttl)
+        if not isinstance(ttl, datetime.timedelta):
+            raise ValueError('AndroidConfig.ttl must be a duration in seconds or an instance of '
+                             'datetime.timedelta.')
+        total_seconds = ttl.total_seconds()
+        if total_seconds < 0:
+            raise ValueError('AndroidConfig.ttl must not be negative.')
+        seconds = int(math.floor(total_seconds))
+        nanos = int((total_seconds - seconds) * 1e9)
+        if nanos:
+            return f'{seconds}.{str(nanos).zfill(9)}s'
+        return f'{seconds}s'
+
+    @classmethod
+    def encode_milliseconds(cls, label, msec):
+        """Encodes a duration in milliseconds into a string."""
+        if msec is None:
+            return None
+        if isinstance(msec, numbers.Number):
+            msec = datetime.timedelta(milliseconds=msec)
+        if not isinstance(msec, datetime.timedelta):
+            raise ValueError(
+                f'{label} must be a duration in milliseconds or an instance of datetime.timedelta.')
+        total_seconds = msec.total_seconds()
+        if total_seconds < 0:
+            raise ValueError(f'{label} must not be negative.')
+        seconds = int(math.floor(total_seconds))
+        nanos = int((total_seconds - seconds) * 1e9)
+        if nanos:
+            return f'{seconds}.{str(nanos).zfill(9)}s'
+        return f'{seconds}s'
+
+    @classmethod
+    def encode_android_notification(cls, notification):
+        """Encodes an ``AndroidNotification`` instance into JSON."""
+        if notification is None:
+            return None
+        if not isinstance(notification, _messaging_utils.AndroidNotification):
+            raise ValueError('AndroidConfig.notification must be an instance of '
+                             'AndroidNotification class.')
+        result = {
+            'body': _Validators.check_string(
+                'AndroidNotification.body', notification.body),
+            'body_loc_args': _Validators.check_string_list(
+                'AndroidNotification.body_loc_args', notification.body_loc_args),
+            'body_loc_key': _Validators.check_string(
+                'AndroidNotification.body_loc_key', notification.body_loc_key),
+            'click_action': _Validators.check_string(
+                'AndroidNotification.click_action', notification.click_action),
+            'color': _Validators.check_string(
+                'AndroidNotification.color', notification.color, non_empty=True),
+            'icon': _Validators.check_string(
+                'AndroidNotification.icon', notification.icon),
+            'sound': _Validators.check_string(
+                'AndroidNotification.sound', notification.sound),
+            'tag': _Validators.check_string(
+                'AndroidNotification.tag', notification.tag),
+            'title': _Validators.check_string(
+                'AndroidNotification.title', notification.title),
+            'title_loc_args': _Validators.check_string_list(
+                'AndroidNotification.title_loc_args', notification.title_loc_args),
+            'title_loc_key': _Validators.check_string(
+                'AndroidNotification.title_loc_key', notification.title_loc_key),
+            'channel_id': _Validators.check_string(
+                'AndroidNotification.channel_id', notification.channel_id),
+            'image': _Validators.check_string(
+                'image', notification.image),
+            'ticker': _Validators.check_string(
+                'AndroidNotification.ticker', notification.ticker),
+            'sticky': notification.sticky,
+            'event_time': _Validators.check_datetime(
+                'AndroidNotification.event_timestamp', notification.event_timestamp),
+            'local_only': notification.local_only,
+            'notification_priority': _Validators.check_string(
+                'AndroidNotification.priority', notification.priority, non_empty=True),
+            'vibrate_timings': _Validators.check_number_list(
+                'AndroidNotification.vibrate_timings_millis', notification.vibrate_timings_millis),
+            'default_vibrate_timings': notification.default_vibrate_timings,
+            'default_sound': notification.default_sound,
+            'default_light_settings': notification.default_light_settings,
+            'light_settings': cls.encode_light_settings(notification.light_settings),
+            'visibility': _Validators.check_string(
+                'AndroidNotification.visibility', notification.visibility, non_empty=True),
+            'notification_count': _Validators.check_number(
+                'AndroidNotification.notification_count', notification.notification_count),
+            'proxy': _Validators.check_string(
+                'AndroidNotification.proxy', notification.proxy, non_empty=True)
+        }
+        result = cls.remove_null_values(result)
+        color = result.get('color')
+        if color and not re.match(r'^#[0-9a-fA-F]{6}$', color):
+            raise ValueError(
+                'AndroidNotification.color must be in the form #RRGGBB.')
+        if result.get('body_loc_args') and not result.get('body_loc_key'):
+            raise ValueError(
+                'AndroidNotification.body_loc_key is required when specifying body_loc_args.')
+        if result.get('title_loc_args') and not result.get('title_loc_key'):
+            raise ValueError(
+                'AndroidNotification.title_loc_key is required when specifying title_loc_args.')
+
+        event_time = result.get('event_time')
+        if event_time:
+            # if the datetime instance is not naive (tzinfo is present), convert to UTC
+            # otherwise (tzinfo is None) assume the datetime instance is already in UTC
+            if event_time.tzinfo is not None:
+                event_time = event_time.astimezone(datetime.timezone.utc)
+            result['event_time'] = event_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+        priority = result.get('notification_priority')
+        if priority:
+            if priority not in ('min', 'low', 'default', 'high', 'max'):
+                raise ValueError('AndroidNotification.priority must be "default", "min", "low", '
+                                 '"high" or "max".')
+            result['notification_priority'] = 'PRIORITY_' + priority.upper()
+
+        visibility = result.get('visibility')
+        if visibility:
+            if visibility not in ('private', 'public', 'secret'):
+                raise ValueError(
+                    'AndroidNotification.visibility must be "private", "public" or "secret".')
+            result['visibility'] = visibility.upper()
+
+        vibrate_timings_millis = result.get('vibrate_timings')
+        if vibrate_timings_millis:
+            vibrate_timing_strings = []
+            for msec in vibrate_timings_millis:
+                formated_string = cls.encode_milliseconds(
+                    'AndroidNotification.vibrate_timings_millis', msec)
+                vibrate_timing_strings.append(formated_string)
+            result['vibrate_timings'] = vibrate_timing_strings
+
+        proxy = result.get('proxy')
+        if proxy:
+            if proxy not in ('allow', 'deny', 'if_priority_lowered'):
+                raise ValueError(
+                    'AndroidNotification.proxy must be "allow", "deny" or "if_priority_lowered".')
+            result['proxy'] = proxy.upper()
+        return result
+
+    @classmethod
+    def encode_light_settings(cls, light_settings):
+        """Encodes a ``LightSettings`` instance into JSON."""
+        if light_settings is None:
+            return None
+        if not isinstance(light_settings, _messaging_utils.LightSettings):
+            raise ValueError(
+                'AndroidNotification.light_settings must be an instance of LightSettings class.')
+        result = {
+            'color': _Validators.check_string(
+                'LightSettings.color', light_settings.color, non_empty=True),
+            'light_on_duration': cls.encode_milliseconds(
+                'LightSettings.light_on_duration_millis', light_settings.light_on_duration_millis),
+            'light_off_duration': cls.encode_milliseconds(
+                'LightSettings.light_off_duration_millis',
+                light_settings.light_off_duration_millis),
+        }
+        result = cls.remove_null_values(result)
+        light_on_duration = result.get('light_on_duration')
+        if not light_on_duration:
+            raise ValueError(
+                'LightSettings.light_on_duration_millis is required.')
+
+        light_off_duration = result.get('light_off_duration')
+        if not light_off_duration:
+            raise ValueError(
+                'LightSettings.light_off_duration_millis is required.')
+
+        color = result.get('color')
+        if not color:
+            raise ValueError('LightSettings.color is required.')
+        if not re.match(r'^#[0-9a-fA-F]{6}$', color) and not re.match(r'^#[0-9a-fA-F]{8}$', color):
+            raise ValueError(
+                'LightSettings.color must be in the form #RRGGBB or #RRGGBBAA.')
+        if len(color) == 7:
+            color = color+'FF'
+        rgba = [int(color[i:i + 2], 16) / 255.0 for i in (1, 3, 5, 7)]
+        result['color'] = {'red': rgba[0], 'green': rgba[1],
+                           'blue': rgba[2], 'alpha': rgba[3]}
+        return result
+
+    @classmethod
+    def encode_webpush(cls, webpush):
+        """Encodes a ``WebpushConfig`` instance into JSON."""
+        if webpush is None:
+            return None
+        if not isinstance(webpush, _messaging_utils.WebpushConfig):
+            raise ValueError('Message.webpush must be an instance of WebpushConfig class.')
+        result = {
+            'data': _Validators.check_string_dict(
+                'WebpushConfig.data', webpush.data),
+            'headers': _Validators.check_string_dict(
+                'WebpushConfig.headers', webpush.headers),
+            'notification': cls.encode_webpush_notification(webpush.notification),
+            'fcm_options': cls.encode_webpush_fcm_options(webpush.fcm_options),
+        }
+        return cls.remove_null_values(result)
+
+    @classmethod
+    def encode_webpush_notification(cls, notification):
+        """Encodes a ``WebpushNotification`` instance into JSON."""
+        if notification is None:
+            return None
+        if not isinstance(notification, _messaging_utils.WebpushNotification):
+            raise ValueError('WebpushConfig.notification must be an instance of '
+                             'WebpushNotification class.')
+        result = {
+            'actions': cls.encode_webpush_notification_actions(notification.actions),
+            'badge': _Validators.check_string(
+                'WebpushNotification.badge', notification.badge),
+            'body': _Validators.check_string(
+                'WebpushNotification.body', notification.body),
+            'data': notification.data,
+            'dir': _Validators.check_string(
+                'WebpushNotification.direction', notification.direction),
+            'icon': _Validators.check_string(
+                'WebpushNotification.icon', notification.icon),
+            'image': _Validators.check_string(
+                'WebpushNotification.image', notification.image),
+            'lang': _Validators.check_string(
+                'WebpushNotification.language', notification.language),
+            'renotify': notification.renotify,
+            'requireInteraction': notification.require_interaction,
+            'silent': notification.silent,
+            'tag': _Validators.check_string(
+                'WebpushNotification.tag', notification.tag),
+            'timestamp': _Validators.check_number(
+                'WebpushNotification.timestamp_millis', notification.timestamp_millis),
+            'title': _Validators.check_string(
+                'WebpushNotification.title', notification.title),
+            'vibrate': notification.vibrate,
+        }
+        direction = result.get('dir')
+        if direction and direction not in ('auto', 'ltr', 'rtl'):
+            raise ValueError('WebpushNotification.direction must be "auto", "ltr" or "rtl".')
+        if notification.custom_data is not None:
+            if not isinstance(notification.custom_data, dict):
+                raise ValueError('WebpushNotification.custom_data must be a dict.')
+            for key, value in notification.custom_data.items():
+                if key in result:
+                    raise ValueError(
+                        f'Multiple specifications for {key} in WebpushNotification.')
+                result[key] = value
+        return cls.remove_null_values(result)
+
+    @classmethod
+    def encode_webpush_notification_actions(cls, actions):
+        """Encodes a list of ``WebpushNotificationActions`` into JSON."""
+        if actions is None:
+            return None
+        if not isinstance(actions, list):
+            raise ValueError('WebpushConfig.notification.actions must be a list of '
+                             'WebpushNotificationAction instances.')
+        results = []
+        for action in actions:
+            if not isinstance(action, _messaging_utils.WebpushNotificationAction):
+                raise ValueError('WebpushConfig.notification.actions must be a list of '
+                                 'WebpushNotificationAction instances.')
+            result = {
+                'action': _Validators.check_string(
+                    'WebpushNotificationAction.action', action.action),
+                'title': _Validators.check_string(
+                    'WebpushNotificationAction.title', action.title),
+                'icon': _Validators.check_string(
+                    'WebpushNotificationAction.icon', action.icon),
+            }
+            results.append(cls.remove_null_values(result))
+        return results
+
+    @classmethod
+    def encode_webpush_fcm_options(cls, options):
+        """Encodes a ``WebpushFCMOptions`` instance into JSON."""
+        if options is None:
+            return None
+        result = {
+            'link': _Validators.check_string('WebpushConfig.fcm_options.link', options.link),
+        }
+        result = cls.remove_null_values(result)
+        link = result.get('link')
+        if link is not None and not link.startswith('https://'):
+            raise ValueError('WebpushFCMOptions.link must be a HTTPS URL.')
+        return result
+
+    @classmethod
+    def encode_apns(cls, apns):
+        """Encodes an ``APNSConfig`` instance into JSON."""
+        if apns is None:
+            return None
+        if not isinstance(apns, _messaging_utils.APNSConfig):
+            raise ValueError('Message.apns must be an instance of APNSConfig class.')
+        result = {
+            'headers': _Validators.check_string_dict(
+                'APNSConfig.headers', apns.headers),
+            'payload': cls.encode_apns_payload(apns.payload),
+            'fcm_options': cls.encode_apns_fcm_options(apns.fcm_options),
+            'live_activity_token': _Validators.check_string(
+                'APNSConfig.live_activity_token', apns.live_activity_token),
+        }
+        return cls.remove_null_values(result)
+
+    @classmethod
+    def encode_apns_payload(cls, payload):
+        """Encodes an ``APNSPayload`` instance into JSON."""
+        if payload is None:
+            return None
+        if not isinstance(payload, _messaging_utils.APNSPayload):
+            raise ValueError('APNSConfig.payload must be an instance of APNSPayload class.')
+        result = {
+            'aps': cls.encode_aps(payload.aps)
+        }
+        for key, value in payload.custom_data.items():
+            result[key] = value
+        return cls.remove_null_values(result)
+
+    @classmethod
+    def encode_apns_fcm_options(cls, fcm_options):
+        """Encodes an ``APNSFCMOptions`` instance into JSON."""
+        if fcm_options is None:
+            return None
+        if not isinstance(fcm_options, _messaging_utils.APNSFCMOptions):
+            raise ValueError('APNSConfig.fcm_options must be an instance of APNSFCMOptions class.')
+        result = {
+            'analytics_label': _Validators.check_analytics_label(
+                'APNSFCMOptions.analytics_label', fcm_options.analytics_label),
+            'image': _Validators.check_string('APNSFCMOptions.image', fcm_options.image)
+        }
+        result = cls.remove_null_values(result)
+        return result
+
+    @classmethod
+    def encode_aps(cls, aps):
+        """Encodes an ``Aps`` instance into JSON."""
+        if not isinstance(aps, _messaging_utils.Aps):
+            raise ValueError('APNSPayload.aps must be an instance of Aps class.')
+        result = {
+            'alert': cls.encode_aps_alert(aps.alert),
+            'badge': _Validators.check_number('Aps.badge', aps.badge),
+            'sound': cls.encode_aps_sound(aps.sound),
+            'category': _Validators.check_string('Aps.category', aps.category),
+            'thread-id': _Validators.check_string('Aps.thread_id', aps.thread_id),
+        }
+        if aps.content_available is True:
+            result['content-available'] = 1
+        if aps.mutable_content is True:
+            result['mutable-content'] = 1
+        if aps.custom_data is not None:
+            if not isinstance(aps.custom_data, dict):
+                raise ValueError('Aps.custom_data must be a dict.')
+            for key, val in aps.custom_data.items():
+                _Validators.check_string('Aps.custom_data key', key)
+                if key in result:
+                    raise ValueError(f'Multiple specifications for {key} in Aps.')
+                result[key] = val
+        return cls.remove_null_values(result)
+
+    @classmethod
+    def encode_aps_sound(cls, sound):
+        """Encodes an APNs sound configuration into JSON."""
+        if sound is None:
+            return None
+        if sound and isinstance(sound, str):
+            return sound
+        if not isinstance(sound, _messaging_utils.CriticalSound):
+            raise ValueError(
+                'Aps.sound must be a non-empty string or an instance of CriticalSound class.')
+        result = {
+            'name': _Validators.check_string('CriticalSound.name', sound.name, non_empty=True),
+            'volume': _Validators.check_number('CriticalSound.volume', sound.volume),
+        }
+        if sound.critical:
+            result['critical'] = 1
+        if not result['name']:
+            raise ValueError('CriticalSond.name must be a non-empty string.')
+        volume = result['volume']
+        if volume is not None and (volume < 0 or volume > 1):
+            raise ValueError('CriticalSound.volume must be in the interval [0,1].')
+        return cls.remove_null_values(result)
+
+    @classmethod
+    def encode_aps_alert(cls, alert):
+        """Encodes an ``ApsAlert`` instance into JSON."""
+      
+<<<END>>>
+
+##### FILE: functions\.venv\Lib\site-packages\werkzeug\wsgi.py (22105 chars)
+<<<BEGIN>>>
+from __future__ import annotations
+
+import io
+import typing as t
+from functools import partial
+from functools import update_wrapper
+
+from .exceptions import ClientDisconnected
+from .exceptions import RequestEntityTooLarge
+from .sansio import utils as _sansio_utils
+from .sansio.utils import host_is_trusted  # noqa: F401 # Imported as part of API
+
+if t.TYPE_CHECKING:
+    from _typeshed.wsgi import WSGIApplication
+    from _typeshed.wsgi import WSGIEnvironment
+
+
+def responder(f: t.Callable[..., WSGIApplication]) -> WSGIApplication:
+    """Marks a function as responder.  Decorate a function with it and it
+    will automatically call the return value as WSGI application.
+
+    Example::
+
+        @responder
+        def application(environ, start_response):
+            return Response('Hello World!')
+    """
+    return update_wrapper(lambda *a: f(*a)(*a[-2:]), f)
+
+
+def get_current_url(
+    environ: WSGIEnvironment,
+    root_only: bool = False,
+    strip_querystring: bool = False,
+    host_only: bool = False,
+    trusted_hosts: t.Collection[str] | None = None,
+) -> str:
+    """Recreate the URL for a request from the parts in a WSGI
+    environment.
+
+    The URL is an IRI, not a URI, so it may contain Unicode characters.
+    Use :func:`~werkzeug.urls.iri_to_uri` to convert it to ASCII.
+
+    :param environ: The WSGI environment to get the URL parts from.
+    :param root_only: Only build the root path, don't include the
+        remaining path or query string.
+    :param strip_querystring: Don't include the query string.
+    :param host_only: Only build the scheme and host.
+    :param trusted_hosts: A list of trusted host names to validate the
+        host against.
+    """
+    parts = {
+        "scheme": environ["wsgi.url_scheme"],
+        "host": get_host(environ, trusted_hosts),
+    }
+
+    if not host_only:
+        parts["root_path"] = environ.get("SCRIPT_NAME", "")
+
+        if not root_only:
+            parts["path"] = environ.get("PATH_INFO", "")
+
+            if not strip_querystring:
+                parts["query_string"] = environ.get("QUERY_STRING", "").encode("latin1")
+
+    return _sansio_utils.get_current_url(**parts)
+
+
+def _get_server(
+    environ: WSGIEnvironment,
+) -> tuple[str, int | None] | None:
+    name = environ.get("SERVER_NAME")
+
+    if name is None:
+        return None
+
+    try:
+        port: int | None = int(environ.get("SERVER_PORT", None))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        # unix socket
+        port = None
+
+    return name, port
+
+
+def get_host(
+    environ: WSGIEnvironment, trusted_hosts: t.Collection[str] | None = None
+) -> str:
+    """Get and validate a request's ``host:port`` based on the values in the
+    given WSGI environ.
+
+    The ``Host`` header sent by the client is preferred. Otherwise, the server's
+    configured address is used. If the server address is a Unix socket, it is
+    ignored. The port is omitted if it matches the standard HTTP or HTTPS ports.
+
+    The value is passed through :func:`host_is_trusted`. The host must be made
+    up of valid characters, but this does not check validity beyond that. If a
+    list of trusted domains is given, the domain must match one.
+
+    :param environ: The WSGI environ.
+    :param trusted_hosts: A list of trusted domains to match. These should
+        already be IDNA encoded, but will be encoded if needed. The port is
+        ignored for this check. If a name starts with a dot it will match as a
+        suffix, accepting all subdomains. If empty or ``None``, all domains are
+        allowed.
+
+    :return: Host, with port if necessary.
+    :raise .SecurityError: If the host is not trusted.
+
+    .. versionchanged:: 3.2
+        The characters of the host value are validated. The empty string is no
+        longer allowed if no header value is available.
+
+    .. versionchanged:: 3.2
+        When using the server address, Unix sockets are ignored.
+
+    .. versionchanged:: 3.1.3
+        If ``SERVER_NAME`` is IPv6, it is wrapped in ``[]``.
+    """
+    return _sansio_utils.get_host(
+        environ["wsgi.url_scheme"],
+        environ.get("HTTP_HOST"),
+        _get_server(environ),
+        trusted_hosts,
+    )
+
+
+def get_content_length(environ: WSGIEnvironment) -> int | None:
+    """Return the ``Content-Length`` header value as an int. If the header is not given
+    or the ``Transfer-Encoding`` header is ``chunked``, ``None`` is returned to indicate
+    a streaming request. If the value is not an integer, or negative, 0 is returned.
+
+    :param environ: The WSGI environ to get the content length from.
+
+    .. versionadded:: 0.9
+    """
+    return _sansio_utils.get_content_length(
+        http_content_length=environ.get("CONTENT_LENGTH"),
+        http_transfer_encoding=environ.get("HTTP_TRANSFER_ENCODING"),
+    )
+
+
+def get_input_stream(
+    environ: WSGIEnvironment,
+    safe_fallback: bool = True,
+    max_content_length: int | None = None,
+) -> t.IO[bytes]:
+    """Return the WSGI input stream, wrapped so that it may be read safely
+    without going past the ``Content-Length`` header value or
+    ``max_content_length``. This must be used to pass a safe stream to other
+    functions, which are not responsible for enforcing this limit.
+
+    If ``Content-Length`` exceeds ``max_content_length``, a
+    :exc:`RequestEntityTooLarge`` ``413 Content Too Large`` error is raised.
+
+    If the WSGI server sets ``environ["wsgi.input_terminated"]``, it indicates that the
+    server handles terminating the stream, so it is safe to read directly. For example,
+    a server that knows how to handle chunked requests safely would set this.
+
+    If ``max_content_length`` is set, it can be enforced on streams if
+    ``wsgi.input_terminated`` is set. Otherwise, an empty stream is returned unless the
+    user explicitly disables this safe fallback.
+
+    If the limit is reached before the underlying stream is exhausted (such as a file
+    that is too large, or an infinite stream), the remaining contents of the stream
+    cannot be read safely. Depending on how the server handles this, clients may show a
+    "connection reset" failure instead of seeing the 413 response.
+
+    :param environ: The WSGI environ containing the stream.
+    :param safe_fallback: Return an empty stream when ``Content-Length`` is not set.
+        Disabling this allows infinite streams, which can be a denial-of-service risk.
+    :param max_content_length: The maximum length that content-length or streaming
+        requests may not exceed.
+
+    .. versionchanged:: 2.3.2
+        ``max_content_length`` is only applied to streaming requests if the server sets
+        ``wsgi.input_terminated``.
+
+    .. versionchanged:: 2.3
+        Check ``max_content_length`` and raise an error if it is exceeded.
+
+    .. versionadded:: 0.9
+    """
+    stream = t.cast(t.IO[bytes], environ["wsgi.input"])
+    content_length = get_content_length(environ)
+
+    if content_length is not None and max_content_length is not None:
+        if content_length > max_content_length:
+            raise RequestEntityTooLarge()
+
+    # A WSGI server can set this to indicate that it terminates the input stream. In
+    # that case the stream is safe without wrapping, or can enforce a max length.
+    if "wsgi.input_terminated" in environ:
+        if max_content_length is not None:
+            # If this is moved above, it can cause the stream to hang if a read attempt
+            # is made when the client sends no data. For example, the development server
+            # does not handle buffering except for chunked encoding.
+            return t.cast(
+                t.IO[bytes], LimitedStream(stream, max_content_length, is_max=True)
+            )
+
+        return stream
+
+    # No limit given, return an empty stream unless the user explicitly allows the
+    # potentially infinite stream. An infinite stream is dangerous if it's not expected,
+    # as it can tie up a worker indefinitely.
+    if content_length is None:
+        return io.BytesIO() if safe_fallback else stream
+
+    return t.cast(t.IO[bytes], LimitedStream(stream, content_length))
+
+
+def get_path_info(environ: WSGIEnvironment) -> str:
+    """Return ``PATH_INFO`` from  the WSGI environment.
+
+    :param environ: WSGI environment to get the path from.
+
+    .. versionchanged:: 3.0
+        The ``charset`` and ``errors`` parameters were removed.
+
+    .. versionadded:: 0.9
+    """
+    path: bytes = environ.get("PATH_INFO", "").encode("latin1")
+    return path.decode(errors="replace")
+
+
+class ClosingIterator:
+    """The WSGI specification requires that all middlewares and gateways
+    respect the `close` callback of the iterable returned by the application.
+    Because it is useful to add another close action to a returned iterable
+    and adding a custom iterable is a boring task this class can be used for
+    that::
+
+        return ClosingIterator(app(environ, start_response), [cleanup_session,
+                                                              cleanup_locals])
+
+    If there is just one close function it can be passed instead of the list.
+
+    A closing iterator is not needed if the application uses response objects
+    and finishes the processing if the response is started::
+
+        try:
+            return response(environ, start_response)
+        finally:
+            cleanup_session()
+            cleanup_locals()
+    """
+
+    def __init__(
+        self,
+        iterable: t.Iterable[bytes],
+        callbacks: None
+        | (t.Callable[[], None] | t.Iterable[t.Callable[[], None]]) = None,
+    ) -> None:
+        iterator = iter(iterable)
+        self._next = t.cast(t.Callable[[], bytes], partial(next, iterator))
+        if callbacks is None:
+            callbacks = []
+        elif callable(callbacks):
+            callbacks = [callbacks]
+        else:
+            callbacks = list(callbacks)
+        iterable_close = getattr(iterable, "close", None)
+        if iterable_close:
+            callbacks.insert(0, iterable_close)
+        self._callbacks = callbacks
+
+    def __iter__(self) -> ClosingIterator:
+        return self
+
+    def __next__(self) -> bytes:
+        return self._next()
+
+    def close(self) -> None:
+        for callback in self._callbacks:
+            callback()
+
+
+def wrap_file(
+    environ: WSGIEnvironment, file: t.IO[bytes], buffer_size: int = 8192
+) -> t.Iterable[bytes]:
+    """Wraps a file.  This uses the WSGI server's file wrapper if available
+    or otherwise the generic :class:`FileWrapper`.
+
+    .. versionadded:: 0.5
+
+    If the file wrapper from the WSGI server is used it's important to not
+    iterate over it from inside the application but to pass it through
+    unchanged.  If you want to pass out a file wrapper inside a response
+    object you have to set :attr:`Response.direct_passthrough` to `True`.
+
+    More information about file wrappers are available in :pep:`333`.
+
+    :param file: a :class:`file`-like object with a :meth:`~file.read` method.
+    :param buffer_size: number of bytes for one iteration.
+    """
+    return environ.get("wsgi.file_wrapper", FileWrapper)(  # type: ignore
+        file, buffer_size
+    )
+
+
+class FileWrapper:
+    """This class can be used to convert a :class:`file`-like object into
+    an iterable.  It yields `buffer_size` blocks until the file is fully
+    read.
+
+    You should not use this class directly but rather use the
+    :func:`wrap_file` function that uses the WSGI server's file wrapper
+    support if it's available.
+
+    .. versionadded:: 0.5
+
+    If you're using this object together with a :class:`Response` you have
+    to use the `direct_passthrough` mode.
+
+    :param file: a :class:`file`-like object with a :meth:`~file.read` method.
+    :param buffer_size: number of bytes for one iteration.
+    """
+
+    def __init__(self, file: t.IO[bytes], buffer_size: int = 8192) -> None:
+        self.file = file
+        self.buffer_size = buffer_size
+
+    def close(self) -> None:
+        if hasattr(self.file, "close"):
+            self.file.close()
+
+    def seekable(self) -> bool:
+        if hasattr(self.file, "seekable"):
+            return self.file.seekable()
+        if hasattr(self.file, "seek"):
+            return True
+        return False
+
+    def seek(self, *args: t.Any) -> None:
+        if hasattr(self.file, "seek"):
+            self.file.seek(*args)
+
+    def tell(self) -> int | None:
+        if hasattr(self.file, "tell"):
+            return self.file.tell()
+        return None
+
+    def __iter__(self) -> FileWrapper:
+        return self
+
+    def __next__(self) -> bytes:
+        data = self.file.read(self.buffer_size)
+        if data:
+            return data
+        raise StopIteration()
+
+
+class _RangeWrapper:
+    # private for now, but should we make it public in the future ?
+
+    """This class can be used to convert an iterable object into
+    an iterable that will only yield a piece of the underlying content.
+    It yields blocks until the underlying stream range is fully read.
+    The yielded blocks will have a size that can't exceed the original
+    iterator defined block size, but that can be smaller.
+
+    If you're using this object together with a :class:`Response` you have
+    to use the `direct_passthrough` mode.
+
+    :param iterable: an iterable object with a :meth:`__next__` method.
+    :param start_byte: byte from which read will start.
+    :param byte_range: how many bytes to read.
+    """
+
+    def __init__(
+        self,
+        iterable: t.Iterable[bytes] | t.IO[bytes],
+        start_byte: int = 0,
+        byte_range: int | None = None,
+    ):
+        self.iterable = iter(iterable)
+        self.byte_range = byte_range
+        self.start_byte = start_byte
+        self.end_byte = None
+
+        if byte_range is not None:
+            self.end_byte = start_byte + byte_range
+
+        self.read_length = 0
+        self.seekable = hasattr(iterable, "seekable") and iterable.seekable()
+        self.end_reached = False
+
+    def __iter__(self) -> _RangeWrapper:
+        return self
+
+    def _next_chunk(self) -> bytes:
+        try:
+            chunk = next(self.iterable)
+            self.read_length += len(chunk)
+            return chunk
+        except StopIteration:
+            self.end_reached = True
+            raise
+
+    def _first_iteration(self) -> tuple[bytes | None, int]:
+        chunk = None
+        if self.seekable:
+            self.iterable.seek(self.start_byte)  # type: ignore
+            self.read_length = self.iterable.tell()  # type: ignore
+            contextual_read_length = self.read_length
+        else:
+            while self.read_length <= self.start_byte:
+                chunk = self._next_chunk()
+            if chunk is not None:
+                chunk = chunk[self.start_byte - self.read_length :]
+            contextual_read_length = self.start_byte
+        return chunk, contextual_read_length
+
+    def _next(self) -> bytes:
+        if self.end_reached:
+            raise StopIteration()
+        chunk = None
+        contextual_read_length = self.read_length
+        if self.read_length == 0:
+            chunk, contextual_read_length = self._first_iteration()
+        if chunk is None:
+            chunk = self._next_chunk()
+        if self.end_byte is not None and self.read_length >= self.end_byte:
+            self.end_reached = True
+            return chunk[: self.end_byte - contextual_read_length]
+        return chunk
+
+    def __next__(self) -> bytes:
+        chunk = self._next()
+        if chunk:
+            return chunk
+        self.end_reached = True
+        raise StopIteration()
+
+    def close(self) -> None:
+        if hasattr(self.iterable, "close"):
+            self.iterable.close()
+
+
+class LimitedStream(io.RawIOBase):
+    """Wrap a stream so that it doesn't read more than a given limit. This is used to
+    limit ``wsgi.input`` to the ``Content-Length`` header value or
+    :attr:`.Request.max_content_length`.
+
+    When attempting to read after the limit has been reached, :meth:`on_exhausted` is
+    called. When the limit is a maximum, this raises :exc:`.RequestEntityTooLarge`.
+
+    If reading from the stream returns zero bytes or raises an error,
+    :meth:`on_disconnect` is called, which raises :exc:`.ClientDisconnected`. When the
+    limit is a maximum and zero bytes were read, no error is raised, since it may be the
+    end of the stream.
+
+    If the limit is reached before the underlying stream is exhausted (such as a file
+    that is too large, or an infinite stream), the remaining contents of the stream
+    cannot be read safely. Depending on how the server handles this, clients may show a
+    "connection reset" failure instead of seeing the 413 response.
+
+    :param stream: The stream to read from. Must be a readable binary IO object.
+    :param limit: The limit in bytes to not read past. Should be either the
+        ``Content-Length`` header value or ``request.max_content_length``.
+    :param is_max: Whether the given ``limit`` is ``request.max_content_length`` instead
+        of the ``Content-Length`` header value. This changes how exhausted and
+        disconnect events are handled.
+
+    .. versionchanged:: 2.3
+        Handle ``max_content_length`` differently than ``Content-Length``.
+
+    .. versionchanged:: 2.3
+        Implements ``io.RawIOBase`` rather than ``io.IOBase``.
+    """
+
+    def __init__(self, stream: t.IO[bytes], limit: int, is_max: bool = False) -> None:
+        self._stream = stream
+        self._pos = 0
+        self.limit = limit
+        self._limit_is_max = is_max
+
+    @property
+    def is_exhausted(self) -> bool:
+        """Whether the current stream position has reached the limit."""
+        return self._pos >= self.limit
+
+    def on_exhausted(self) -> None:
+        """Called when attempting to read after the limit has been reached.
+
+        The default behavior is to do nothing, unless the limit is a maximum, in which
+        case it raises :exc:`.RequestEntityTooLarge`.
+
+        .. versionchanged:: 2.3
+            Raises ``RequestEntityTooLarge`` if the limit is a maximum.
+
+        .. versionchanged:: 2.3
+            Any return value is ignored.
+        """
+        if self._limit_is_max:
+            raise RequestEntityTooLarge()
+
+    def on_disconnect(self, error: Exception | None = None) -> None:
+        """Called when an attempted read receives zero bytes before the limit was
+        reached. This indicates that the client disconnected before sending the full
+        request body.
+
+        The default behavior is to raise :exc:`.ClientDisconnected`, unless the limit is
+        a maximum and no error was raised.
+
+        .. versionchanged:: 2.3
+            Added the ``error`` parameter. Do nothing if the limit is a maximum and no
+            error was raised.
+
+        .. versionchanged:: 2.3
+            Any return value is ignored.
+        """
+        if not self._limit_is_max or error is not None:
+            raise ClientDisconnected()
+
+        # If the limit is a maximum, then we may have read zero bytes because the
+        # streaming body is complete. There's no way to distinguish that from the
+        # client disconnecting early.
+
+    def exhaust(self) -> bytes:
+        """Exhaust the stream by reading until the limit is reached or the client
+        disconnects, returning the remaining data.
+
+        .. versionchanged:: 2.3
+            Return the remaining data.
+
+        .. versionchanged:: 2.2.3
+            Handle case where wrapped stream returns fewer bytes than requested.
+        """
+        if not self.is_exhausted:
+            return self.readall()
+
+        return b""
+
+    def readinto(self, b: bytearray) -> int | None:  # type: ignore[override]
+        size = len(b)
+        remaining = self.limit - self._pos
+
+        if remaining <= 0:
+            self.on_exhausted()
+            return 0
+
+        if hasattr(self._stream, "readinto"):
+            # Use stream.readinto if it's available.
+            if size <= remaining:
+                # The size fits in the remaining limit, use the buffer directly.
+                try:
+                    out_size: int | None = self._stream.readinto(b)
+                except (OSError, ValueError) as e:
+                    self.on_disconnect(error=e)
+                    return 0
+            else:
+                # Use a temp buffer with the remaining limit as the size.
+                temp_b = bytearray(remaining)
+
+                try:
+                    out_size = self._stream.readinto(temp_b)
+                except (OSError, ValueError) as e:
+                    self.on_disconnect(error=e)
+                    return 0
+
+                if out_size:
+                    # Need to slice both sides. Math here is complicated.
+                    # size=10, remaining=5, out_size=3, remaining > out_size
+                    # Without slicing temp_b (b[:s] = tb), would try to
+                    # put 5 bytes into 3 bytes, causing b to resize to 12.
+                    b[:out_size] = temp_b[:out_size]
+        else:
+            # WSGI requires that stream.read is available.
+            try:
+                data = self._stream.read(min(size, remaining))
+            except (OSError, ValueError) as e:
+                self.on_disconnect(error=e)
+                return 0
+
+            out_size = len(data)
+            b[:out_size] = data
+
+        if not out_size:
+            # Read zero bytes from the stream.
+            self.on_disconnect()
+            return 0
+
+        self._pos += out_size
+        return out_size
+
+    def readall(self) -> bytes:
+        if self.is_exhausted:
+            self.on_exhausted()
+            return b""
+
+        out = bytearray()
+
+        # The parent implementation uses "while True", which results in an extra read.
+        while not self.is_exhausted:
+            data = self.read(1024 * 64)
+
+            # Stream may return empty before a max limit is reached.
+            if not data:
+                break
+
+            out.extend(data)
+
+        return bytes(out)
+
+    def tell(self) -> int:
+        """Return the current stream position.
+
+        .. versionadded:: 0.9
+        """
+        return self._pos
+
+    def readable(self) -> bool:
+        return True
+
+<<<END>>>
+
+=== D. the phone triage lookup (what decides Low / Medium / High) ===
+
+##### FILE: mobile\lib\core\models\triage_outcome.dart (2526 chars)
+<<<BEGIN>>>
+import '../triage/triage_schema.dart';
+
+/// Everything the triage sheet learned about one emergency, ready to be saved on the incident.
+class TriageOutcome {
+  const TriageOutcome({
+    required this.category,
+    required this.subtype,
+    required this.answers,
+    required this.priority,
+    required this.confidence,
+    required this.needsHumanReview,
+    required this.source,
+    this.fallbackReason,
+    this.description,
+    this.flags = const [],
+    this.saveForTraining = false,
+    this.supportOnly = false,
+    required this.schemaVersion,
+  });
+
+  factory TriageOutcome.supportOnly({
+    required String category,
+    required String? subtype,
+  }) => TriageOutcome(
+        category: category,
+        subtype: subtype,
+        answers: const {},
+        priority: 'Low',
+        confidence: 1,
+        needsHumanReview: true,
+        source: 'support_only',
+        supportOnly: true,
+        saveForTraining: false,
+        schemaVersion: kTriageSchemaVersion,
+      );
+
+  final String category;
+  final String? subtype;
+
+  /// Question id -> answer text, only for questions that were actually asked.
+  final Map<String, String> answers;
+  final String priority;
+  final double confidence;
+  final bool needsHumanReview;
+
+  /// 'decision_table', 'safe_fallback' (High because something was missing) or 'support_only'.
+  final String source;
+  final String? fallbackReason;
+
+  /// Free text the resident typed. Null for confidential subtypes: it is never shared with responders.
+  final String? description;
+  final List<String> flags;
+
+  /// True only when the resident ticked the consent box and the text may be kept for training.
+  final bool saveForTraining;
+
+  /// True for emotional distress without self-harm: support lines are shown, no responder is sent.
+  final bool supportOnly;
+  final String schemaVersion;
+
+  /// Fields to merge into the incident document (the caller adds the server timestamp).
+  Map<String, Object?> toIncidentFields() => {
+    'category': category,
+    'subtype': subtype,
+    'priority': priority,
+    'prioritySource': source,
+    'needsHumanReview': needsHumanReview,
+    'triageStatus': 'complete',
+    'triage': {
+      'answers': answers,
+      'confidence': confidence,
+      'fallbackReason': fallbackReason,
+      'schemaVersion': schemaVersion,
+      if (description != null) 'input': 'text_description',
+    },
+    if (description != null) 'description': description,
+    if (flags.isNotEmpty) 'flags': flags,
+    if (supportOnly) 'status': 'SupportOnly',
+  };
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\core\triage\triage_lookup.dart (2849 chars)
+<<<BEGIN>>>
+// GENERATED FILE - DO NOT EDIT BY HAND (version 3.1.0). Looks up the priority in models/decision_table.json,
+// which you add to the app as an asset (pubspec.yaml: assets: - assets/decision_table.json).
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
+import 'triage_schema.dart';
+
+class TriageResult {
+  final String priority; final double confidence; final bool needsHumanReview;
+  const TriageResult(this.priority, this.confidence, this.needsHumanReview);
+}
+
+class TriageLookup {
+  final Map<String, dynamic> _entries;
+  TriageLookup._(this._entries);
+
+  /// For unit tests only (lets a test supply the table without the Flutter asset bundle).
+  factory TriageLookup.fromEntriesForTest(Map<String, dynamic> entries) => TriageLookup._(entries);
+
+  static Future<TriageLookup> load() async {
+    final raw = jsonDecode(await rootBundle.loadString('assets/decision_table.json')) as Map<String, dynamic>;
+    if (raw['schema_version'] != kTriageSchemaVersion) {
+      throw StateError('decision_table.json (${raw['schema_version']}) does not match the app schema ($kTriageSchemaVersion).');
+    }
+    return TriageLookup._(raw['entries'] as Map<String, dynamic>);
+  }
+
+  /// answers: question id -> value as text (people_count as '1'..'5'). Questions not asked for the category are filled with NotAsked.
+  TriageResult lookup(String category, Map<String, String> answers, {String? subtype}) {
+    final parts = <String>[];
+    for (final f in kModelFeatureOrder) {
+      if (f == 'category') { parts.add(category); continue; }
+      parts.add(answers[f] ?? (f == 'people_count' ? '1' : kNotAsked));
+    }
+    final e = _entries[parts.join('|')];
+    if (e == null) { throw ArgumentError('Unknown answer combination: ${parts.join('|')}'); }
+    var priority = e['p'] as String;
+    var review = (e['r'] as num) == 1;
+    final floor = subtype == null ? null : kSubtypeFloors[subtype];
+    if (floor != null && kPriorities.indexOf(floor) > kPriorities.indexOf(priority)) { priority = floor; }
+    if (floor == 'High' || priority == 'High') { review = false; }   // same rule as predict_priority.py
+    return TriageResult(priority, (e['c'] as num).toDouble(), review);
+  }
+
+  /// PRODUCTION entry point. Never throws. On ANY problem (unknown combination, bad input) it fails SAFE:
+  /// High priority, flagged for human review. Log [fallbackReason] to Crashlytics/Firestore so it can be investigated.
+  /// Over-alerting one case costs seconds; silently under-alerting can cost a life.
+  TriageResult lookupSafe(String category, Map<String, String> answers, {String? subtype, void Function(String reason)? onFallback}) {
+    try {
+      return lookup(category, answers, subtype: subtype);
+    } catch (e) {
+      if (onFallback != null) onFallback(e.toString());
+      return TriageResult('High', 0.0, true);
+    }
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\core\triage\triage_schema.dart (6590 chars)
+<<<BEGIN>>>
+// GENERATED FILE - DO NOT EDIT BY HAND. Source: schema/triage_schema.json (version 3.1.0).
+// Regenerate with: py scripts\generate_dart.py
+
+const String kTriageSchemaVersion = "3.1.0";
+const String kNotAsked = "NotAsked";
+const List<String> kPriorities = ["Low", "Medium", "High"];
+const List<String> kModelFeatureOrder = ["category", "age_group", "conscious", "breathing", "severe_bleeding", "chest_pain", "pregnant", "trapped", "hazard", "weapon_involved", "immediate_danger", "people_count"];
+const List<String> kCategories = ["Medical Emergency", "Road Accident", "Fire & Rescue", "Security Threat", "Abduction", "Other / General"];
+
+class TriageQuestion {
+  final String id; final String type; final String prompt; final List<String> values;
+  final Map<String, String> labels; final int min; final int max; final Map<String, List<String>> askIf;
+  const TriageQuestion(this.id, this.type, this.prompt, this.values, this.labels, this.min, this.max, this.askIf);
+}
+
+const Map<String, TriageQuestion> kQuestions = {
+  "age_group": TriageQuestion("age_group", "enum", "Who needs help?", ["Adult", "Child", "Unknown"], {"Adult": "Adult (13 or older)", "Child": "Child (12 or younger)", "Unknown": "Not sure"}, 0, 0, {}),
+  "conscious": TriageQuestion("conscious", "enum", "Is the person awake and responding?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "breathing": TriageQuestion("breathing", "enum", "Is the person breathing normally?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "severe_bleeding": TriageQuestion("severe_bleeding", "enum", "Is there heavy bleeding that will not stop?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "chest_pain": TriageQuestion("chest_pain", "enum", "Is the person having chest pain or crushing pressure in the chest?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "pregnant": TriageQuestion("pregnant", "enum", "Is the person pregnant?", ["Yes", "No", "Unknown"], {}, 0, 0, {"age_group": ["Adult", "Unknown"]}),
+  "trapped": TriageQuestion("trapped", "enum", "Is anyone trapped and unable to get out?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "hazard": TriageQuestion("hazard", "enum", "Is there fire, smoke, fuel leaking or danger of collapse?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "weapon_involved": TriageQuestion("weapon_involved", "enum", "Is there a weapon (gun, knife, panga or similar)?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "immediate_danger": TriageQuestion("immediate_danger", "enum", "Is the attacker or threat still close by?", ["Yes", "No", "Unknown"], {}, 0, 0, {}),
+  "people_count": TriageQuestion("people_count", "int", "How many people need help? (5 means 5 or more)", [], {}, 1, 5, {}),
+};
+
+/// Questions to show for each category, in order. Check askIf before showing each one.
+const Map<String, List<String>> kCategoryQuestions = {
+  "Medical Emergency": ["age_group", "conscious", "breathing", "severe_bleeding", "chest_pain", "pregnant", "people_count"],
+  "Road Accident": ["age_group", "conscious", "breathing", "severe_bleeding", "trapped", "hazard", "pregnant", "people_count"],
+  "Fire & Rescue": ["age_group", "conscious", "breathing", "trapped", "hazard", "people_count"],
+  "Security Threat": ["age_group", "conscious", "breathing", "severe_bleeding", "weapon_involved", "immediate_danger", "people_count"],
+  "Abduction": ["age_group", "weapon_involved", "immediate_danger", "people_count"],
+  "Other / General": ["age_group", "conscious", "breathing", "severe_bleeding", "people_count"],
+};
+
+const Map<String, List<String>> kCategorySubtypes = {
+  "Medical Emergency": ["cardiac", "breathing_problem", "seizure_or_collapse", "maternal", "sick_child", "snakebite_or_poison", "other_medical"],
+  "Road Accident": ["boda_boda", "matatu_or_bus", "private_vehicle", "pedestrian_hit", "truck_or_heavy"],
+  "Fire & Rescue": ["building_fire", "bush_or_vegetation_fire", "building_collapse", "flood_or_water_rescue"],
+  "Security Threat": ["armed_robbery", "assault", "mob_violence", "looting_or_riot", "domestic_violence", "sexual_violence", "other_security"],
+  "Abduction": ["kidnapping", "missing_child"],
+  "Other / General": ["mental_health_crisis", "emotional_distress", "wildlife_attack", "fall_or_injury", "burns", "unclear"],
+};
+
+/// The 3 questions asked before the alert is refined, in this order (measured: every required responder type is covered).
+const Map<String, List<String>> kQuickQuestions = {
+  "Medical Emergency": ["conscious", "breathing", "severe_bleeding"],
+  "Road Accident": ["trapped", "hazard", "conscious"],
+  "Fire & Rescue": ["conscious", "trapped", "breathing"],
+  "Security Threat": ["conscious", "breathing", "severe_bleeding"],
+  "Abduction": ["immediate_danger", "weapon_involved", "age_group"],
+  "Other / General": ["conscious", "breathing", "severe_bleeding"],
+};
+
+class SubtypeRule { final bool confidential; final bool notifyTrustedContactsByDefault; final bool shareFreeTextWithResponder;
+  final bool dispatchResponder; final String safetyQuestion;
+  const SubtypeRule(this.confidential, this.notifyTrustedContactsByDefault, this.shareFreeTextWithResponder, this.dispatchResponder, this.safetyQuestion); }
+
+const Map<String, SubtypeRule> kSubtypeRules = {
+  "sexual_violence": SubtypeRule(true, false, false, true, ""),
+  "domestic_violence": SubtypeRule(true, false, false, true, ""),
+  "mental_health_crisis": SubtypeRule(true, true, false, true, ""),
+  "missing_child": SubtypeRule(false, true, true, true, ""),
+  "emotional_distress": SubtypeRule(true, false, false, false, "Are you thinking of harming yourself?"),
+};
+
+/// Lowest priority allowed for a subtype (rule floors F09, F10). The decision table does not know the subtype, so lookupSafe applies these.
+const Map<String, String> kSubtypeFloors = {
+  "sexual_violence": "Medium",
+  "mental_health_crisis": "High",
+};
+
+class Hotline { final String number; final String name; final String showWhen; final bool verified;
+  const Hotline(this.number, this.name, this.showWhen, this.verified); }
+
+/// Only show hotlines where verified is true.
+const List<Hotline> kHotlines = [
+  Hotline("922", "National Ambulance Dispatch Centre (SHA 922 Lifeline)", "always", true),
+  Hotline("1195", "National GBV helpline (run by HAK with the government)", "sexual_violence,domestic_violence", true),
+  Hotline("999", "Police and general emergency number (112 also works)", "always", true),
+  Hotline("112", "General emergency number", "never", true),
+  Hotline("116", "National Child Helpline (free, 24 hours)", "kidnapping,missing_child", true),
+];
+
+const double kOfferTimeoutSeconds = 45;
+const int kMaxCardsShown = 3;
+
+<<<END>>>
+
+=== E. ops Incidents list: the row that overflows, and how it picks the priority label ===
+
+##### FILE: mobile\lib\features\ops\ops_incidents_page.dart (11079 chars)
+<<<BEGIN>>>
+// The Incidents page: search, filters, 25 rows per page, and the same incident panel in read-only mode.
+// Contact details never appear in this list or its CSV export.
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../core/models/dispatch_models.dart';
+import 'ops_incident_panel.dart';
+import 'ops_repository.dart';
+import 'ops_tokens.dart';
+import 'ops_widgets.dart';
+
+class OpsIncidentsPage extends StatefulWidget {
+  const OpsIncidentsPage({
+    super.key,
+    required this.repo,
+    required this.incidents,
+    required this.responders,
+    required this.offers,
+    required this.search,
+    required this.selectedId,
+    required this.onOpen,
+    required this.onClose,
+  });
+
+  final OpsRepository repo;
+  final List<IncidentRecord> incidents;
+  final List<ResponderRecord> responders;
+  final List<Offer> offers;
+  final String search;
+  final String? selectedId;
+  final void Function(String id) onOpen;
+  final VoidCallback onClose;
+
+  @override
+  State<OpsIncidentsPage> createState() => _OpsIncidentsPageState();
+}
+
+class _OpsIncidentsPageState extends State<OpsIncidentsPage> {
+  static const _pageSize = 25;
+  String _status = 'All';
+  String _range = '30 days';
+  String _category = 'All';
+  String _priority = 'All';
+  String _outcome = 'Any';
+  int _page = 0;
+
+  List<IncidentRecord> get _filtered {
+    final q = widget.search.trim().toLowerCase();
+    final now = DateTime.now();
+    return [
+      for (final i in widget.incidents)
+        if (_status == 'All' || (_status == 'Open' ? i.isOpen : !i.isOpen))
+          if (_outcome == 'Any' || i.status == _outcome)
+            if (_category == 'All' || i.category == _category)
+              if (_priority == 'All' || i.priority == _priority)
+                if (_inRange(i.createdAt, now))
+                  if (q.isEmpty ||
+                      i.id.toLowerCase().contains(q) ||
+                      i.category.toLowerCase().contains(q) ||
+                      (i.subtype ?? '').replaceAll('_', ' ').contains(q) ||
+                      i.landmark.toLowerCase().contains(q))
+                    i,
+    ];
+  }
+
+  bool _inRange(DateTime? at, DateTime now) {
+    if (_range == 'All') return true;
+    if (at == null) return false;
+    if (_range == 'Today') return at.year == now.year && at.month == now.month && at.day == now.day;
+    final days = _range == '7 days' ? 7 : 30;
+    return now.difference(at).inDays < days;
+  }
+
+  @override
+  void didUpdateWidget(covariant OpsIncidentsPage old) {
+    super.didUpdateWidget(old);
+    if (old.search != widget.search) _page = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = _filtered;
+    final pages = all.isEmpty ? 1 : (all.length + _pageSize - 1) ~/ _pageSize;
+    if (_page >= pages) _page = pages - 1;
+    final start = _page * _pageSize;
+    final pageRows = all.skip(start).take(_pageSize).toList();
+    final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final panel = widget.selectedId == null
+        ? null
+        : OpsIncidentPanel(
+            key: ValueKey('ro-${widget.selectedId}'),
+            repo: widget.repo,
+            incidentId: widget.selectedId!,
+            responders: widget.responders,
+            offers: widget.offers,
+            readOnly: true,
+            onClose: widget.onClose,
+          );
+
+    final list = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _filters(),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(OT.pad, 4, OT.pad, 6),
+        child: Row(children: [
+          Expanded(
+            child: Text(
+              '${all.length} incident${all.length == 1 ? '' : 's'} match · page ${_page + 1} of $pages · contact details are not shown here',
+              style: const TextStyle(fontSize: 11.5, color: OT.muted),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: pageRows.isEmpty ? null : () => _copyCsv(pageRows, all.length),
+            icon: const Icon(Icons.copy_all_outlined, size: 16),
+            label: const Text('Copy as CSV'),
+          ),
+        ]),
+      ),
+      Expanded(
+        child: pageRows.isEmpty
+            ? const EmptyState(icon: Icons.search_off, title: 'No incidents match', message: 'Change the filters or clear the search box.')
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(OT.pad, 0, OT.pad, 10),
+                itemCount: pageRows.length,
+                itemBuilder: (_, k) => _row(pageRows[k]),
+              ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(OT.pad, 0, OT.pad, 12),
+        child: Row(children: [
+          OutlinedButton(onPressed: _page == 0 ? null : () => setState(() => _page--), child: const Text('Previous')),
+          const SizedBox(width: 8),
+          Text('Page ${_page + 1} of $pages', style: const TextStyle(fontSize: 12, color: OT.muted)),
+          const Spacer(),
+          OutlinedButton(onPressed: _page >= pages - 1 ? null : () => setState(() => _page++), child: const Text('Next')),
+        ]),
+      ),
+    ]);
+
+    if (wide && panel != null) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(flex: 5, child: list),
+        const SizedBox(width: 10),
+        Expanded(flex: 5, child: panel),
+      ]);
+    }
+    if (panel != null) return panel;
+    return list;
+  }
+
+  Widget _filters() {
+    final categories = ['All', ...{for (final i in widget.incidents) i.category}];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(OT.pad, 10, OT.pad, 0),
+      child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        for (final s in const ['Open', 'Closed', 'All'])
+          ChoiceChip(label: Text(s), selected: _status == s, onSelected: (_) => setState(() {
+            _status = s;
+            _page = 0;
+          })),
+        const SizedBox(width: 8),
+        _drop<String>(
+          value: _range,
+          items: const ['Today', '7 days', '30 days', 'All'],
+          label: 'Date',
+          labelOf: (v) => v,
+          onChanged: (v) => setState(() {
+            _range = v;
+            _page = 0;
+          }),
+        ),
+        _drop<String>(
+          value: _category,
+          items: categories,
+          label: 'Category',
+          labelOf: (v) => v,
+          onChanged: (v) => setState(() {
+            _category = v;
+            _page = 0;
+          }),
+        ),
+        _drop<String>(
+          value: _priority,
+          items: const ['All', 'High', 'Medium', 'Low'],
+          label: 'Priority',
+          labelOf: (v) => v,
+          onChanged: (v) => setState(() {
+            _priority = v;
+            _page = 0;
+          }),
+        ),
+        _drop<String>(
+          value: _outcome,
+          items: const ['Any', 'Resolved', 'Cancelled'],
+          label: 'Outcome',
+          labelOf: (v) => v == 'Any' ? 'Any outcome' : v,
+          onChanged: (v) => setState(() {
+            _outcome = v;
+            _page = 0;
+            if (v != 'Any' && _status == 'Open') _status = 'Closed';
+          }),
+        ),
+      ]),
+    );
+  }
+
+  Widget _drop<T>({required T value, required List<T> items, required String label, required String Function(T) labelOf, required void Function(T) onChanged}) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(color: OT.raised, borderRadius: BorderRadius.circular(8), border: Border.all(color: OT.line)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          dropdownColor: OT.raised,
+          style: const TextStyle(fontSize: 12.5, color: OT.soft),
+          hint: Text(label),
+          items: [for (final v in items) DropdownMenuItem<T>(value: v, child: Text(labelOf(v)))],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _row(IncidentRecord i) => Padding(
+    padding: const EdgeInsets.only(bottom: 5),
+    child: Material(
+      color: widget.selectedId == i.id ? OT.raised : OT.panel,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: () => widget.onOpen(i.id),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: widget.selectedId == i.id ? OT.accent : OT.line),
+          ),
+          child: Row(children: [
+            SizedBox(
+              width: 92,
+              child: Text(_stamp(i.createdAt), style: const TextStyle(fontSize: 11, color: OT.muted)),
+            ),
+            PriorityTag(i.priority),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  '${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: OT.text),
+                ),
+                Text(
+                  '${i.id}${i.landmark.isEmpty ? '' : ' · ${i.landmark}'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: OT.muted),
+                ),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            OpsTag(i.status, bg: OT.raised, fg: i.isOpen ? OT.accent : OT.soft),
+            const SizedBox(width: 6),
+            SizedBox(width: 104, child: Text(i.dispatchState.replaceAll('_', ' '), textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, color: OT.muted))),
+          ]),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _copyCsv(List<IncidentRecord> rows, int total) async {
+    String q(String v) => '"${v.replaceAll('"', '""')}"';
+    final out = StringBuffer('id,createdAt,category,subtype,priority,status,dispatchState,landmark\n');
+    for (final i in rows) {
+      out.writeln([q(i.id), q(i.createdAt?.toIso8601String() ?? ''), q(i.category), q(i.subtype ?? ''), q(i.priority), q(i.status), q(i.dispatchState), q(i.landmark)].join(','));
+    }
+    await Clipboard.setData(ClipboardData(text: out.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied ${rows.length} rows from this page only ($total match the filters; other pages are not included).')),
+    );
+  }
+}
+
+String _stamp(DateTime? t) {
+  if (t == null) return '';
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+  if (d.inHours < 24) return '${d.inHours} h ago';
+  return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+}
+
+<<<END>>>

@@ -48,7 +48,7 @@ class AdminOverview extends StatelessWidget {
         );
         final byPri = Panel(
           title: 'Alerts today by priority',
-          child: s.byPriority.isEmpty ? const Text('No alerts today.', style: TextStyle(color: AC.mute)) : Column(children: [for (final p in const ['High', 'Medium', 'Low']) if (s.byPriority[p] != null) BarRow(label: p, value: s.byPriority[p]!, max: maxPri, color: AC.priority(p))]),
+          child: s.byPriority.isEmpty ? const Text('No alerts today.', style: TextStyle(color: AC.mute)) : Column(children: [for (final p in const ['High', 'Medium', 'Low', 'Awaiting details']) if (s.byPriority[p] != null) BarRow(label: p, value: s.byPriority[p]!, max: maxPri, color: AC.priority(p))]),
         );
         return two ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: byCat), const SizedBox(width: 16), Expanded(child: byPri)]) : Column(children: [byCat, byPri]);
       }),
@@ -64,7 +64,7 @@ class AdminOverview extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [
-        PriorityPill(i.priority),
+        PriorityPill(i.priorityShown),
         const SizedBox(width: 10),
         Expanded(child: Text('${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}', style: const TextStyle(fontWeight: FontWeight.w700, color: AC.ink))),
         StatePill(i.dispatchState),

@@ -1,6 +1,7 @@
 // Shared pieces for the staff console. Solid surfaces only (no glass), graphite tokens.
 import 'package:flutter/material.dart';
 
+import '../../core/models/dispatch_models.dart' show kAwaitingDetails;
 import 'ops_tokens.dart';
 
 class OpsPanel extends StatelessWidget {
@@ -50,6 +51,10 @@ class PriorityTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Unassessed alert: urgent but not yet assessed. Neutral and clearly worded, never the red of a real High.
+    if (priority == kAwaitingDetails) {
+      return OpsTag('AWAITING DETAILS', bg: OT.raised, fg: OT.soft, border: OT.line);
+    }
     final c = OT.priority(priority);
     return OpsTag(priority.toUpperCase(), bg: c.withValues(alpha: 0.16), fg: c, border: c.withValues(alpha: 0.55));
   }

@@ -1,0 +1,1123 @@
+
+##### FILE: mobile\lib\features\resident\status\alert_status_body.dart (25176 chars)
+<<<BEGIN>>>
+// The "Alert recorded" content, laid out the way a ride app shows a trip: what happened, where you are, who is coming and when, what to do now.
+// Put it inside the existing alert sheet (it does not scroll by itself). Every sentence is human; nothing here shows an internal code.
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../core/models/dispatch_models.dart';
+import '../../../core/ui/app_button.dart';
+import '../../../core/ui/feedback.dart';
+import '../../../core/ui/glass.dart';
+import '../../../core/ui/routes.dart';
+import '../../../core/ui/states.dart';
+import '../../../core/ui/tokens.dart';
+import '../first_aid/first_aid_entry.dart';
+import '../map/help_map_screen.dart';
+import '../map/help_models.dart';
+import '../map/help_repository.dart';
+import '../map/location_gate.dart';
+import '../map/resident_track_publisher.dart';
+import '../quiet_mode.dart';
+import '../widgets/closure_sheet.dart';
+import '../widgets/dispatch_card.dart' show watchDispatch;
+import 'location_confidence.dart';
+
+class AlertStatusBody extends StatefulWidget {
+  const AlertStatusBody({
+    super.key,
+    required this.incidentId,
+    required this.categoryLabel,
+    this.priorityLabel,
+    this.reference,
+    this.receivedAt,
+    this.detailsPending = false,
+    this.onAddDetails,
+    this.repo,
+    this.quiet,
+    this.dispatch,
+    this.sending = false,
+    this.onRaiseAlert,
+  });
+  final String incidentId;
+  final String categoryLabel; // e.g. "Road Accident"
+  final String? priorityLabel; // "High" | "Medium" | "Low"
+  final String? reference; // short ref shown to the resident
+  final DateTime? receivedAt;
+  final bool detailsPending; // show the optional "Add more details" row
+  final VoidCallback? onAddDetails;
+  final HelpRepository? repo;
+  final QuietMode? quiet;
+  final Stream<DispatchInfo>? dispatch; // injectable for tests; defaults to the incident's dispatch summary
+  final bool sending; // the create write has not been confirmed by the server yet
+  final VoidCallback? onRaiseAlert;
+
+  @override
+  State<AlertStatusBody> createState() => _AlertStatusBodyState();
+}
+
+class _AlertStatusBodyState extends State<AlertStatusBody> {
+  late final HelpRepository repo = widget.repo ?? HelpRepository();
+  late final QuietMode _quiet = widget.quiet ?? QuietMode();
+  String? _street;
+  String _streetFor = '';
+  bool _closureOpen = false;
+
+  /// "Show once" survives reopening the alert sheet in the same app session.
+  static final Set<String> _closureShown = {};
+
+  @override
+  void dispose() {
+    if (widget.quiet == null) _quiet.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadStreet(IncidentInfo i) async {
+    if (!i.hasLocation) return;
+    final key = '${i.latitude!.toStringAsFixed(4)},${i.longitude!.toStringAsFixed(4)}';
+    if (key == _streetFor) return;
+    _streetFor = key;
+    final s = await repo.geocode(i.latitude!, i.longitude!);
+    if (mounted && key == _streetFor) setState(() => _street = s);
+  }
+
+  Future<void> _call(String number) async {
+    if (kIsWeb) {
+      try {
+        await Clipboard.setData(ClipboardData(text: number));
+      } catch (_) {/* number is still on the button */}
+      if (mounted) AppToast.show(context, 'A computer cannot dial. $number was copied; call it from your phone.');
+      return;
+    }
+    final ok = await launchUrl(Uri(scheme: 'tel', path: number));
+    if (!ok && mounted) AppToast.show(context, 'Could not open the dialer. Please dial $number.', kind: ToastKind.error);
+  }
+
+  Future<void> _movePin(IncidentInfo i) async {
+    final start = i.hasLocation ? LatLng(i.latitude!, i.longitude!) : const LatLng(-1.2921, 36.8219);
+    final p = await Navigator.of(context).push<LatLng>(appRoute((_) => ManualPinPage(start: start)));
+    if (p == null || !mounted) return;
+    final ok = await repo.saveLocation(widget.incidentId, p.latitude, p.longitude);
+    if (ok) await repo.saveContext(widget.incidentId, source: 'manual_pin', accuracyM: 30);
+    if (!mounted) return;
+    AppToast.show(context, ok ? 'Location updated.' : 'Could not update the location. Try again.', kind: ok ? ToastKind.success : ToastKind.error);
+  }
+
+  Future<void> _editLandmark(IncidentInfo i) async {
+    final controller = TextEditingController(text: i.landmark);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Landmark or building'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 120,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'e.g. opposite Westgate gate B'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, controller.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (text == null || !mounted) return;
+    final ok = await repo.saveContext(widget.incidentId, landmark: text);
+    if (mounted) AppToast.show(context, ok ? 'Landmark saved.' : 'Could not save the landmark.', kind: ok ? ToastKind.success : ToastKind.error);
+  }
+
+  /// Completed or closed: ask once whether the caller is safe. Never required, never repeated.
+  void _maybePromptClosure(IncidentInfo inc) {
+    if (inc.status != 'Resolved' || inc.feedbackSafe != null) return;
+    if (_closureOpen || _closureShown.contains(widget.incidentId)) return;
+    _closureShown.add(widget.incidentId);
+    _closureOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showClosureSheet(
+        context,
+        onSave: (safe, rating) => repo.saveFeedback(widget.incidentId, safe: safe, rating: rating),
+        onRaiseAlert: widget.onRaiseAlert,
+      );
+      _closureOpen = false;
+    });
+  }
+
+  void _openMap() => Navigator.of(context).push(appRoute((_) => HelpMapScreen(incidentId: widget.incidentId)));
+
+  static String _two(int n) => n.toString().padLeft(2, '0');
+  static String _clock(DateTime t) {
+    final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    return '$h:${_two(t.minute)} ${t.hour < 12 ? 'AM' : 'PM'}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<IncidentInfo>(
+      stream: repo.watchIncident(widget.incidentId),
+      builder: (context, incSnap) {
+        final inc = incSnap.data ?? const IncidentInfo();
+        _loadStreet(inc);
+        _maybePromptClosure(inc);
+        return StreamBuilder<HelpState>(
+          stream: repo.watchOptions(widget.incidentId),
+          builder: (context, optSnap) {
+            final help = optSnap.data ?? const HelpState();
+            return StreamBuilder<DispatchInfo>(
+              stream: widget.dispatch ?? watchDispatch(widget.incidentId),
+              builder: (context, dSnap) {
+                final info = dSnap.data ?? DispatchInfo.empty;
+                return ListenableBuilder(
+                  listenable: _quiet,
+                  builder: (context, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _quietRow(),
+                      if (_sharing(inc)) ...[const SizedBox(height: 8), _sharingPill()],
+                      const SizedBox(height: 12),
+                      Opacity(
+                        opacity: _quiet.on ? 0.82 : 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _header(),
+                            const SizedBox(height: 14),
+                            _locationCard(inc),
+                            const SizedBox(height: 12),
+                            _statusCard(info, help, incSnap.hasData && optSnap.hasData, inc.status),
+                            const SizedBox(height: 12),
+                            _callRow(),
+                            const SizedBox(height: 12),
+                            _mapButton(help),
+                            if (inc.category != null) ...[const SizedBox(height: 12), _firstAidButton(inc)],
+                            if (widget.detailsPending && widget.onAddDetails != null) ...[const SizedBox(height: 12), _detailsRow()],
+                            const SizedBox(height: 12),
+                            _quickDetails(),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------- pieces
+  BoxDecoration get _card => BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Tk.rCard), boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 16, offset: Offset(0, 4))]);
+
+  Widget _chip(String t, Color bg, Color fg) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Tk.rPill)),
+    child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: fg)),
+  );
+
+  /// Discreet, always visible: one line and a switch. It does not open anything.
+  Widget _quietRow() => Semantics(
+    toggled: _quiet.on,
+    label: "I can't speak or make noise",
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          Icon(_quiet.on ? Icons.volume_off_rounded : Icons.volume_off_outlined, size: 18, color: Tk.mute),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text("I can't speak or make noise", style: TextStyle(fontSize: 13, color: Tk.mute)),
+          ),
+          Switch.adaptive(
+            value: _quiet.on,
+            onChanged: _quiet.set,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  bool _sharing(IncidentInfo inc) =>
+      (inc.status == 'Active' || inc.status == 'SupportOnly') && ResidentTrackPublisher.instance.holds(widget.incidentId);
+
+  Widget _sharingPill() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(color: Tk.brandTint, borderRadius: BorderRadius.circular(Tk.rPill)),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.location_on, size: 15, color: Tk.brandDeep),
+        SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            'Sharing your location with responders until this alert ends',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Tk.brandDeep),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _header() {
+    final p = widget.priorityLabel;
+    final (pbg, pfg) = switch (p) {
+      'High' => (Tk.dangerTint, Tk.danger),
+      'Medium' => (Tk.warnTint, Tk.warnInk),
+      _ => (Tk.okTint, Tk.okInk),
+    };
+    final motion = MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 600);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _card,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: motion,
+          curve: Tk.spring,
+          builder: (_, v, child) => Transform.scale(scale: widget.sending ? 1 : v, child: child),
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(color: widget.sending ? Tk.brandTint : Tk.okTint, shape: BoxShape.circle),
+            child: widget.sending
+                ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2.6, color: Tk.brandDeep))
+                : const Icon(Icons.check_rounded, size: 30, color: Tk.okInk),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(widget.sending ? 'Sending your alert…' : 'Alert recorded', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Tk.ink)),
+            if (!widget.sending) ...[
+              const SizedBox(height: 4),
+              const Text("We have your alert. You don't need to do anything else.", style: TextStyle(fontSize: 14, height: 1.4, color: Tk.mute)),
+            ],
+            if (!widget.sending && widget.receivedAt != null) Text('Received at ${_clock(widget.receivedAt!)}', style: const TextStyle(fontSize: 13, color: Tk.mute)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              if (p != null) _chip('$p priority', pbg, pfg),
+              _chip(widget.categoryLabel, Tk.brandTint, Tk.brandDeep),
+              if (widget.reference != null) _chip('Ref ${widget.reference}', const Color(0xFFEDEBE6), Tk.mute),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _locationCard(IncidentInfo inc) {
+    final has = inc.hasLocation;
+    final where = !has ? 'Finding your location…' : (_street ?? '${inc.latitude!.toStringAsFixed(4)}, ${inc.longitude!.toStringAsFixed(4)}');
+    final accuracy = has ? accuracyWords(inc.accuracyM) : null;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: _card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 44, height: 44, decoration: const BoxDecoration(color: Color(0xFFE8F0FE), shape: BoxShape.circle), child: has ? const Icon(Icons.my_location, color: Tk.you) : const Padding(padding: EdgeInsets.all(13), child: CircularProgressIndicator(strokeWidth: 2.4, color: Tk.you))),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('LOCATION SHARED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Tk.mute, letterSpacing: .8)),
+                const SizedBox(height: 2),
+                Text(where, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Tk.ink)),
+                if (accuracy != null) ...[
+                  const SizedBox(height: 2),
+                  Text(accuracy, style: const TextStyle(fontSize: 12.5, color: Tk.mute)),
+                ],
+                if (inc.landmark.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text('Landmark: ${inc.landmark}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: Tk.mute)),
+                ],
+              ]),
+            ),
+            Flexible(
+              child: TextButton(
+                onPressed: () => _movePin(inc),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                child: Text(
+                  has ? 'Wrong place?' : 'Set it',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Tk.brandDeep),
+                ),
+              ),
+            ),
+          ]),
+          if (has)
+            Padding(
+              padding: const EdgeInsets.only(left: 56, top: 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _editLandmark(inc),
+                  icon: const Icon(Icons.place_outlined, size: 16),
+                  label: Text(inc.landmark.isEmpty ? 'Add a landmark' : 'Change landmark', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Tk.brandDeep)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(0, 34)),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// One calm sentence about who is coming. Big number like a ride app. Never claims more than is true.
+  Widget _statusCard(DispatchInfo info, HelpState help, bool loaded, String? incStatus) {
+    if (widget.sending) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: _card,
+        child: const Row(children: [
+          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.4, color: Tk.brand)),
+          SizedBox(width: 12),
+          Expanded(child: Text('We are finding the nearest help.', style: TextStyle(fontSize: 15, color: Tk.mute))),
+        ]),
+      );
+    }
+    if (!loaded) return Container(padding: const EdgeInsets.all(16), decoration: _card, child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Skeleton(width: 140, height: 14), SizedBox(height: 12), Skeleton(width: 90, height: 30), SizedBox(height: 12), Skeleton(height: 8)]));
+    final held = help.options.where((o) => o.holdsJob).toList();
+    final first = help.options.isEmpty ? null : help.options.first;
+    String title, sub;
+    String? big;
+    double? progress;
+    var working = false, warn = false;
+    if (info.state == 'cancelled' || incStatus == 'Cancelled') {
+      title = 'Alert cancelled. No help is being sent. Stay safe.';
+      sub = '';
+    } else if (info.state == 'completed') {
+      title = 'Help has been completed';
+      sub = 'We hope you are safe. You can close this screen.';
+    } else if (held.isNotEmpty) {
+      final o = held.first;
+      final m = o.etaMin?.round().clamp(1, 999);
+      switch (o.status) {
+        case 'arrived':
+          title = '${o.name} has arrived.';
+          sub = 'Stay where you are and keep your phone with you.';
+          progress = 1;
+        case 'enroute':
+          title = '${o.name} is on the way.';
+          sub = 'You can follow them on the map.';
+          big = m == null ? null : '$m min';
+          progress = 0.65;
+        default:
+          title = m == null ? '${o.name} is coming.' : '${o.name} is coming. About $m min away.';
+          sub = 'Stay where you are. Keep your phone with you.';
+          big = m == null ? null : '$m min';
+          progress = 0.3;
+      }
+    } else if (info.state == 'unfilled') {
+      title = 'Still looking. If you are in danger, call 999 or 922 now.';
+      sub = 'Keep your phone with you.';
+      warn = true;
+      working = true;
+    } else if (help.meta.asking.isNotEmpty) {
+      title = 'We are finding the nearest help.';
+      sub = 'We are asking the closest units now. This usually takes a few seconds.';
+      working = true;
+    } else if (first != null) {
+      final m = first.etaMin?.round().clamp(1, 999);
+      title = 'Nearest help: ${first.name}';
+      sub = 'No responder is free to come right now. Call them, or open the map for directions.';
+      big = m == null ? null : '$m min';
+      warn = true;
+    } else {
+      title = 'We are finding the nearest help.';
+      sub = 'This usually takes a few seconds.';
+      working = true;
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _card,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          if (working) const Padding(padding: EdgeInsets.only(right: 8), child: PulseDot(size: 9)),
+          Expanded(child: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: warn ? Tk.warnInk : Tk.ink))),
+        ]),
+        if (big != null) Padding(padding: const EdgeInsets.only(top: 6), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(big, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Tk.ink, height: 1)), const SizedBox(width: 8), Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(held.isEmpty ? 'estimated' : 'away', style: const TextStyle(fontSize: 13, color: Tk.mute)))])),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(value: progress, minHeight: 6, backgroundColor: const Color(0xFFEDEBE6), color: warn ? Tk.warnInk : Tk.brand),
+        ),
+        if (sub.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(sub, style: const TextStyle(fontSize: 14, height: 1.45, color: Tk.mute)),
+        ],
+      ]),
+    );
+  }
+
+  Widget _callRow() => Row(children: [
+    Expanded(child: _callBtn('999', 'Emergency services', Tk.danger)),
+    const SizedBox(width: 10),
+    Expanded(child: _callBtn('922', 'Dispatch centre', const Color(0xFF1F3A5F))),
+  ]);
+
+  Widget _callBtn(String number, String caption, Color c) => Semantics(
+    button: true,
+    label: 'Call $number, $caption',
+    child: Material(
+      color: c,
+      borderRadius: BorderRadius.circular(Tk.rCard),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tk.rCard),
+        onTap: () => _call(number),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            const Icon(Icons.call, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Call $number', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+              Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white)),
+            ])),
+          ]),
+        ),
+      ),
+    ),
+  );
+
+  Widget _firstAidButton(IncidentInfo inc) => Semantics(
+    button: true,
+    label: 'First aid for this emergency',
+    child: OutlinedButton.icon(
+      onPressed: () => openFirstAid(context, category: inc.category, subtype: inc.subtype, quiet: _quiet.on),
+      icon: const Icon(Icons.medical_services_outlined, size: 20),
+      label: const Text('First aid for this emergency', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+      style: OutlinedButton.styleFrom(foregroundColor: Tk.brandDeep, side: const BorderSide(color: Tk.brand), minimumSize: const Size(0, 52)),
+    ),
+  );
+
+  Widget _mapButton(HelpState help) {
+    final n = help.options.length;
+    final first = help.options.isEmpty ? null : help.options.first;
+    final m = first?.etaMin?.round().clamp(1, 999);
+    final sub = n == 0 ? 'Hospitals, police and more near you' : '$n option${n == 1 ? '' : 's'}${m == null ? '' : ' · nearest about $m min'}';
+    return Material(
+      color: Tk.brand,
+      borderRadius: BorderRadius.circular(Tk.rCard),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tk.rCard),
+        onTap: _openMap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            const Icon(Icons.map_outlined, color: Colors.white, size: 28),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('See help on the map', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+              Text(sub, style: const TextStyle(fontSize: 13, color: Colors.white)),
+            ])),
+            const Icon(Icons.chevron_right, color: Colors.white),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailsRow() => Container(
+    padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+    decoration: _card,
+    child: Row(children: [
+      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Add more details', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Tk.ink)),
+        SizedBox(height: 2),
+        Text('Optional. Helps responders prepare. About 30 seconds.', style: TextStyle(fontSize: 12, color: Tk.mute)),
+      ])),
+      AppButton(label: 'Add', onPressed: widget.onAddDetails, expand: false, height: 44),
+    ]),
+  );
+
+  Widget _quickDetails() {
+    Widget row(String k, String v) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(children: [Text(k, style: const TextStyle(fontSize: 14, color: Tk.mute)), const Spacer(), Flexible(child: Text(v, textAlign: TextAlign.right, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Tk.ink)))]),
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: _card,
+      child: Column(children: [
+        row('Type', widget.categoryLabel),
+        if (widget.priorityLabel != null) row('Priority', widget.priorityLabel!),
+        if (widget.reference != null) row('Reference', widget.reference!),
+        if (widget.receivedAt != null) row('Received', _clock(widget.receivedAt!)),
+      ]),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\features\ops\ops_widgets.dart (8083 chars)
+<<<BEGIN>>>
+// Shared pieces for the staff console. Solid surfaces only (no glass), graphite tokens.
+import 'package:flutter/material.dart';
+
+import 'ops_tokens.dart';
+
+class OpsPanel extends StatelessWidget {
+  const OpsPanel({super.key, required this.title, required this.child, this.trailing, this.padding = const EdgeInsets.all(OT.pad)});
+  final String title;
+  final Widget child;
+  final Widget? trailing;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: OT.panelDecoration(),
+    padding: padding,
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: OT.text, letterSpacing: 0.2))),
+        if (trailing != null) trailing!,
+      ]),
+      const SizedBox(height: 10),
+      child,
+    ]),
+  );
+}
+
+class OpsTag extends StatelessWidget {
+  const OpsTag(this.text, {super.key, this.bg, this.fg, this.border});
+  final String text;
+  final Color? bg;
+  final Color? fg;
+  final Color? border;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: bg ?? OT.raised,
+      borderRadius: BorderRadius.circular(7),
+      border: border == null ? null : Border.all(color: border!),
+    ),
+    child: Text(text, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: fg ?? OT.soft)),
+  );
+}
+
+class PriorityTag extends StatelessWidget {
+  const PriorityTag(this.priority, {super.key});
+  final String priority;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = OT.priority(priority);
+    return OpsTag(priority.toUpperCase(), bg: c.withValues(alpha: 0.16), fg: c, border: c.withValues(alpha: 0.55));
+  }
+}
+
+class OpsKpi extends StatelessWidget {
+  const OpsKpi({super.key, required this.label, required this.value, this.hint, this.alert = false, this.selected = false, this.onTap});
+  final String label;
+  final String value;
+  final String? hint;
+  final bool alert;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = alert ? OT.alert : OT.accent;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(OT.radius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? OT.raised : OT.panel,
+          borderRadius: BorderRadius.circular(OT.radius),
+          border: Border.all(color: selected ? accent : OT.line),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(label.toUpperCase(), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: OT.muted)),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1.05, color: alert ? OT.alert : OT.text)),
+          if (hint != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text(hint!, style: const TextStyle(fontSize: 11, color: OT.muted))),
+        ]),
+      ),
+    );
+  }
+}
+
+class EmptyState extends StatelessWidget {
+  const EmptyState({super.key, this.icon = Icons.inbox_outlined, required this.title, this.message});
+  final IconData icon;
+  final String title;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 34, color: OT.muted),
+        const SizedBox(height: 10),
+        Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: OT.soft)),
+        if (message != null) ...[
+          const SizedBox(height: 6),
+          Text(message!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: OT.muted, height: 1.4)),
+        ],
+      ]),
+    ),
+  );
+}
+
+class ErrorState extends StatelessWidget {
+  const ErrorState({super.key, required this.message, this.onRetry});
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.cloud_off_outlined, size: 34, color: OT.alert),
+        const SizedBox(height: 10),
+        Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: OT.soft, height: 1.4)),
+        if (onRetry != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+        ],
+      ]),
+    ),
+  );
+}
+
+/// A calm placeholder while the first snapshot arrives. No spinner on the whole page.
+class OpsSkeleton extends StatelessWidget {
+  const OpsSkeleton({super.key, this.rows = 6});
+  final int rows;
+
+  @override
+  Widget build(BuildContext context) => ListView.builder(
+    padding: const EdgeInsets.all(OT.pad),
+    itemCount: rows,
+    itemBuilder: (_, i) => Container(
+      height: i == 0 ? 42 : 66,
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: OT.raised, borderRadius: BorderRadius.circular(10)),
+    ),
+  );
+}
+
+class OpsSectionHeader extends StatelessWidget {
+  const OpsSectionHeader(this.title, {super.key, this.trailing, this.subtitle});
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(OT.pad, 14, OT.pad, 8),
+    child: Row(children: [
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: OT.text)),
+          if (subtitle != null) Text(subtitle!, style: const TextStyle(fontSize: 12, color: OT.muted)),
+        ]),
+      ),
+      if (trailing != null) trailing!,
+    ]),
+  );
+}
+
+/// Thin bar for the analytics pages (no chart package).
+class OpsBarRow extends StatelessWidget {
+  const OpsBarRow({super.key, required this.label, required this.value, required this.max, this.color = OT.accent, this.suffix = ''});
+  final String label;
+  final num value;
+  final num max;
+  final Color color;
+  final String suffix;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [
+      SizedBox(width: 150, child: Text(label, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, color: OT.soft))),
+      Expanded(
+        child: LayoutBuilder(builder: (context, c) {
+          final w = max <= 0 ? 0.0 : c.maxWidth * (value / max);
+          return Stack(children: [
+            Container(height: 10, decoration: BoxDecoration(color: OT.raised, borderRadius: BorderRadius.circular(5))),
+            Container(height: 10, width: w.clamp(0.0, c.maxWidth), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(5))),
+          ]);
+        }),
+      ),
+      SizedBox(width: 74, child: Text('$value$suffix', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: OT.text))),
+    ]),
+  );
+}
+
+class OpsDialogField extends StatelessWidget {
+  const OpsDialogField({super.key, required this.controller, required this.label, this.maxLength, this.maxLines = 1, this.error});
+  final TextEditingController controller;
+  final String label;
+  final int? maxLength;
+  final int maxLines;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    maxLength: maxLength,
+    maxLines: maxLines,
+    decoration: InputDecoration(labelText: label, errorText: error, border: const OutlineInputBorder()),
+  );
+}
+
+<<<END>>>
+
+##### FILE: mobile\lib\features\ops\ops_tokens.dart (1371 chars)
+<<<BEGIN>>>
+// Shared graphite tokens for the staff console. Colours come from the approved responder design
+// (features/responder/responder_theme.dart) so both staff-facing surfaces match.
+import 'package:flutter/material.dart';
+
+import '../responder/responder_theme.dart';
+
+class OT {
+  static const bg = RC.bg;
+  static const panel = RC.card;
+  static const raised = RC.surface2;
+  static const line = RC.line;
+  static const text = RC.text;
+  static const muted = RC.muted;
+  static const soft = RC.soft;
+  static const accent = RC.accent;
+  static const alert = RC.alert;
+
+  static Color priority(String p) => RC.priority(p);
+
+  static const double gap = 12;
+  static const double pad = 16;
+  static const double radius = 14;
+
+  static BoxDecoration panelDecoration() => BoxDecoration(
+    color: panel,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: line),
+  );
+}
+
+/// The four staff states of a unit, in words.
+String unitGroup(String availability, DateTime? lastSeenAt, {DateTime? now}) {
+  final seen = lastSeenAt;
+  final stale = seen != null && (now ?? DateTime.now()).difference(seen).inSeconds > 120;
+  if (stale) return 'Stale GPS';
+  return switch (availability) {
+    'Available' => 'Available',
+    'Busy' => 'On a job',
+    _ => 'Offline',
+  };
+}
+
+const List<String> kUnitGroups = ['Available', 'On a job', 'Stale GPS', 'Offline'];
+
+<<<END>>>
+
+=== other files that show a priority to a person: lines with 4 lines of context ===
+
+----- mobile\lib\features\ops\ops_queue.dart
+133:   Widget build(BuildContext context) {
+134:     final i = row.incident;
+135:     final pinned = row.pinned;
+136:     final accent = OT.priority(i.priority);
+137:     final sub = i.subtype == null ? '' : i.subtype!.replaceAll('_', ' ');
+138:     final place = street ?? (i.landmark.isNotEmpty ? i.landmark : (i.latitude == null ? 'No location' : 'Finding the street…'));
+139:     return Padding(
+   ...
+156:                   padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+157:                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+158:                     Row(children: [
+159:                       PriorityTag(i.priority),
+160:                       if (i.needsAttention) ...[
+161:                         const SizedBox(width: 5),
+162:                         Container(
+   ...
+
+----- mobile\lib\features\ops\ops_incident_panel.dart
+13: 
+14: const Map<String, String> _eventWords = {
+15:   'incident_created': 'Alert created',
+16:   'classified': 'Category and priority set',
+17:   'priority_set': 'Priority set',
+18:   'offer_sent': 'Unit alerted',
+19:   'offer_seen': 'Unit saw the alert',
+   ...
+20:   'offer_accepted': 'Unit accepted',
+   ...
+190:         Expanded(
+191:           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+192:             Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+193:               PriorityTag(inc.priority),
+194:               OpsTag(inc.category),
+195:               if (closed) OpsTag(inc.status, bg: OT.raised, fg: OT.soft),
+196:               if (inc.needsAttention) OpsTag('Needs attention', bg: const Color(0xFF3A2020), fg: const Color(0xFFFFB8B0), border: const Color(0xFF7A3A3A)),
+   ...
+264:         const _SubTitle('Caller description'),
+265:         Text(inc.description, style: const TextStyle(fontSize: 13, color: OT.soft, height: 1.4)),
+266:       ],
+267:       if (inc.priorityReasons.isNotEmpty) ...[
+268:         const SizedBox(height: 12),
+269:         const _SubTitle('Why this priority'),
+270:         for (final r in inc.priorityReasons) Text('• $r', style: const TextStyle(fontSize: 12.5, color: OT.muted)),
+   ...
+271:       ],
+272:       if (!inc.isOpen) ...[
+   ...
+273:         const SizedBox(height: 12),
+   ...
+
+----- mobile\lib\features\admin\admin_stats.dart
+4: const _attentionStates = {'unfilled', 'no_location', 'needs_review'};
+5: 
+6: class AdminStats {
+7:   const AdminStats({required this.open, required this.attention, required this.today, required this.byCategory, required this.byPriority, required this.avgFirstAcceptSeconds, required this.available, required this.busy, required this.pendingVerification, required this.verified});
+8: 
+9:   final List<IncidentRecord> open;
+10:   final List<IncidentRecord> attention;
+   ...
+11:   final int today;
+12:   final Map<String, int> byCategory;
+13:   final Map<String, int> byPriority;
+14: 
+15:   /// Average seconds from the first offer to the first acceptance, over incidents that had one. Null when none.
+16:   final double? avgFirstAcceptSeconds;
+   ...
+32:       if (i.createdAt != null && !i.createdAt!.isBefore(startOfDay)) {
+33:         today++;
+34:         byCat[i.category] = (byCat[i.category] ?? 0) + 1;
+35:         byPri[i.priority] = (byPri[i.priority] ?? 0) + 1;
+36:       }
+37:     }
+38:     final firstOffer = <String, DateTime>{};
+   ...
+55:       attention: [for (final i in open) if (needsAttention(i)) i],
+56:       today: today,
+57:       byCategory: byCat,
+58:       byPriority: byPri,
+59:       avgFirstAcceptSeconds: gaps.isEmpty ? null : gaps.reduce((a, b) => a + b) / gaps.length,
+60:       available: verified.where((r) => r.availabilityStatus == 'Available').length,
+61:       busy: verified.where((r) => r.availabilityStatus == 'Busy').length,
+   ...
+
+----- mobile\lib\features\admin\admin_incidents.dart
+58:                       child: Padding(
+59:                         padding: const EdgeInsets.all(14),
+60:                         child: Row(children: [
+61:                           PriorityPill(i.priority),
+62:                           const SizedBox(width: 12),
+63:                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+64:                             Text('${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}', style: const TextStyle(fontWeight: FontWeight.w800, color: AC.ink)),
+   ...
+202: 
+203:   Widget _header(IncidentRecord i) => Panel(
+204:     title: '${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}',
+205:     trailing: PriorityPill(i.priority),
+206:     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+207:       SelectableText(i.id, style: const TextStyle(fontSize: 13, color: AC.mute)),
+208:       const SizedBox(height: 10),
+   ...
+218:   );
+219: 
+220:   Widget _why(IncidentRecord i) => Panel(
+221:     title: 'Why this priority',
+222:     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+223:       Text('${i.priority} · decided by: ${i.prioritySource.isEmpty ? 'pending' : i.prioritySource.replaceAll('_', ' ')}', style: const TextStyle(fontWeight: FontWeight.w700, color: AC.ink)),
+224:       const SizedBox(height: 8),
+   ...
+225:       if (i.priorityReasons.isNotEmpty) ...[const Text('Safety rules triggered', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AC.mute)), for (final r in i.priorityReasons) Text('• $r')],
+226:       if (i.answers.isNotEmpty) ...[
+   ...
+227:         const SizedBox(height: 10),
+228:         const Text('Answers given', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AC.mute)),
+   ...
+229:         Wrap(spacing: 6, runSpacing: 6, children: [for (final e in i.answers.entries) Pill('${e.key.replaceAll('_', ' ')}: ${e.value}', const Color(0xFFEDEDED), AC.ink)]),
+230:       ] else
+231:         const Padding(padding: EdgeInsets.only(top: 8), child: Text('No answers yet. The alert was sent with the fail-safe priority.', style: TextStyle(color: AC.mute))),
+232:       if (i.needsHumanReview && i.triageStatus == 'complete') const Padding(padding: EdgeInsets.only(top: 10), child: Text('The classifier was not confident. Please review.', style: TextStyle(color: AC.medium, fontWeight: FontWeight.w700))),
+233:     ]),
+234:   );
+   ...
+
+----- mobile\lib\features\admin\admin_overview.dart
+16:   Widget build(BuildContext context) {
+17:     final s = AdminStats.compute(incidents, offers, responders, DateTime.now());
+18:     final maxCat = s.byCategory.values.fold<int>(0, (a, b) => a > b ? a : b);
+19:     final maxPri = s.byPriority.values.fold<int>(0, (a, b) => a > b ? a : b);
+20:     final avg = s.avgFirstAcceptSeconds;
+21:     return ListView(padding: const EdgeInsets.all(20), children: [
+22:       LayoutBuilder(builder: (context, c) {
+   ...
+47:           child: s.byCategory.isEmpty ? const Text('No alerts today.', style: TextStyle(color: AC.mute)) : Column(children: [for (final e in (s.byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))) BarRow(label: e.key, value: e.value, max: maxCat)]),
+48:         );
+49:         final byPri = Panel(
+50:           title: 'Alerts today by priority',
+51:           child: s.byPriority.isEmpty ? const Text('No alerts today.', style: TextStyle(color: AC.mute)) : Column(children: [for (final p in const ['High', 'Medium', 'Low']) if (s.byPriority[p] != null) BarRow(label: p, value: s.byPriority[p]!, max: maxPri, color: AC.priority(p))]),
+52:         );
+53:         return two ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: byCat), const SizedBox(width: 16), Expanded(child: byPri)]) : Column(children: [byCat, byPri]);
+   ...
+54:       }),
+   ...
+64:     child: Padding(
+65:       padding: const EdgeInsets.symmetric(vertical: 8),
+66:       child: Row(children: [
+67:         PriorityPill(i.priority),
+68:         const SizedBox(width: 10),
+69:         Expanded(child: Text('${i.category}${i.subtype == null ? '' : ' · ${i.subtype!.replaceAll('_', ' ')}'}', style: const TextStyle(fontWeight: FontWeight.w700, color: AC.ink))),
+70:         StatePill(i.dispatchState),
+   ...
+
+----- mobile\lib\features\ops\ops_logic.dart
+66: // ---------------------------------------------------------------------------------------------
+67: // Pending queue
+68: // ---------------------------------------------------------------------------------------------
+69: const Map<String, int> kPriorityRank = {'High': 0, 'Medium': 1, 'Low': 2};
+70: 
+71: /// Dispatch states that are finished or fully staffed: they never sit in the pending queue.
+72: const Set<String> kSettledStates = {
+   ...
+112:   );
+113: }
+114: 
+115: /// Open incidents that are not fully staffed, SLA breaches pinned first, then priority, then oldest first.
+116: List<QueueRow> buildQueue(Iterable<IncidentRecord> incidents) {
+117:   final rows = <QueueRow>[];
+118:   for (final i in incidents) {
+   ...
+125:     final pa = a.$2.pinned ? 0 : 1;
+126:     final pb = b.$2.pinned ? 0 : 1;
+127:     if (pa != pb) return pa - pb;
+128:     final ra = kPriorityRank[a.$2.incident.priority] ?? 3;
+129:     final rb = kPriorityRank[b.$2.incident.priority] ?? 3;
+130:     if (ra != rb) return ra - rb;
+131:     final ca = a.$2.incident.createdAt?.millisecondsSinceEpoch ?? 0;
+   ...
+132:     final cb = b.$2.incident.createdAt?.millisecondsSinceEpoch ?? 0;
+   ...
+
+----- mobile\lib\features\ops\ops_notifications.dart
+23:   bool get isUrgent => kind == NoticeKind.sos || kind == NoticeKind.high;
+24: }
+25: 
+26: /// Newest first. An incident can raise more than one notice (e.g. High priority and low accuracy).
+27: List<OpsNotice> buildNotices({required List<IncidentRecord> incidents, required List<SosAlert> sos, DateTime? now}) {
+28:   final out = <OpsNotice>[];
+29:   for (final s in sos) {
+   ...
+56:       };
+57:       out.add(OpsNotice(id: '${kind.name}_${i.id}', kind: kind, title: where, body: body, at: i.createdAt, incidentId: i.id));
+58:     }
+59:     if (i.priority == 'High') {
+60:       out.add(OpsNotice(id: 'high_${i.id}', kind: NoticeKind.high, title: 'High priority: $where', body: 'A new High priority incident is open.', at: i.createdAt, incidentId: i.id));
+61:     }
+62:   }
+   ...
+63:   out.sort((a, b) => (b.at ?? DateTime(2000)).compareTo(a.at ?? DateTime(2000)));
+   ...
+66: 
+67: IconData noticeIcon(NoticeKind k) => switch (k) {
+68:   NoticeKind.sos => Icons.sos_outlined,
+69:   NoticeKind.attention => Icons.priority_high,
+70:   NoticeKind.extraResources => Icons.group_add_outlined,
+71:   NoticeKind.high => Icons.campaign_outlined,
+72:   NoticeKind.lowAccuracy => Icons.my_location_outlined,
+   ...
+103:       const Divider(height: 1, color: OT.line),
+104:       Flexible(
+105:         child: notices.isEmpty
+106:             ? const EmptyState(icon: Icons.notifications_none, title: 'Nothing needs you right now', message: 'SOS alerts, attention flags and new High priority incidents appear here.')
+107:             : ListView.separated(
+108:                 shrinkWrap: true,
+109:                 padding: const EdgeInsets.all(8),
+   ...
+
+----- mobile\lib\features\ops\ops_map.dart
+1: // The control-room map: incident pins by priority, unit pins by state, and the selected incident's live
+2: // positions (the caller and the units holding the job). Bounds are computed by hand, never newLatLngBounds.
+3: import 'dart:math' as math;
+4: import 'dart:typed_data';
+   ...
+71:     _ensurePins();
+72:   }
+73: 
+74:   /// Pins are drawn once per priority+category and unit state, then reused (web-safe: no default marker glyphs).
+75:   Future<void> _ensurePins() async {
+76:     final wanted = <String, (Color, IconData)>{};
+77:     for (final i in widget.incidents) {
+   ...
+78:       wanted['p_${i.priority}_${i.category}'] = (OT.priority(i.priority), _categoryIcon(i.category));
+79:     }
+80:     wanted['u_Available'] = (OT.accent, Icons.navigation_outlined);
+81:     wanted['u_On a job'] = (_onJob, Icons.navigation_outlined);
+   ...
+124:       out.add(Marker(
+125:         markerId: MarkerId('i_${i.id}'),
+126:         position: LatLng(i.latitude!, i.longitude!),
+127:         icon: _pins['p_${i.priority}_${i.category}'] ?? BitmapDescriptor.defaultMarkerWithHue(_hue(i.priority)),
+128:         onTap: () => widget.onSelect(i.id),
+129:         infoWindow: InfoWindow(title: '${i.priority} · ${i.category}', snippet: 'Tap to open'),
+130:         zIndexInt: widget.selectedId == i.id ? 6 : 4,
+   ...
+131:       ));
+132:     }
+   ...
+169:     return out;
+170:   }
+171: 
+172:   static double _hue(String priority) => switch (priority) { 'High' => BitmapDescriptor.hueRed, 'Medium' => BitmapDescriptor.hueOrange, _ => BitmapDescriptor.hueBlue };
+173:   static double _unitHue(String group) => switch (group) { 'Available' => BitmapDescriptor.hueGreen, 'On a job' => BitmapDescriptor.hueYellow, _ => BitmapDescriptor.hueRose };
+174: 
+175:   List<LatLng> _points() {
+   ...
+
+----- mobile\lib\features\admin\admin_widgets.dart
+12:   static const medium = Color(0xFFB26A00);
+13:   static const low = Color(0xFF3A6EA5);
+14: 
+15:   static Color priority(String p) => switch (p) { 'High' => high, 'Medium' => medium, _ => low };
+16: 
+17:   static (Color, Color) stateColors(String s) => switch (s) {
+18:     'unfilled' || 'no_location' => (const Color(0xFFFDE8E8), const Color(0xFF9B1C1C)),
+   ...
+65:   );
+66: }
+67: 
+68: class PriorityPill extends StatelessWidget {
+69:   const PriorityPill(this.priority, {super.key});
+70:   final String priority;
+71:   @override
+   ...
+72:   Widget build(BuildContext context) => Pill(priority.toUpperCase(), AC.priority(priority), Colors.white);
+   ...
+73: }
+   ...
+74: 
+75: class StatePill extends StatelessWidget {
+   ...
+
+=== what Skip and the quick answers write (alert_status_sheet.dart) ===
+105:       _saveDescriptionFeedback();
+106:       _saveQuickProgress();
+213:   void _saveQuickProgress() {
+223:       'triageStatus': 'quick',
+263:   void _saveDescriptionFeedback() {
+313:       _saveQuickProgress();
+314:       _saveDescriptionFeedback();
+325:       _saveQuickProgress();
+353:       _saveQuickProgress();
+926:                 child: const Text('Skip, help is already coming'),

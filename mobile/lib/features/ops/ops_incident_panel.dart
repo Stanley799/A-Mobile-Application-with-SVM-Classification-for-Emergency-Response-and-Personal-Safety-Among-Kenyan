@@ -190,7 +190,7 @@ class _OpsIncidentPanelState extends State<OpsIncidentPanel> with SingleTickerPr
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              PriorityTag(inc.priority),
+              PriorityTag(inc.priorityShown),
               OpsTag(inc.category),
               if (closed) OpsTag(inc.status, bg: OT.raised, fg: OT.soft),
               if (inc.needsAttention) OpsTag('Needs attention', bg: const Color(0xFF3A2020), fg: const Color(0xFFFFB8B0), border: const Color(0xFF7A3A3A)),

@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDH2ZRj26RCiYESHlb2uad_dEZz6hWRtIw',
-    appId: '1:209706329218:android:3ea556fe5bb62f5b65809b',
+    appId: '1:209706329218:android:2d8abcafb5ef6a3c65809b',
     messagingSenderId: '209706329218',
     projectId: 'emergencyresponsesystem-166601',
     storageBucket: 'emergencyresponsesystem-166601.firebasestorage.app',

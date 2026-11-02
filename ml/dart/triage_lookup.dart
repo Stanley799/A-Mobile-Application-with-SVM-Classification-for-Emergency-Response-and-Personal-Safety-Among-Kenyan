@@ -24,13 +24,34 @@ class TriageLookup {
     return TriageLookup._(raw['entries'] as Map<String, dynamic>);
   }
 
-  /// answers: question id -> value as text (people_count as '1'..'5'). Questions not asked for the category are filled with NotAsked.
+  /// answers: question id -> value as text (people_count as '1'..'5').
+  /// Read exactly like the server (functions/dispatch/core.py filled_answers + triage_core.normalize):
+  /// a question that BELONGS to this category but has not been answered yet counts as "Unknown";
+  /// only questions this category never asks are NotAsked. (Before: unanswered meant NotAsked, which is not in
+  /// the table, so every alert answered with just the 3 quick questions fell back to High.)
   TriageResult lookup(String category, Map<String, String> answers, {String? subtype}) {
-    final parts = <String>[];
-    for (final f in kModelFeatureOrder) {
-      if (f == 'category') { parts.add(category); continue; }
-      parts.add(answers[f] ?? (f == 'people_count' ? '1' : kNotAsked));
+    final categoryQuestions = kCategoryQuestions[category];
+    if (categoryQuestions == null) { throw ArgumentError('Unknown category: $category'); }
+    final byFeature = <String, String>{
+      for (final f in kModelFeatureOrder) f: (kQuestions[f]?.type == 'int') ? '1' : kNotAsked,
+    };
+    for (final q in categoryQuestions) {
+      final spec = kQuestions[q]!;
+      final given = answers[q];
+      if (spec.type == 'int') {
+        final n = int.tryParse(given ?? '');
+        byFeature[q] = (n == null ? 1 : (n < spec.min ? spec.min : (n > spec.max ? spec.max : n))).toString();
+        continue;
+      }
+      var asked = true;
+      for (final c in spec.askIf.entries) {
+        if (!c.value.contains(byFeature[c.key])) { asked = false; }
+      }
+      if (!asked) continue;
+      byFeature[q] = (given != null && spec.values.contains(given)) ? given : 'Unknown';
     }
+    byFeature['category'] = category;
+    final parts = <String>[for (final f in kModelFeatureOrder) byFeature[f]!];
     final e = _entries[parts.join('|')];
     if (e == null) { throw ArgumentError('Unknown answer combination: ${parts.join('|')}'); }
     var priority = e['p'] as String;

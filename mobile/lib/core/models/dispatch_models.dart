@@ -15,6 +15,10 @@ const Map<String, String> kRoleLabels = {
 
 String roleLabel(String code) => kRoleLabels[code] ?? code.replaceAll('_', ' ');
 
+/// Shown instead of a priority while nobody has given details yet. The alert is still dispatched as urgent;
+/// this only says the High is the fail-safe default, not an assessment.
+const String kAwaitingDetails = 'Awaiting details';
+
 DateTime? _dt(Object? v) => v is Timestamp ? v.toDate() : (v is DateTime ? v : null);
 List<String> _strs(Object? v) => [for (final x in (v as List? ?? const [])) x.toString()];
 
@@ -243,7 +247,7 @@ class DispatchUnit {
 
 /// incident.dispatch as the RESIDENT sees it.
 class DispatchInfo {
-  const DispatchInfo({required this.state, required this.escalate922, required this.reason, required this.units});
+  const DispatchInfo({required this.state, required this.escalate922, required this.reason, required this.units, this.priority, this.prioritySource = '', this.priorityReasons = const []});
 
   /// awaiting_details | waiting_location | dispatching | partially_assigned | assigned | enroute | arrived | completed
   /// | unfilled | no_location | support_only | needs_review | cancelled
@@ -251,6 +255,17 @@ class DispatchInfo {
   final bool escalate922;
   final String reason;
   final List<DispatchUnit> units;
+
+  /// The server's decision: High | Medium | Low. Null before the server has decided.
+  final String? priority;
+  final String prioritySource; // model_table | rule_floor | safe_fallback
+  final List<String> priorityReasons;
+
+  /// True while the priority is only the fail-safe default (no details yet, or it could not be assessed).
+  bool get isProvisional => priority == null || prioritySource == 'safe_fallback';
+
+  /// What the resident sees: the real priority, or "Awaiting details". Never a false "High".
+  String get priorityShown => isProvisional ? kAwaitingDetails : priority!;
 
   static const empty = DispatchInfo(state: 'none', escalate922: false, reason: '', units: []);
 
@@ -289,6 +304,9 @@ class DispatchInfo {
       escalate922: raw['escalate922'] == true,
       reason: (raw['reason'] ?? '') as String,
       units: [for (final u in (raw['units'] as List? ?? const [])) if (u is Map) DispatchUnit.fromMap(u)],
+      priority: raw['priority'] as String?,
+      prioritySource: (raw['prioritySource'] ?? '') as String,
+      priorityReasons: _strs(raw['priorityReasons']),
     );
   }
 }
@@ -399,6 +417,13 @@ class IncidentRecord {
   final int? callerRating;
 
   bool get isOpen => status == 'Active' || status == 'SupportOnly';
+
+  /// True while nobody has given any details: the High is only the fail-safe default, not an assessment.
+  /// Sorting and dispatch still use [priority] (urgent); screens show [priorityShown].
+  bool get isUnassessed => triageStatus == 'pending';
+
+  /// What staff screens show: the real priority, or "Awaiting details" while the alert is unassessed.
+  String get priorityShown => isUnassessed ? kAwaitingDetails : priority;
 
   /// People reported at the scene (from the triage answers; the engine defaults to 1).
   int get peopleCount => int.tryParse(answers['people_count'] ?? '') ?? 1;

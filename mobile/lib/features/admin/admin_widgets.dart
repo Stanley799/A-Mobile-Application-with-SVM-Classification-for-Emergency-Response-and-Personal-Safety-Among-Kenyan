@@ -12,7 +12,7 @@ class AC {
   static const medium = Color(0xFFB26A00);
   static const low = Color(0xFF3A6EA5);
 
-  static Color priority(String p) => switch (p) { 'High' => high, 'Medium' => medium, _ => low };
+  static Color priority(String p) => switch (p) { 'High' => high, 'Medium' => medium, 'Awaiting details' => const Color(0xFF6B7280), _ => low };
 
   static (Color, Color) stateColors(String s) => switch (s) {
     'unfilled' || 'no_location' => (const Color(0xFFFDE8E8), const Color(0xFF9B1C1C)),

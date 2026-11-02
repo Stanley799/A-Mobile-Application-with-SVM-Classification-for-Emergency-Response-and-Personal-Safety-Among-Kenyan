@@ -156,7 +156,7 @@ class _QueueTile extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      PriorityTag(i.priority),
+                      PriorityTag(i.priorityShown),
                       if (i.needsAttention) ...[
                         const SizedBox(width: 5),
                         Container(

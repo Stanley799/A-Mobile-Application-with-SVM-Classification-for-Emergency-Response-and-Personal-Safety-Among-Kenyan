@@ -57,7 +57,7 @@ List<OpsNotice> buildNotices({required List<IncidentRecord> incidents, required 
       out.add(OpsNotice(id: '${kind.name}_${i.id}', kind: kind, title: where, body: body, at: i.createdAt, incidentId: i.id));
     }
     if (i.priority == 'High') {
-      out.add(OpsNotice(id: 'high_${i.id}', kind: NoticeKind.high, title: 'High priority: $where', body: 'A new High priority incident is open.', at: i.createdAt, incidentId: i.id));
+      out.add(OpsNotice(id: 'high_${i.id}', kind: NoticeKind.high, title: i.isUnassessed ? 'New alert: $where' : 'High priority: $where', body: i.isUnassessed ? 'Details not given yet. Treat as urgent until they arrive.' : 'A new High priority incident is open.', at: i.createdAt, incidentId: i.id));
     }
   }
   out.sort((a, b) => (b.at ?? DateTime(2000)).compareTo(a.at ?? DateTime(2000)));

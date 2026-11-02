@@ -32,7 +32,7 @@ class AdminStats {
       if (i.createdAt != null && !i.createdAt!.isBefore(startOfDay)) {
         today++;
         byCat[i.category] = (byCat[i.category] ?? 0) + 1;
-        byPri[i.priority] = (byPri[i.priority] ?? 0) + 1;
+        byPri[i.priorityShown] = (byPri[i.priorityShown] ?? 0) + 1;
       }
     }
     final firstOffer = <String, DateTime>{};

@@ -238,12 +238,16 @@ class _OpsIncidentsPageState extends State<OpsIncidentsPage> {
             borderRadius: BorderRadius.circular(9),
             border: Border.all(color: widget.selectedId == i.id ? OT.accent : OT.line),
           ),
-          child: Row(children: [
-            SizedBox(
-              width: 92,
-              child: Text(_stamp(i.createdAt), style: const TextStyle(fontSize: 11, color: OT.muted)),
-            ),
-            PriorityTag(i.priority),
+          child: LayoutBuilder(builder: (context, box) {
+            // On a phone the row is too narrow for every column: the time moves under the title, the dispatch state is dropped.
+            final narrow = box.maxWidth < 430;
+            return Row(children: [
+            if (!narrow)
+              SizedBox(
+                width: 92,
+                child: Text(_stamp(i.createdAt), style: const TextStyle(fontSize: 11, color: OT.muted)),
+              ),
+            PriorityTag(i.priorityShown),
             const SizedBox(width: 8),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -254,7 +258,7 @@ class _OpsIncidentsPageState extends State<OpsIncidentsPage> {
                   style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: OT.text),
                 ),
                 Text(
-                  '${i.id}${i.landmark.isEmpty ? '' : ' · ${i.landmark}'}',
+                  '${narrow ? '${_stamp(i.createdAt)} · ' : ''}${i.id}${i.landmark.isEmpty ? '' : ' · ${i.landmark}'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 11, color: OT.muted),
@@ -263,9 +267,12 @@ class _OpsIncidentsPageState extends State<OpsIncidentsPage> {
             ),
             const SizedBox(width: 8),
             OpsTag(i.status, bg: OT.raised, fg: i.isOpen ? OT.accent : OT.soft),
-            const SizedBox(width: 6),
-            SizedBox(width: 104, child: Text(i.dispatchState.replaceAll('_', ' '), textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, color: OT.muted))),
-          ]),
+            if (!narrow) ...[
+              const SizedBox(width: 6),
+              SizedBox(width: 104, child: Text(i.dispatchState.replaceAll('_', ' '), textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, color: OT.muted))),
+            ],
+          ]);
+          }),
         ),
       ),
     ),
