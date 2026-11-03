@@ -99,6 +99,7 @@ class Offer {
     this.callerFeedbackSafe,
     this.landmark = '',
     this.accuracyM,
+    this.prioritySource = '',
   });
 
   final String id;
@@ -146,6 +147,14 @@ class Offer {
   /// The caller's words for the place ("opposite Westgate gate B") and how precise the GPS fix was.
   final String landmark;
   final double? accuracyM;
+
+  /// Where the priority came from (safe_fallback = the default High given before details arrive).
+  final String prioritySource;
+
+  /// True while the High is only the default, not an assessment of this emergency. Still treated as urgent.
+  bool get isProvisional => prioritySource == 'safe_fallback' && priority == 'High';
+  String get priorityLabel => isProvisional ? 'High \u00b7 awaiting details' : priority;
+  String get priorityBanner => isProvisional ? 'HIGH PRIORITY \u00b7 AWAITING DETAILS' : '${priority.toUpperCase()} PRIORITY';
 
   bool get hasSeen => seenAt != null;
 
@@ -210,6 +219,7 @@ class Offer {
       callerFeedbackSafe: m['callerFeedback'] is Map ? (m['callerFeedback'] as Map)['safe'] == true : null,
       landmark: (m['landmark'] ?? '').toString(),
       accuracyM: (m['locationAccuracyM'] as num?)?.toDouble(),
+      prioritySource: (m['prioritySource'] ?? '').toString(),
     );
   }
 }

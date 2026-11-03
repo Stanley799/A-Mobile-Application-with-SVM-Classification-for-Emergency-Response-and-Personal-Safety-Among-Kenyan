@@ -730,7 +730,7 @@ class _ResponderShellState extends State<ResponderShell>
       children: [
         Row(
           children: [
-            PriorityTag(priority: offer.priority),
+            PriorityTag(priority: offer.priority, provisional: offer.isProvisional),
             const Spacer(),
             Text(
               '${offer.secondsLeft()} s',
@@ -795,7 +795,7 @@ class _ResponderShellState extends State<ResponderShell>
         style: ResponderTextStyles.caption,
       ),
       child: InfoRow(
-        label: '${hhmm(offer.createdAt)} · ${offer.priority}',
+        label: '${hhmm(offer.createdAt)} · ${offer.priorityLabel}',
         value: '${offer.distanceKm.toStringAsFixed(1)} km · straight line',
       ),
     ),
@@ -862,7 +862,7 @@ class _ResponderShellState extends State<ResponderShell>
               ),
               const SizedBox(height: 2),
               Text(
-                '${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km · ${_statusLabel(o.status)}',
+                '${o.priorityLabel} · ${o.distanceKm.toStringAsFixed(1)} km · ${_statusLabel(o.status)}',
                 style: const TextStyle(fontSize: 13, color: RC.muted),
               ),
             ],
@@ -916,7 +916,7 @@ class _ResponderShellState extends State<ResponderShell>
                       ),
                     ),
                     Text(
-                      '${hhmm(o.createdAt)} · ${o.priority} · ${o.distanceKm.toStringAsFixed(1)} km',
+                      '${hhmm(o.createdAt)} · ${o.priorityLabel} · ${o.distanceKm.toStringAsFixed(1)} km',
                       style: const TextStyle(fontSize: 12, color: RC.muted),
                     ),
                   ],

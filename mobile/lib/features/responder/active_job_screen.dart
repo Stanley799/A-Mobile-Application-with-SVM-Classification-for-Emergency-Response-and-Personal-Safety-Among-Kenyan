@@ -404,7 +404,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
-            '${o.priority.toUpperCase()} PRIORITY · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}',
+            '${o.priorityBanner} · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}',
             style: const TextStyle(
               fontWeight: FontWeight.w800,
               color: Colors.white,

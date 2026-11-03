@@ -160,14 +160,14 @@ def reconcile(incident, responders, offers, now, table):
             creates.append({"type": "create_offer", "offer": {
                 "id": f"{incident['id']}_{c['id']}", "incidentId": incident["id"], "incidentCode": incident.get("code") or incident["id"],
                 "responderId": c["id"], "role": label, "wave": wave, "status": "offered", "createdAt": now, "expiresAt": now + C.OFFER_SECONDS,
-                "distanceKm": c["distance_km"], "priority": priority, "category": incident["category"], "subtype": incident.get("subtype"),
+                "distanceKm": c["distance_km"], "priority": priority, "prioritySource": pr["source"], "category": incident["category"], "subtype": incident.get("subtype"),
                 "covers": covers, "location": {"lat": incident["lat"], "lng": incident["lng"]}, **briefing_fields(incident, priority, required, n or {})}})
     actions += creates
     # 6 keep open offers up to date (location, priority, new answers)
     fresh = briefing_fields(incident, priority, required, n or {}) if n else None
     for o in view:
         if o["status"] in ("offered", "accepted", "enroute", "arrived"):
-            want = {"priority": priority, "location": {"lat": incident["lat"], "lng": incident["lng"]}}
+            want = {"priority": priority, "prioritySource": pr["source"], "location": {"lat": incident["lat"], "lng": incident["lng"]}}
             if fresh:
                 want.update({"flags": fresh["flags"], "summary": fresh["summary"], "peopleCount": fresh["peopleCount"], "needs": fresh["needs"]})
             diff = {k: v for k, v in want.items() if o.get(k) != v}

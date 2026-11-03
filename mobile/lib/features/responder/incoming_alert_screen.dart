@@ -168,7 +168,7 @@ class _IncomingAlertScreenState extends State<IncomingAlertScreen> {
                         children: [
                           Row(
                             children: [
-                              PriorityTag(priority: o.priority),
+                              PriorityTag(priority: o.priority, provisional: o.isProvisional),
                               const SizedBox(width: ResponderSpacing.sm),
                               Expanded(
                                 child: Text(

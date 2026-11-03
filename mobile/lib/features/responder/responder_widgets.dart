@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'responder_theme.dart';
 
 class PriorityTag extends StatelessWidget {
-  const PriorityTag({super.key, required this.priority});
+  const PriorityTag({super.key, required this.priority, this.provisional = false});
 
   final String priority;
+  final bool provisional;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +38,7 @@ class PriorityTag extends StatelessWidget {
           Icon(icon, size: 18, color: ink),
           const SizedBox(width: ResponderSpacing.xs),
           Text(
-            label,
+            provisional ? '$label \u00b7 AWAITING DETAILS' : label,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w900,
