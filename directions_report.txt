@@ -1,0 +1,143 @@
+##### FILE: functions/phase3c_functions.py (52 lines)
+<<<BEGIN>>>
+"""Phase 3A.2 callables (imported by main.py next to phase3_functions).
+  help_geocode    : lat,lng -> street label for the "You are at ..." line (signed-in users)
+  help_directions : origin,dest -> route line + minutes + km, drawn inside the app (signed-in users)
+Both use the Firebase secret MAPS_SERVER_KEY; without it they answer ok:false / a straight-line estimate and the app still works."""
+import math
+
+from firebase_functions import https_fn, options
+
+import dispatch  # noqa: F401
+from dispatch import config as C, core, lookup, routes
+from phase3_functions import MAPS_SERVER_KEY
+
+OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_256, timeout_sec=20, max_instances=10, secrets=[MAPS_SERVER_KEY])
+
+
+def _auth(req):
+    if req.auth is None:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.UNAUTHENTICATED, "Sign in first.")
+
+
+def _pt(d, a, b):
+    try:
+        la, lo = float(d.get(a)), float(d.get(b))
+    except (TypeError, ValueError):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Bad coordinates.")
+    if not (math.isfinite(la) and math.isfinite(lo) and -90 <= la <= 90 and -180 <= lo <= 180):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Bad coordinates.")
+    return la, lo
+
+
+def directions(key, o, d, http=None):
+    km = core.dl.haversine_km(o[0], o[1], d[0], d[1])
+    r = routes.route(key, o, d, http)
+    if r is None:
+        return {"ok": True, "polyline": "", "etaS": round((2 + km * 1.35 / 25 * 60) * 60), "distanceM": round(km * 1000), "estimate": True}
+    return {"ok": True, "polyline": r["polyline"], "etaS": r["durationS"], "distanceM": r["distanceM"], "estimate": False}
+
+
+@https_fn.on_call(**OPTS)
+def help_geocode(req: https_fn.CallableRequest):
+    _auth(req)
+    la, lo = _pt(req.data if isinstance(req.data, dict) else {}, "lat", "lng")
+    g = lookup.reverse_geocode(routes.key(), la, lo)
+    return {"ok": bool(g), "label": (g or {}).get("label", ""), "full": (g or {}).get("full", "")}
+
+
+@https_fn.on_call(**OPTS)
+def help_directions(req: https_fn.CallableRequest):
+    _auth(req)
+    d = req.data if isinstance(req.data, dict) else {}
+    return directions(routes.key(), _pt(d, "fromLat", "fromLng"), _pt(d, "toLat", "toLng"))
+
+<<<END>>>
+
+##### FILE: functions/phase3_functions.py (54 lines)
+<<<BEGIN>>>
+"""Phase 3A callables (self-contained; main.py imports them with one line).
+  resident_request_unit : the resident asks one specific registered unit from their options list
+  incident_route        : route line + ETA of an accepted unit (owner, that unit, or an administrator)
+The Maps server key is the Firebase secret MAPS_SERVER_KEY. If it is missing, everything still works with straight-line estimates."""
+import time
+
+from firebase_admin import firestore
+from firebase_functions import https_fn, options
+from firebase_functions.params import SecretParam
+
+import dispatch  # noqa: F401  (path set-up)
+from dispatch import config as C, job_route, notify, resident_requests as rr
+
+MAPS_SERVER_KEY = SecretParam("MAPS_SERVER_KEY")
+OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_256, timeout_sec=30, max_instances=10, secrets=[MAPS_SERVER_KEY])
+_CODES = {"not-found": https_fn.FunctionsErrorCode.NOT_FOUND, "failed-precondition": https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
+          "resource-exhausted": https_fn.FunctionsErrorCode.RESOURCE_EXHAUSTED}
+
+
+def _need_auth(req):
+    if req.auth is None:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.UNAUTHENTICATED, "Sign in first.")
+
+
+def _strs(req, *names):
+    d = req.data if isinstance(req.data, dict) else {}
+    out = []
+    for n in names:
+        v = d.get(n)
+        if not isinstance(v, str) or not v or len(v) > 128 or "/" in v:
+            raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, f"{n} is required.")
+        out.append(v)
+    return out
+
+
+@https_fn.on_call(**OPTS)
+def resident_request_unit(req: https_fn.CallableRequest):
+    _need_auth(req)
+    iid, rid = _strs(req, "incidentId", "responderId")
+    db = firestore.client()
+    try:
+        offer = rr.request_unit(db, iid, req.auth.uid, rid, time.time())
+    except rr.RequestError as e:
+        raise https_fn.HttpsError(_CODES.get(e.code, https_fn.FunctionsErrorCode.INTERNAL), e.message)
+    notify.send_offer_push(db, offer)
+    return {"ok": True}
+
+
+@https_fn.on_call(**OPTS)
+def incident_route(req: https_fn.CallableRequest):
+    _need_auth(req)
+    iid, rid = _strs(req, "incidentId", "responderId")
+    return job_route.route_for(firestore.client(), iid, rid, req.auth.uid, (req.auth.token or {}).get("role") == "SystemAdmin", time.time())
+
+<<<END>>>
+
+=== functions/tests ===
+  functions\tests\fake_firestore.py
+  functions\tests\test_admin_accounts.py
+  functions\tests\test_dispatch_core.py
+  functions\tests\test_labels.py
+  functions\tests\test_lookup.py
+  functions\tests\test_offer_priority_source.py
+  functions\tests\test_options.py
+  functions\tests\test_phase4d.py
+  functions\tests\test_store_lifecycle.py
+
+=== other python files that mention directions or routes ===
+functions\main.py:22: from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
+functions\phase3c_functions.py:3:   help_directions : origin,dest -> route line + minutes + km, drawn inside the app (signed-in users)
+functions\phase3c_functions.py:31: def directions(key, o, d, http=None):
+functions\phase3c_functions.py:35:         return {"ok": True, "polyline": "", "etaS": round((2 + km * 1.35 / 25 * 60) * 60), "distanceM": round(km * 1000), "estimate": True}
+functions\phase3c_functions.py:36:     return {"ok": True, "polyline": r["polyline"], "etaS": r["durationS"], "distanceM": r["distanceM"], "estimate": False}
+functions\phase3c_functions.py:48: def help_directions(req: https_fn.CallableRequest):
+functions\phase3c_functions.py:51:     return directions(routes.key(), _pt(d, "fromLat", "fromLng"), _pt(d, "toLat", "toLng"))
+functions\dispatch\job_route.py:32:             return {"ok": True, "polyline": cd["polyline"], "etaS": cd["etaS"], "distanceM": cd["distanceM"], "ageS": round(age), "cached": True}
+functions\dispatch\job_route.py:36:         return {"ok": True, "polyline": "", "etaS": round((2 + km * 1.35 / 30 * 60) * 60), "distanceM": round(km * 1000), "estimate": True}
+functions\dispatch\job_route.py:37:     cache_ref.set({"polyline": r["polyline"], "etaS": r["durationS"], "distanceM": r["distanceM"], "fromLat": pos["lat"], "fromLng": pos["lng"], "at": store.when(now)})
+functions\dispatch\job_route.py:38:     return {"ok": True, "polyline": r["polyline"], "etaS": r["durationS"], "distanceM": r["distanceM"], "cached": False}
+functions\dispatch\options.py:3:                place   = a real facility with coordinates from the directory (call / directions only)
+functions\dispatch\options.py:169:                           "etaMin": eta[0], "etaSource": eta[1], "status": "directions", "phone": (f.get("phones") or [""])[0], "phones": f.get("phones") or [],
+functions\dispatch\routes.py:9: ROUTE_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
+functions\dispatch\routes.py:52:     """Returns {'polyline': str, 'durationS': float, 'distanceM': int} or None."""
+functions\dispatch\routes.py:57:         data = _post(ROUTE_URL, key, "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline", body, http)
+functions\dispatch\routes.py:61:         return {"polyline": (r.get("polyline") or {}).get("encodedPolyline", ""), "durationS": _secs(r.get("duration")) or 0.0, "distanceM": int(r.get("distanceMeters", 0))}

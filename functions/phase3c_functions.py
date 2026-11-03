@@ -28,12 +28,19 @@ def _pt(d, a, b):
     return la, lo
 
 
-def directions(key, o, d, http=None):
+def directions(key, o, d, http=None, steps=False):
     km = core.dl.haversine_km(o[0], o[1], d[0], d[1])
-    r = routes.route(key, o, d, http)
+    r = routes.route(key, o, d, http, steps=steps)
     if r is None:
         return {"ok": True, "polyline": "", "etaS": round((2 + km * 1.35 / 25 * 60) * 60), "distanceM": round(km * 1000), "estimate": True}
-    return {"ok": True, "polyline": r["polyline"], "etaS": r["durationS"], "distanceM": r["distanceM"], "estimate": False}
+    out = {"ok": True, "polyline": r["polyline"], "etaS": r["durationS"], "distanceM": r["distanceM"], "estimate": False}
+    if steps:                                      # additive: only when the app asks with steps=true
+        out["overviewPolyline"] = r["polyline"]
+        out["durationSec"] = round(r["durationS"])
+        out["steps"] = r.get("steps", [])
+        if r.get("stepsTruncated"):
+            out["stepsTruncated"] = True
+    return out
 
 
 @https_fn.on_call(**OPTS)
@@ -48,4 +55,4 @@ def help_geocode(req: https_fn.CallableRequest):
 def help_directions(req: https_fn.CallableRequest):
     _auth(req)
     d = req.data if isinstance(req.data, dict) else {}
-    return directions(routes.key(), _pt(d, "fromLat", "fromLng"), _pt(d, "toLat", "toLng"))
+    return directions(routes.key(), _pt(d, "fromLat", "fromLng"), _pt(d, "toLat", "toLng"), steps=d.get("steps") is True)

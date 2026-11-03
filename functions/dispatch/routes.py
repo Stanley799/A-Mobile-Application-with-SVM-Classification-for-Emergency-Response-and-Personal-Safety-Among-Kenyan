@@ -3,6 +3,8 @@ the caller falls back to a straight-line estimate and the system keeps working. 
 (a Firebase secret). NEVER log the key."""
 import json
 import os
+import html
+import re
 import urllib.request
 
 MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
@@ -48,17 +50,70 @@ def matrix_seconds(key, origins, destinations, http=None):
         return {}
 
 
-def route(key, origin, dest, http=None):
+# Turn-by-turn steps (only requested when the app asks for them, so ordinary route calls cost and return what they always did).
+ROUTE_STEPS_MASK = (",routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,"
+                    "routes.legs.steps.staticDuration,routes.legs.steps.polyline.encodedPolyline")
+MAX_STEPS = 120
+MAX_INSTRUCTION_CHARS = 120
+_TAGS = re.compile(r"<[^>]*>")
+_MANEUVERS = {
+    "TURN_LEFT": "turn-left", "TURN_RIGHT": "turn-right", "TURN_SLIGHT_LEFT": "turn-slight-left", "TURN_SLIGHT_RIGHT": "turn-slight-right",
+    "TURN_SHARP_LEFT": "turn-sharp-left", "TURN_SHARP_RIGHT": "turn-sharp-right", "UTURN_LEFT": "uturn-left", "UTURN_RIGHT": "uturn-right",
+    "ROUNDABOUT_LEFT": "roundabout-left", "ROUNDABOUT_RIGHT": "roundabout-right", "RAMP_LEFT": "ramp-left", "RAMP_RIGHT": "ramp-right",
+    "FORK_LEFT": "fork-left", "FORK_RIGHT": "fork-right", "KEEP_LEFT": "keep-left", "KEEP_RIGHT": "keep-right", "MERGE": "merge", "STRAIGHT": "straight",
+}
+
+
+def clean_instruction(text, limit=MAX_INSTRUCTION_CHARS):
+    """Plain text for the turn banner: tags removed, entities decoded, spaces tidied, cut to `limit`."""
+    t = html.unescape(_TAGS.sub(" ", str(text if text is not None else "")))
+    return " ".join(t.split())[:limit]
+
+
+def _num(v):
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def normalize_steps(legs):
+    """Google's legs -> {"steps": [...up to 120...], "stepsTruncated": True when there were more (then no per-step lines)}. Never raises."""
+    raw = []
+    for leg in legs if isinstance(legs, list) else []:
+        for st in (leg.get("steps") if isinstance(leg, dict) else None) or []:
+            if isinstance(st, dict):
+                raw.append(st)
+    truncated = len(raw) > MAX_STEPS
+    out = []
+    for st in raw[:MAX_STEPS]:
+        nav = st.get("navigationInstruction") if isinstance(st.get("navigationInstruction"), dict) else {}
+        poly = st.get("polyline") if isinstance(st.get("polyline"), dict) else {}
+        dur = _secs(st.get("staticDuration"))
+        out.append({"instruction": clean_instruction(nav.get("instructions")), "maneuver": _MANEUVERS.get(nav.get("maneuver")),
+                    "distanceM": _num(st.get("distanceMeters")), "durationSec": int(round(dur)) if dur is not None else None,
+                    "polyline": None if truncated else (poly.get("encodedPolyline") or None)})
+    res = {"steps": out}
+    if truncated:
+        res["stepsTruncated"] = True
+    return res
+
+
+def route(key, origin, dest, http=None, steps=False):
     """Returns {'polyline': str, 'durationS': float, 'distanceM': int} or None."""
     if not key:
         return None
     try:
         body = {"origin": _wp(*origin)["waypoint"], "destination": _wp(*dest)["waypoint"], "travelMode": "DRIVE"}
-        data = _post(ROUTE_URL, key, "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline", body, http)
+        mask = "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline"
+        if steps:
+            mask += ROUTE_STEPS_MASK
+            body["polylineQuality"] = "HIGH_QUALITY"
+        data = _post(ROUTE_URL, key, mask, body, http)
         r = (data.get("routes") or [None])[0]
         if not r:
             return None
-        return {"polyline": (r.get("polyline") or {}).get("encodedPolyline", ""), "durationS": _secs(r.get("duration")) or 0.0, "distanceM": int(r.get("distanceMeters", 0))}
+        out = {"polyline": (r.get("polyline") or {}).get("encodedPolyline", ""), "durationS": _secs(r.get("duration")) or 0.0, "distanceM": int(r.get("distanceMeters", 0))}
+        if steps:
+            out.update(normalize_steps(r.get("legs")))
+        return out
     except Exception as e:  # noqa: BLE001
         print(f"[routes] route failed: {type(e).__name__}")
         return None
