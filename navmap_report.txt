@@ -1,0 +1,4681 @@
+=== dart files that use maps, tracks or routes ===
+  mobile/lib/features/ops/ops_map.dart  [GoogleMap(, TrackPoint]
+  mobile/lib/features/ops/ops_repository.dart  [TrackPoint]
+  mobile/lib/features/ops/ops_shell.dart  [TrackPoint]
+  mobile/lib/features/resident/map/help_map_screen.dart  [GoogleMap(]
+  mobile/lib/features/resident/map/help_models.dart  [TrackPoint]
+  mobile/lib/features/resident/map/help_repository.dart  [TrackPoint, incident_route, help_directions]
+  mobile/lib/features/resident/map/location_gate.dart  [GoogleMap(]
+  mobile/lib/features/resident/map/resident_track_publisher.dart  [TrackPublisher]
+  mobile/lib/features/resident/screens/home_screen.dart  [TrackPublisher]
+  mobile/lib/features/resident/status/alert_status_body.dart  [TrackPublisher]
+  mobile/lib/features/responder/active_job_screen.dart  [TrackPublisher]
+  mobile/lib/features/responder/job_map_screen.dart  [GoogleMap(, TrackPoint]
+  mobile/lib/features/responder/responder_shell.dart  [TrackPublisher]
+  mobile/lib/features/responder/track_publisher.dart  [TrackPublisher]
+  mobile/lib/features/responder/transport_screen.dart  [GoogleMap(]
+
+##### FILE: mobile/lib/features/resident/map/help_repository.dart (186 lines)
+<<<BEGIN>>>
+// Firestore and Cloud Function access for the resident help map. Streams never throw: errors become empty data so the screen stays usable.
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
+import 'help_models.dart';
+
+class IncidentInfo {
+  const IncidentInfo({
+    this.latitude,
+    this.longitude,
+    this.category,
+    this.subtype,
+    this.status,
+    this.landmark = '',
+    this.accuracyM,
+    this.feedbackSafe,
+    this.locationSource = 'gps',
+  });
+  final double? latitude;
+  final double? longitude;
+  final String? category;
+  final String? subtype;
+  final String? status;
+  final String landmark;
+  final double? accuracyM;
+  final bool? feedbackSafe;
+  final String locationSource;
+  bool get hasLocation => latitude != null && longitude != null;
+}
+
+class HelpRepository {
+  HelpRepository({FirebaseFirestore? db, FirebaseFunctions? functions})
+      : _db = db ?? FirebaseFirestore.instance,
+        _functions = functions;
+
+  final FirebaseFirestore _db;
+  FirebaseFunctions? _functions;
+
+  /// Created on first use: screens that never call a Cloud Function work without a Firebase app (tests).
+  FirebaseFunctions get _fn => _functions ??= FirebaseFunctions.instanceFor(region: 'europe-west1');
+
+  DocumentReference<Map<String, dynamic>> _incident(String id) => _db.collection('incidents').doc(id);
+
+  Stream<HelpState> watchOptions(String incidentId) => _incident(incidentId).collection('options').snapshots().map((q) {
+        final opts = <HelpOption>[];
+        HelpMeta meta = const HelpMeta();
+        for (final d in q.docs) {
+          if (d.id == 'meta') {
+            meta = HelpMeta.fromMap(d.data());
+          } else {
+            opts.add(HelpOption.fromMap(d.id, d.data()));
+          }
+        }
+        opts.sort((a, b) => a.rank.compareTo(b.rank));
+        return HelpState(options: opts, meta: meta, loaded: true);
+      }).handleError((_) {});
+
+  /// Live positions keyed by responder id.
+  Stream<Map<String, TrackPoint>> watchTracks(String incidentId) => _incident(incidentId).collection('tracks').snapshots().map((q) {
+        final out = <String, TrackPoint>{};
+        for (final d in q.docs) {
+          final p = TrackPoint.tryParse(d.data());
+          if (p != null) out[d.id] = p;
+        }
+        return out;
+      }).handleError((_) {});
+
+  /// Where the alert is, and what kind of emergency it is.
+  Stream<IncidentInfo> watchIncident(String incidentId) => _incident(incidentId).snapshots().map((s) {
+        final d = s.data();
+        final loc = d?['location'];
+        final fb = d?['residentFeedback'];
+        return IncidentInfo(
+          latitude: loc is GeoPoint ? loc.latitude : null,
+          longitude: loc is GeoPoint ? loc.longitude : null,
+          category: d?['category']?.toString(),
+          subtype: d?['subtype']?.toString(),
+          status: d?['status']?.toString(),
+          landmark: (d?['landmark'] ?? '').toString(),
+          accuracyM: (d?['locationAccuracyM'] as num?)?.toDouble(),
+          feedbackSafe: fb is Map && fb['safe'] is bool ? fb['safe'] as bool : null,
+          locationSource: (d?['locationSource'] ?? 'gps').toString(),
+        );
+      }).handleError((_) {});
+
+  /// Landmark (in words) and how precise the fix was. firestore.rules allow ONLY these three keys, while the alert is open.
+  Future<bool> saveContext(String incidentId, {String? landmark, double? accuracyM, String? source}) async {
+    try {
+      await _incident(incidentId).update({
+        if (landmark != null) 'landmark': landmark.length > 120 ? landmark.substring(0, 120) : landmark,
+        if (accuracyM != null) 'locationAccuracyM': accuracyM,
+        if (source != null) 'locationSource': source,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// "Are you safe now?" answered once after the alert closed. Never required.
+  Future<bool> saveFeedback(String incidentId, {required bool safe, int? rating}) async {
+    try {
+      await _incident(incidentId).update({
+        'residentFeedback': {'safe': safe, if (rating != null) 'rating': rating},
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Saves a late or corrected location. firestore.rules allow ONLY location + updatedAt, and only while the alert is active.
+  Future<bool> saveLocation(String incidentId, double lat, double lng) async {
+    try {
+      await _incident(incidentId).update({'location': GeoPoint(lat, lng), 'updatedAt': FieldValue.serverTimestamp()});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The resident closes their own alert. firestore.rules allow ONLY status/cancelledAt/updatedAt, and only while it is active.
+  Future<bool> cancelIncident(String incidentId) async {
+    try {
+      await _incident(incidentId).update({
+        'status': 'Cancelled',
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Throws a FirebaseFunctionsException whose message is safe to show.
+  Future<void> requestUnit(String incidentId, String responderId) => _fn.httpsCallable('resident_request_unit').call<dynamic>({'incidentId': incidentId, 'responderId': responderId});
+
+  Future<RouteInfo?> route(String incidentId, String responderId) async {
+    try {
+      final r = await _fn.httpsCallable('incident_route').call<dynamic>({'incidentId': incidentId, 'responderId': responderId});
+      final m = Map<String, dynamic>.from(r.data as Map);
+      if (m['ok'] != true) return null;
+      return RouteInfo(
+        points: decodePolyline((m['polyline'] ?? '').toString()),
+        etaSeconds: (m['etaS'] as num?)?.toDouble() ?? 0,
+        distanceMeters: (m['distanceM'] as num?)?.toInt() ?? 0,
+        estimate: m['estimate'] == true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Street label for "You are at ...". null when the server key is not set or Google has nothing.
+  Future<String?> geocode(double lat, double lng) async {
+    try {
+      final r = await _fn.httpsCallable('help_geocode').call<dynamic>({'lat': lat, 'lng': lng});
+      final m = Map<String, dynamic>.from(r.data as Map);
+      final label = (m['label'] ?? '').toString();
+      return m['ok'] == true && label.isNotEmpty ? label : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Route from the resident to a place, drawn inside the app. Falls back to a straight-line estimate on the server.
+  Future<RouteInfo?> directions(double fromLat, double fromLng, double toLat, double toLng) async {
+    try {
+      final r = await _fn.httpsCallable('help_directions').call<dynamic>({'fromLat': fromLat, 'fromLng': fromLng, 'toLat': toLat, 'toLng': toLng});
+      final m = Map<String, dynamic>.from(r.data as Map);
+      if (m['ok'] != true) return null;
+      return RouteInfo(
+        points: decodePolyline((m['polyline'] ?? '').toString()),
+        etaSeconds: (m['etaS'] as num?)?.toDouble() ?? 0,
+        distanceMeters: (m['distanceM'] as num?)?.toInt() ?? 0,
+        estimate: m['estimate'] == true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/resident/map/help_models.dart (206 lines)
+<<<BEGIN>>>
+// Data classes for the resident help map. Parsing is defensive: missing or odd fields never crash the screen.
+import 'dart:math' as math;
+
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
+double? _d(Object? v) => v is num ? v.toDouble() : null;
+List<String> _list(Object? v) => [for (final x in (v as List? ?? const [])) x.toString()];
+
+/// One card on the resident's help screen (written by the dispatch Cloud Function into incidents/{id}/options/rN).
+class HelpOption {
+  const HelpOption({
+    required this.rank,
+    required this.kind,
+    required this.refId,
+    required this.name,
+    required this.orgType,
+    required this.status,
+    this.latitude,
+    this.longitude,
+    this.distanceKm,
+    this.etaMin,
+    this.etaIsRoad = false,
+    this.phone = '',
+    this.phones = const [],
+    this.is24h,
+    this.verified = false,
+    this.address = '',
+    this.caps = const [],
+    this.why = const [],
+  });
+
+  final int rank;
+  final String kind; // live | place | hotline
+  final String refId;
+  final String name;
+  final String orgType;
+  final String status; // live: available | asking | accepted | enroute | arrived   place: directions   hotline: call
+  final double? latitude;
+  final double? longitude;
+  final double? distanceKm;
+  final double? etaMin;
+  final bool etaIsRoad;
+  final String phone;
+  final List<String> phones;
+  final bool? is24h;
+  final bool verified;
+  final String address;
+  final List<String> caps;
+  final List<String> why;
+
+  bool get isLive => kind == 'live';
+  bool get hasPosition => latitude != null && longitude != null;
+  bool get holdsJob => status == 'accepted' || status == 'enroute' || status == 'arrived';
+  bool get canRequest => isLive && status == 'available';
+
+  /// "6 min" for road times, "about 6 min" for estimates.
+  String? get etaText {
+    final e = etaMin;
+    if (e == null) return null;
+    final m = e.round().clamp(1, 999);
+    return etaIsRoad ? '$m min' : 'about $m min';
+  }
+
+  factory HelpOption.fromMap(String id, Map<String, dynamic> m) => HelpOption(
+    rank: (m['rank'] as num?)?.toInt() ?? int.tryParse(id.replaceAll(RegExp('[^0-9]'), '')) ?? 9,
+    kind: (m['kind'] ?? 'place').toString(),
+    refId: (m['refId'] ?? id).toString(),
+    name: (m['name'] ?? '').toString(),
+    orgType: (m['orgType'] ?? '').toString(),
+    status: (m['status'] ?? '').toString(),
+    latitude: _d(m['lat']),
+    longitude: _d(m['lng']),
+    distanceKm: _d(m['distanceKm']),
+    etaMin: _d(m['etaMin']),
+    etaIsRoad: m['etaSource'] == 'road',
+    phone: (m['phone'] ?? '').toString(),
+    phones: _list(m['phones']),
+    is24h: m['is24h'] is bool ? m['is24h'] as bool : null,
+    verified: m['verified'] == true,
+    address: (m['address'] ?? '').toString(),
+    caps: _list(m['caps']),
+    why: _list(m['why']),
+  );
+}
+
+/// options/meta: what the banner at the top should say.
+class HelpMeta {
+  const HelpMeta({this.mode = 'map', this.state = '', this.failedCount = 0, this.asking = const [], this.held = false, this.suggestCall = false, this.showNumbers = false, this.noLive = true, this.sensitive = false});
+  final String mode; // map | helplines
+  final String state;
+  final int failedCount;
+  final List<String> asking;
+  final bool held;
+  final bool suggestCall;
+  final bool showNumbers;
+  final bool noLive;
+  final bool sensitive;
+
+  factory HelpMeta.fromMap(Map<String, dynamic>? m) => m == null
+      ? const HelpMeta()
+      : HelpMeta(
+          mode: (m['mode'] ?? 'map').toString(),
+          state: (m['state'] ?? '').toString(),
+          failedCount: (m['failedCount'] as num?)?.toInt() ?? 0,
+          asking: _list(m['asking']),
+          held: m['held'] == true,
+          suggestCall: m['suggestCall'] == true,
+          showNumbers: m['showNumbers'] == true,
+          noLive: m['noLive'] != false,
+          sensitive: m['sensitive'] == true,
+        );
+}
+
+class HelpState {
+  const HelpState({this.options = const [], this.meta = const HelpMeta(), this.loaded = false});
+  final List<HelpOption> options;
+  final HelpMeta meta;
+  final bool loaded;
+}
+
+/// Live position of one unit that holds the job (incidents/{id}/tracks/{responderId}).
+class TrackPoint {
+  const TrackPoint({required this.latitude, required this.longitude, this.heading, this.speed, this.at});
+  final double latitude;
+  final double longitude;
+  final double? heading;
+  final double? speed;
+  final DateTime? at;
+
+  static TrackPoint? tryParse(Map<String, dynamic>? m) {
+    final la = _d(m?['lat']);
+    final lo = _d(m?['lng']);
+    if (la == null || lo == null) return null;
+    final at = m?['at'];
+    return TrackPoint(latitude: la, longitude: lo, heading: _d(m?['heading']), speed: _d(m?['speed']), at: at is Timestamp ? at.toDate() : (at is DateTime ? at : null));
+  }
+}
+
+class RouteInfo {
+  const RouteInfo({required this.points, required this.etaSeconds, required this.distanceMeters, this.estimate = false});
+  final List<({double lat, double lng})> points;
+  final double etaSeconds;
+  final int distanceMeters;
+  final bool estimate;
+}
+
+/// Decodes a Google encoded polyline (precision 5). Returns [] for empty or malformed input.
+List<({double lat, double lng})> decodePolyline(String encoded) {
+  final out = <({double lat, double lng})>[];
+  var index = 0, lat = 0, lng = 0;
+  try {
+    while (index < encoded.length) {
+      for (var axis = 0; axis < 2; axis++) {
+        var shift = 0, result = 0, b = 0;
+        do {
+          b = encoded.codeUnitAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+        } while (b >= 0x20);
+        final delta = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+        if (axis == 0) {
+          lat += delta;
+        } else {
+          lng += delta;
+        }
+      }
+      out.add((lat: lat / 1e5, lng: lng / 1e5));
+    }
+  } catch (_) {
+    return const [];
+  }
+  return out;
+}
+
+/// Straight-line distance in km (used only for the arrival check on the phone).
+double haversineKm(double la1, double lo1, double la2, double lo2) {
+  const r = 6371.0;
+  final dLa = (la2 - la1) * math.pi / 180, dLo = (lo2 - lo1) * math.pi / 180;
+  final a = math.pow(math.sin(dLa / 2), 2) + math.cos(la1 * math.pi / 180) * math.cos(la2 * math.pi / 180) * math.pow(math.sin(dLo / 2), 2);
+  return 2 * r * math.asin(math.sqrt(a));
+}
+
+/// Emergency numbers always available to the resident. Verify them with the providers before publishing.
+const List<({String label, String number})> kEmergencyNumbers = [
+  (label: 'Police / general emergency', number: '999'),
+  (label: 'General emergency', number: '112'),
+  (label: 'Kenya Red Cross', number: '1199'),
+  (label: 'Emergency line', number: '922'),
+];
+
+const Map<String, String> kOrgLabels = {
+  'hospital': 'Hospital',
+  'clinic': 'Clinic',
+  'police': 'Police',
+  'fire': 'Fire & rescue',
+  'ambulance_operator': 'Ambulance service',
+  'helpline': 'Helpline',
+  'Ambulance': 'Ambulance',
+  'Fire': 'Fire & rescue',
+  'Police': 'Police',
+  'Hospital': 'Hospital',
+  'Community': 'Community responder',
+  'Maritime': 'Maritime rescue',
+  'Other': 'Responder',
+};
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/resident/map/map_style.dart (17 lines)
+<<<BEGIN>>>
+// Emergency map style: no shops, restaurants, malls or transit clutter. Roads and water stay readable; our own pins are the loudest things.
+const String kEmergencyMapStyle = '''
+[
+  {"featureType":"poi","stylers":[{"visibility":"off"}]},
+  {"featureType":"transit","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.land_parcel","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.neighborhood","elementType":"labels","stylers":[{"visibility":"simplified"}]},
+  {"featureType":"road","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#f6d9a8"}]},
+  {"featureType":"road.local","elementType":"geometry","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#f3f1ec"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#cfe3ee"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#5f5f5f"}]}
+]
+''';
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/resident/map/pin_factory.dart (72 lines)
+<<<BEGIN>>>
+// Draws round map pins (coloured disc + white icon) once and caches them. If anything fails (for example the icon font did not load)
+// the caller gets null and uses the standard coloured marker instead, so the map never breaks.
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+import 'emergency_layers.dart';
+
+class PinStyle {
+  const PinStyle(this.color, this.icon, this.hue);
+  final Color color;
+  final IconData icon;
+  final double hue;
+}
+
+const Map<String, PinStyle> kPinStyles = {
+  'hospital': PinStyle(Color(0xFFC62828), Icons.local_hospital, BitmapDescriptor.hueRed),
+  'clinic': PinStyle(Color(0xFFC2185B), Icons.medical_services, BitmapDescriptor.hueRose),
+  'ambulance': PinStyle(Color(0xFF2E7D32), Icons.emergency, BitmapDescriptor.hueGreen),
+  'police': PinStyle(Color(0xFF1565C0), Icons.local_police, BitmapDescriptor.hueAzure),
+  'fire': PinStyle(Color(0xFFBF360C), Icons.local_fire_department, BitmapDescriptor.hueOrange),
+  'helpline': PinStyle(Color(0xFF6A1B9A), Icons.support_agent, BitmapDescriptor.hueViolet),
+  'live': PinStyle(Color(0xFF00695C), Icons.directions_car, BitmapDescriptor.hueGreen),
+  'me': PinStyle(Color(0xFF1A73E8), Icons.circle, BitmapDescriptor.hueBlue),
+};
+
+String pinKeyFor(PlaceType t) => t.name;
+
+class PinFactory {
+  static final Map<String, BitmapDescriptor> _cache = {};
+
+  /// Returns a custom pin or null (use [fallback] instead).
+  static Future<BitmapDescriptor?> pin(String key, {bool big = false}) async {
+    final id = big ? '$key!' : key;
+    final hit = _cache[id];
+    if (hit != null) return hit;
+    final style = kPinStyles[key];
+    if (style == null) return null;
+    try {
+      final logical = big ? 54.0 : 40.0;
+      const scale = 2.0;
+      final size = logical * scale;
+      final rec = ui.PictureRecorder();
+      final c = Canvas(rec);
+      final center = Offset(size / 2, size / 2);
+      c.drawCircle(center + const Offset(0, 2), size / 2 - 3, Paint()..color = const Color(0x33000000));
+      c.drawCircle(center, size / 2 - 3, Paint()..color = Colors.white);
+      c.drawCircle(center, size / 2 - 8, Paint()..color = style.color);
+      if (key != 'me') {
+        final tp = TextPainter(
+          text: TextSpan(text: String.fromCharCode(style.icon.codePoint), style: TextStyle(fontSize: size * 0.48, fontFamily: style.icon.fontFamily, package: style.icon.fontPackage, color: Colors.white)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(c, center - Offset(tp.width / 2, tp.height / 2));
+      }
+      final img = await rec.endRecording().toImage(size.toInt(), size.toInt());
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return null;
+      final bytes = Uint8List.view(data.buffer);
+      final d = BitmapDescriptor.bytes(bytes, width: logical, height: logical);
+      _cache[id] = d;
+      return d;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static BitmapDescriptor fallback(String key) => BitmapDescriptor.defaultMarkerWithHue((kPinStyles[key] ?? kPinStyles['hospital']!).hue);
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/resident/map/maps_available.dart (72 lines)
+<<<BEGIN>>>
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'maps_runtime_stub.dart'
+    if (dart.library.js_interop) 'maps_runtime_web.dart' as maps_runtime;
+
+bool hasGoogleMapsRuntime() {
+  if (!kIsWeb) return true;
+  return maps_runtime.isAvailable;
+}
+
+class MapsUnavailableView extends StatelessWidget {
+  const MapsUnavailableView({
+    super.key,
+    this.title = 'Map unavailable',
+    this.message = 'Google Maps is not available in this browser because the Maps JavaScript API key has not been configured.',
+    this.primaryAction,
+  });
+
+  final String title;
+  final String message;
+  final Widget? primaryAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE5E1DA)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      height: 1.5,
+                      color: Color(0xFF5F5F5F),
+                    ),
+                  ),
+                  if (primaryAction != null) ...[
+                    const SizedBox(height: 18),
+                    primaryAction!,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/core/ui/tokens.dart (44 lines)
+<<<BEGIN>>>
+// Design tokens. Every text/background pair below was checked with WCAG 2 contrast and APCA (see Phase 4 design document).
+// Rule of thumb: body text >= 4.5:1, large text and icons >= 3:1. Change a colour only after re-checking it.
+import 'package:flutter/material.dart';
+
+class Tk {
+  Tk._();
+  // text
+  static const ink = Color(0xFF111111); // 18.9:1 on white
+  static const mute = Color(0xFF4A4A4A); // 7.9:1 on the page background, >= 5.5:1 on glass
+  static const faint = Color(0xFF6B6B6B); // 5.3:1 on white: captions only
+  // surfaces
+  static const bg = Color(0xFFF4F2EE);
+  static const card = Colors.white;
+  static const line = Color(0xFFE5E1DA);
+  // brand and status
+  static const brand = Color(0xFF0F766E); // white text 5.47:1
+  static const brandDeep = Color(0xFF0B5F58); // brand-coloured text: 7.5:1 on white, >= 4.7:1 on glass
+  static const brandTint = Color(0xFFE0F2F1);
+  static const danger = Color(0xFFB33A3A); // white text 5.86:1
+  static const dangerTint = Color(0xFFFFF4F4);
+  static const warnInk = Color(0xFF9C3700); // on warnTint 6.5:1
+  static const warnTint = Color(0xFFFFF3E0);
+  static const okInk = Color(0xFF1B5E20);
+  static const okTint = Color(0xFFE8F5E9);
+  static const you = Color(0xFF1A73E8);
+  // place kinds: white icon/text on each is >= 4.5:1
+  static const hospital = Color(0xFFC62828);
+  static const clinic = Color(0xFFC2185B);
+  static const ambulance = Color(0xFF2E7D32);
+  static const police = Color(0xFF1565C0);
+  static const fire = Color(0xFFBF360C);
+  static const helpline = Color(0xFF6A1B9A);
+  static const live = Color(0xFF00695C);
+
+  // shape and motion
+  static const rCard = 20.0;
+  static const rSheet = 28.0;
+  static const rPill = 999.0;
+  static const fast = Duration(milliseconds: 180);
+  static const normal = Duration(milliseconds: 320);
+  static const spring = Curves.easeOutBack; // gentle overshoot, never linear
+  static const settle = Curves.easeOutCubic;
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/ops/ops_tokens.dart (44 lines)
+<<<BEGIN>>>
+// Shared graphite tokens for the staff console. Colours come from the approved responder design
+// (features/responder/responder_theme.dart) so both staff-facing surfaces match.
+import 'package:flutter/material.dart';
+
+import '../responder/responder_theme.dart';
+
+class OT {
+  static const bg = RC.bg;
+  static const panel = RC.card;
+  static const raised = RC.surface2;
+  static const line = RC.line;
+  static const text = RC.text;
+  static const muted = RC.muted;
+  static const soft = RC.soft;
+  static const accent = RC.accent;
+  static const alert = RC.alert;
+
+  static Color priority(String p) => RC.priority(p);
+
+  static const double gap = 12;
+  static const double pad = 16;
+  static const double radius = 14;
+
+  static BoxDecoration panelDecoration() => BoxDecoration(
+    color: panel,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: line),
+  );
+}
+
+/// The four staff states of a unit, in words.
+String unitGroup(String availability, DateTime? lastSeenAt, {DateTime? now}) {
+  final seen = lastSeenAt;
+  final stale = seen != null && (now ?? DateTime.now()).difference(seen).inSeconds > 120;
+  if (stale) return 'Stale GPS';
+  return switch (availability) {
+    'Available' => 'Available',
+    'Busy' => 'On a job',
+    _ => 'Offline',
+  };
+}
+
+const List<String> kUnitGroups = ['Available', 'On a job', 'Stale GPS', 'Offline'];
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/responder/active_job_screen.dart (1015 lines)
+<<<BEGIN>>>
+// After accepting: who to call, where to go, the three steps, transport, notes and the completion summary.
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/models/dispatch_models.dart';
+import '../resident/status/location_confidence.dart' show accuracyShort;
+import 'incoming_alert_screen.dart' show openInMaps;
+import 'job_map_screen.dart';
+import 'more_units_sheet.dart';
+import 'responder_repository.dart';
+import 'responder_theme.dart';
+import 'sos_sheet.dart';
+import 'track_publisher.dart';
+import 'transport_models.dart';
+import 'transport_screen.dart';
+
+class ActiveJobScreen extends StatefulWidget {
+  const ActiveJobScreen({super.key, required this.offerId, required this.repo});
+  final String offerId;
+  final ResponderRepository repo;
+
+  @override
+  State<ActiveJobScreen> createState() => _ActiveJobScreenState();
+}
+
+class _ActiveJobScreenState extends State<ActiveJobScreen> {
+  bool _busy = false;
+  bool _stoodDown = false;
+  bool _wellbeingDismissed = false;
+
+  final _notes = TextEditingController();
+  final _notesFocus = FocusNode();
+  bool _notesLoaded = false;
+  bool _notesDirty = false;
+  bool _notesSaving = false;
+  String? _notesError;
+  String _savedNote = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _notesFocus.addListener(() {
+      if (!_notesFocus.hasFocus && _notesDirty) unawaited(_saveNotes());
+    });
+  }
+
+  /// Runs from the one offer stream the screen already listens to.
+  void _syncFromOffer(Offer o) {
+    if (!_notesLoaded) {
+      _notesLoaded = true;
+      _notes.text = o.note;
+      _savedNote = o.note;
+    }
+  }
+
+  @override
+  void dispose() {
+    _notesFocus.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _move(String status) async {
+    setState(() => _busy = true);
+    try {
+      await widget.repo.respond(widget.offerId, status);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update. Check your connection and try again.',
+            ),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  static const _withdrawReasons = [
+    ('cannot_reach', 'I cannot get there', 'Blocked route, no vehicle or too far.'),
+    ('scene_unsafe', 'The scene is not safe for me', 'I need backup or a different unit.'),
+    ('unit_broken_down', 'My unit has broken down', 'Vehicle or equipment failure.'),
+    ('no_longer_available', 'I am no longer available', 'Something else came up.'),
+  ];
+
+  Future<void> _standDown() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          children: [
+            Text(
+              'Stand down from this job?',
+              style: Theme.of(c).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Only do this if you truly cannot respond. The system will immediately alert the next nearest unit, and the caller stays informed.',
+              style: TextStyle(color: RC.soft, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            for (final (value, label, hint) in _withdrawReasons)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(hint),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(c, value),
+              ),
+            const SizedBox(height: 4),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Keep the job'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      // The server releases this unit's availability when it records the withdrawal.
+      await widget.repo.respond(widget.offerId, 'withdrawn', withdrawReason: picked);
+      if (mounted) {
+        setState(() => _stoodDown = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You stood down. The next nearest unit is being alerted.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not stand down. Check your connection and try again.')),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _confirmComplete() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Complete this job?'),
+        content: const Text(
+          'Only complete it when the person has been helped or handed over.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+    if (yes == true) await _move('completed');
+  }
+
+  String? _moreUnitsLine(Offer o) {
+    final mu = o.moreUnits;
+    if (mu == null) return null;
+    final at = mu.requestedAt;
+    final when = at == null
+        ? ''
+        : ' at ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    final count = mu.count == 1 ? '1 unit' : '${mu.count} units';
+    return 'Requested: $count · ${moreUnitRoleLabel(mu.role)}$when. Dispatch has this request.';
+  }
+
+  Future<void> _openMoreUnits() async {
+    final done = await showMoreUnitsSheet(
+      context,
+      onSubmit: (role, count, note) => widget.repo.requestMoreUnits(
+        widget.offerId,
+        role: role,
+        count: count,
+        note: note,
+      ),
+    );
+    if (done == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Dispatch has been asked. Keep working. You will see an update here.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _startTransport(Offer o) async {
+    final lat = o.latitude, lng = o.longitude;
+    if (lat == null || lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The scene has no map position. Use Google Maps.')),
+      );
+      return;
+    }
+    final picked = await showTransportPicker(
+      context,
+      load: () => widget.repo.hospitalsNear(lat, lng),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.repo.startTransport(
+        widget.offerId,
+        destinationId: picked.id,
+        destinationName: picked.name,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not start transport. Check your connection and try again.'),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _hospitalArrived() async {
+    setState(() => _busy = true);
+    try {
+      await widget.repo.arriveAtHospital(widget.offerId);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update. Check your connection and try again.'),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _openTransportRoute(Offer o) async {
+    final leg = o.transport;
+    if (leg == null) return;
+    final place = await widget.repo.facility(leg.destinationId);
+    final fallback = place ??
+        TransportDestination(
+          id: leg.destinationId,
+          name: leg.destinationName,
+          type: 'hospital',
+          latitude: o.latitude,
+          longitude: o.longitude,
+        );
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TransportMapScreen(offer: o, destination: fallback),
+      ),
+    );
+  }
+
+  Future<void> _saveNotes() async {
+    final text = _notes.text.trim();
+    if (text == _savedNote) {
+      if (mounted) setState(() => _notesDirty = false);
+      return;
+    }
+    setState(() {
+      _notesSaving = true;
+      _notesError = null;
+    });
+    try {
+      await widget.repo.saveNote(widget.offerId, text);
+      _savedNote = text;
+      if (mounted) {
+        setState(() {
+          _notesDirty = false;
+          _notesSaving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _notesSaving = false;
+          _notesError = 'Not saved. Check your connection.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Offer?>(
+      stream: widget.repo.watchOffer(widget.offerId),
+      builder: (context, snap) {
+        final o = snap.data;
+        if (o != null) _syncFromOffer(o);
+        return Scaffold(
+          backgroundColor: RC.bg,
+          appBar: AppBar(
+            backgroundColor: RC.bg,
+            foregroundColor: RC.text,
+            elevation: 0,
+            title: const Text('Active job'),
+            actions: [
+              PopupMenuButton<String>(
+                tooltip: 'More actions',
+                onSelected: (value) {
+                  if (value == 'sos') {
+                    showSosSheet(context, widget.repo, incidentId: o?.incidentId);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'sos',
+                    child: Row(
+                      children: [
+                        Icon(Icons.sos_rounded, color: RC.alert),
+                        SizedBox(width: 10),
+                        Text(
+                          'I need help',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: RC.alert,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          body: snap.hasError
+              ? const Center(
+                  child: Text(
+                    'Unable to load this response. Check your connection and try again.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: RC.soft),
+                  ),
+                )
+              : o == null
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                    children: [_body(o)],
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _body(Offer o) {
+    final closed =
+        o.status == 'withdrawn' ||
+        o.status == 'completed' ||
+        o.status == 'expired';
+    final held = o.isActiveJob;
+    final name = (o.residentFirstName ?? '').trim();
+    final phone = o.residentPhone ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ValueListenableBuilder<String?>(
+          valueListenable: TrackPublisher.instance.problem,
+          builder: (context, problem, _) {
+            if (problem == null || problem.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4F4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                problem,
+                style: const TextStyle(
+                  color: Color(0xFFB33A3A),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            );
+          },
+        ),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: RC.priority(o.priority),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            '${o.priorityBanner} · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        if (o.isActiveJob || o.status == 'completed') ...[
+          const SizedBox(height: 12),
+          _progress(o.status),
+        ],
+        if (o.summary.isNotEmpty ||
+            (o.freeText.isNotEmpty && !o.confidential) ||
+            o.landmark.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: RC.card,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('INCIDENT BRIEF'),
+                if (o.summary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    o.summary,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: RC.text,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (o.freeText.isNotEmpty && !o.confidential) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    o.freeText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: RC.soft,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (o.landmark.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Landmark: ${o.landmark}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: RC.soft,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (accuracyShort(o.accuracyM) case final String line) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    line,
+                    style: const TextStyle(fontSize: 13, color: RC.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+        if (closed) ...[
+          const SizedBox(height: 16),
+          _closedCard(o),
+        ],
+        if (o.status == 'completed') ...[
+          const SizedBox(height: 12),
+          _summaryCard(o),
+          if (o.priority == 'High' && !_wellbeingDismissed) ...[
+            const SizedBox(height: 12),
+            _wellbeingCard(),
+          ],
+        ],
+        if (o.transport != null) ...[
+          const SizedBox(height: 12),
+          _transportCard(o),
+        ],
+        Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionLabel('CALLER'),
+              const SizedBox(height: 8),
+              Text(
+                name.isEmpty ? 'Resident' : name,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: RC.text,
+                ),
+              ),
+              if (phone.isNotEmpty)
+                Text(
+                  phone,
+                  style: const TextStyle(fontSize: 15, color: RC.soft),
+                ),
+              const SizedBox(height: 12),
+              BigButton(
+                label: phone.isEmpty ? 'Phone not available' : 'Call caller',
+                height: 52,
+                color: RC.accept,
+                onPressed: phone.isEmpty
+                    ? null
+                    : () => launchUrl(Uri(scheme: 'tel', path: phone)),
+              ),
+              const SizedBox(height: 10),
+              if (o.isActiveJob) ...[
+                BigButton(
+                  label: 'Live map — see the caller move',
+                  height: 52,
+                  color: RC.accent,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => JobMapScreen(offer: o)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              BigButton(
+                label: 'Open location in Google Maps',
+                filled: false,
+                height: 52,
+                onPressed: () => openInMaps(o.latitude, o.longitude),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${o.distanceKm.toStringAsFixed(1)} km from where you were, straight line',
+                style: const TextStyle(fontSize: 12, color: RC.muted),
+              ),
+            ],
+          ),
+        ),
+        if (held || o.status == 'completed') ...[
+          const SizedBox(height: 16),
+          _notesCard(),
+        ],
+        const SizedBox(height: 16),
+        const SectionLabel('WHAT WE KNOW'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final f in o.flags) Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
+            Chip2(
+              o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people',
+              RC.infoChipBg,
+              RC.infoChipFg,
+            ),
+          ],
+        ),
+        if (o.needs.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const SectionLabel('RESPONSE CAPABILITIES'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final need in o.needs)
+                Chip2(roleLabel(need), RC.needBg, RC.needFg),
+            ],
+          ),
+        ],
+        if (held) ...[
+          const SizedBox(height: 16),
+          _moreUnitsCard(o),
+        ],
+        const SizedBox(height: 24),
+        if (!closed) ...[
+          if (o.status == 'accepted')
+            BigButton(
+              label: "I'm on my way",
+              onPressed: _busy ? null : () => _move('enroute'),
+            ),
+          if (o.status == 'enroute')
+            BigButton(
+              label: 'I have arrived',
+              onPressed: _busy ? null : () => _move('arrived'),
+            ),
+          if (o.status == 'arrived') ...[
+            if (_needsTransport(o) && o.transport == null) ...[
+              BigButton(
+                label: 'Start transport',
+                color: RC.accent,
+                onPressed: _busy ? null : () => _startTransport(o),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (_needsTransport(o) && o.transport != null && !o.transport!.hasArrived) ...[
+              BigButton(
+                label: 'I have arrived at the hospital',
+                color: RC.accent,
+                onPressed: _busy ? null : _hospitalArrived,
+              ),
+              const SizedBox(height: 10),
+            ],
+            BigButton(
+              label: 'Complete job',
+              onPressed: _busy ? null : _confirmComplete,
+            ),
+          ],
+          if (o.status == 'accepted' || o.status == 'enroute') ...[
+            const SizedBox(height: 10),
+            Center(
+              child: TextButton.icon(
+                onPressed: _busy ? null : _standDown,
+                icon: const Icon(Icons.exit_to_app, size: 18),
+                label: const Text("I can't take this job"),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  static bool _needsTransport(Offer o) =>
+      o.role == 'medical_transport' || o.needs.contains('medical_transport');
+
+  Widget _closedCard(Offer o) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: RC.card,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          o.status == 'completed'
+              ? 'Job completed. Thank you.'
+              : _stoodDown
+              ? 'You stood down from this job. Dispatch has alerted the next nearest unit, and the caller can see the update.'
+              : o.withdrawReason == 'incident_cancelled'
+              ? 'The resident cancelled this alert. You can stand down.'
+              : 'This job is no longer open.',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: RC.text,
+          ),
+        ),
+        if (_stoodDown) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'You are back to Available, so you can take the next call.',
+            style: TextStyle(fontSize: 13, color: RC.soft, height: 1.4),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  /// 2.6: Beacon-style response times, from server-stamped offer times.
+  Widget _summaryCard(Offer o) {
+    final received = o.createdAt;
+    final accepted = o.timeFor('accepted');
+    final arrived = o.timeFor('arrived');
+    final done = o.timeFor('completed') ?? o.respondedAt;
+    final feedback = o.callerFeedbackSafe;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('RESPONSE TIMES'),
+          const SizedBox(height: 10),
+          _summaryRow('Received to accepted', received, accepted),
+          _summaryRow('Accepted to arrived', accepted, arrived),
+          _summaryRow('Arrived to complete', arrived, done),
+          if (feedback != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  feedback ? Icons.check_circle_outline : Icons.error_outline,
+                  size: 18,
+                  color: feedback ? RC.accept : RC.medium,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    feedback
+                        ? 'Caller confirmed safe'
+                        : 'Caller reported still needing help',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: feedback ? RC.accept : RC.medium,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, DateTime? from, DateTime? to) {
+    final raw = from == null || to == null
+        ? null
+        : to.difference(from).inSeconds;
+    final seconds = raw == null || raw >= 0 ? raw : 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13.5, color: RC.soft),
+            ),
+          ),
+          Text(
+            seconds == null
+                ? 'Not recorded'
+                : seconds < 60
+                ? '${seconds < 0 ? 0 : seconds} s'
+                : '${seconds ~/ 60} min ${seconds % 60} s',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: seconds == null ? RC.muted : RC.text,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 2.8: shown once after a High priority completion. Nothing is stored.
+  Widget _wellbeingCard() => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: RC.surface2,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: RC.line),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'That was a demanding call. If you want to talk to someone, ask your supervisor about peer support.',
+          style: TextStyle(fontSize: 14.5, color: RC.text, height: 1.4),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => setState(() => _wellbeingDismissed = true),
+            child: const Text('Dismiss'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _transportCard(Offer o) {
+    final leg = o.transport!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(
+            leg.hasArrived ? 'TRANSPORT COMPLETE' : 'TRANSPORTING TO',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            leg.destinationName,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: RC.text,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            leg.hasArrived
+                ? 'Arrived${_travelText(leg) == null ? '' : ' · ${_travelText(leg)} from the scene'}'
+                : 'Take the patient there now. The route is in the app.',
+            style: const TextStyle(fontSize: 13, color: RC.soft, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => _openTransportRoute(o),
+            icon: const Icon(Icons.route_outlined, size: 18),
+            label: const Text('Open route'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String? _travelText(TransportLeg leg) {
+    final d = leg.travelTime;
+    if (d == null) return null;
+    final s = d.inSeconds;
+    return s < 60 ? '$s s' : '${s ~/ 60} min ${s % 60} s';
+  }
+
+  /// 2.7: notes are available at any time while the unit holds the job, saved when the field loses focus.
+  Widget _notesCard() => Container(
+    margin: const EdgeInsets.only(top: 16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: RC.card,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('INCIDENT NOTES'),
+        const SizedBox(height: 4),
+        const Text(
+          'Only you and dispatch can see these.',
+          style: TextStyle(fontSize: 12, color: RC.muted),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _notes,
+          focusNode: _notesFocus,
+          maxLength: 500,
+          minLines: 3,
+          maxLines: 6,
+          style: const TextStyle(color: RC.text, fontSize: 14.5, height: 1.4),
+          onChanged: (_) {
+            if (!_notesDirty) setState(() => _notesDirty = true);
+          },
+          decoration: InputDecoration(
+            hintText: 'Street, gate, patient condition, anything the next unit should know.',
+            hintStyle: const TextStyle(color: RC.muted, height: 1.4),
+            filled: true,
+            fillColor: RC.surface2,
+            counterStyle: const TextStyle(color: RC.muted, fontSize: 11),
+            border: const OutlineInputBorder(
+              borderSide: BorderSide(color: RC.line),
+            ),
+          ),
+        ),
+        Row(
+          children: [
+            if (_notesSaving)
+              const Text(
+                'Saving…',
+                style: TextStyle(fontSize: 12, color: RC.muted),
+              )
+            else if (_notesError != null)
+              Expanded(
+                child: Text(
+                  _notesError!,
+                  style: const TextStyle(fontSize: 12, color: RC.alert),
+                ),
+              )
+            else if (_notesDirty)
+              const Text(
+                'Tap outside the box to save.',
+                style: TextStyle(fontSize: 12, color: RC.muted),
+              )
+            else if (_savedNote.isNotEmpty)
+              const Text(
+                'Saved',
+                style: TextStyle(fontSize: 12, color: RC.accept),
+              ),
+            const Spacer(),
+            if (_notesError != null)
+              TextButton(
+                onPressed: _saveNotes,
+                child: const Text('Retry'),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// 2.3: request more units (once per offer), and the request status afterwards.
+  Widget _moreUnitsCard(Offer o) {
+    final mu = o.moreUnits;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('MORE UNITS'),
+          const SizedBox(height: 8),
+          if (mu == null) ...[
+            const Text(
+              'Need backup? Dispatch will alert the next nearest unit.',
+              style: TextStyle(fontSize: 13.5, color: RC.soft, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _openMoreUnits,
+              icon: const Icon(Icons.group_add_outlined, size: 18),
+              label: const Text('Request more units'),
+            ),
+          ] else ...[
+            Text(
+              _moreUnitsLine(o) ?? '',
+              style: const TextStyle(fontSize: 13.5, color: RC.text, height: 1.4),
+            ),
+            if (mu.note.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Your note: ${mu.note}',
+                style: const TextStyle(fontSize: 12.5, color: RC.muted),
+              ),
+            ],
+            const SizedBox(height: 8),
+            const Text(
+              'Dispatch has been asked. Keep working. You will see an update here.',
+              style: TextStyle(fontSize: 12.5, color: RC.accept, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _progress(String status) {
+    final current = switch (status) {
+      'accepted' => 0,
+      'enroute' => 1,
+      'arrived' => 2,
+      'completed' => 3,
+      _ => 0,
+    };
+    const steps = ['Accepted', 'En route', 'Arrived', 'Complete'];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('RESPONSE PROGRESS'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var index = 0; index < steps.length; index++) ...[
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: index <= current ? RC.accept : RC.line,
+                        ),
+                        child: index < current
+                            ? const Icon(
+                                Icons.check,
+                                size: 15,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        steps[index],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: index <= current ? RC.text : RC.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/responder/job_map_screen.dart (333 lines)
+<<<BEGIN>>>
+// Live mutual tracking on the responder side, Uber-style: the caller's blue dot moves on the map as they
+// (or their phone) move, and the unit sees itself as a car pin. Positions come from incidents/{id}/tracks,
+// written by the resident's phone while the alert is open and by this unit while it holds the job.
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/models/dispatch_models.dart';
+import '../resident/map/help_models.dart' show TrackPoint, haversineKm;
+import '../resident/map/map_style.dart';
+import '../resident/map/pin_factory.dart';
+import 'incoming_alert_screen.dart' show openInMaps;
+import 'responder_theme.dart';
+
+class JobMapScreen extends StatefulWidget {
+  const JobMapScreen({super.key, required this.offer});
+  final Offer offer;
+
+  @override
+  State<JobMapScreen> createState() => _JobMapScreenState();
+}
+
+class _JobMapScreenState extends State<JobMapScreen> with SingleTickerProviderStateMixin {
+  GoogleMapController? _map;
+  final Map<String, BitmapDescriptor> _pins = {};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
+  Timer? _selfTimer;
+
+  LatLng? _resident;
+  LatLng? _me;
+  double? _residentAccuracy;
+  DateTime? _residentAt;
+  bool _moving = false;
+  String _fitKey = '';
+
+  late final AnimationController _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..addListener(() => setState(() {}));
+  LatLng? _from;
+  LatLng? _to;
+
+  String get _uid => FirebaseAuth.instance.currentUser!.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPins();
+    _watchTracks();
+    _readSelf();
+    _selfTimer = Timer.periodic(const Duration(seconds: 10), (_) => _readSelf());
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _selfTimer?.cancel();
+    _anim.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPins() async {
+    for (final k in ['me', 'live']) {
+      final p = await PinFactory.pin(k, big: true);
+      if (p != null) _pins[k] = p;
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _watchTracks() {
+    _sub = FirebaseFirestore.instance
+        .collection('incidents')
+        .doc(widget.offer.incidentId)
+        .collection('tracks')
+        .snapshots()
+        .listen((q) {
+      for (final d in q.docs) {
+        if (d.id == _uid) continue; // that one is my own unit
+        final p = TrackPoint.tryParse(d.data());
+        if (p == null) continue;
+        final next = LatLng(p.latitude, p.longitude);
+        if (!mounted) return;
+        setState(() {
+          _from = _resident ?? next;
+          _to = next;
+          _resident = next;
+          _residentAccuracy = (d.data()['accuracy'] as num?)?.toDouble();
+          _residentAt = p.at;
+          _moving = (p.speed ?? 0) > 1.2;
+        });
+        _anim.forward(from: 0);
+        _fit();
+        return;
+      }
+    }, onError: (Object _) {/* rules / offline: the map still shows the last known point */});
+  }
+
+  Future<void> _readSelf() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+      if (p == LocationPermission.denied || p == LocationPermission.deniedForever) return;
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 8)));
+      if (!mounted) return;
+      setState(() => _me = LatLng(pos.latitude, pos.longitude));
+      _fit();
+    } catch (_) {/* optional: the resident pin still shows */}
+  }
+
+  LatLng? get _residentNow {
+    final b = _to;
+    if (b == null) return null;
+    final a = _from;
+    if (a == null) return b;
+    final t = Curves.easeOut.transform(_anim.value);
+    return LatLng(a.latitude + (b.latitude - a.latitude) * t, a.longitude + (b.longitude - a.longitude) * t);
+  }
+
+  LatLng? get _offerPoint {
+    final la = widget.offer.latitude, lo = widget.offer.longitude;
+    return la != null && lo != null ? LatLng(la, lo) : null;
+  }
+
+  LatLng? get _destination => _resident ?? _offerPoint;
+
+  double? get _km {
+    final me = _me;
+    final d = _destination;
+    if (me == null || d == null) return null;
+    return haversineKm(me.latitude, me.longitude, d.latitude, d.longitude);
+  }
+
+  void _fit() {
+    final d = _destination;
+    if (d == null) return;
+    final pts = [?_me, d];
+    final key = pts.map((p) => '${p.latitude.toStringAsFixed(4)},${p.longitude.toStringAsFixed(4)}').join('|');
+    if (key == _fitKey || _map == null) return;
+    _fitKey = key;
+    if (pts.length < 2) {
+      _map?.animateCamera(CameraUpdate.newLatLngZoom(pts.first, 15));
+      return;
+    }
+    var minLa = pts.first.latitude, maxLa = minLa, minLo = pts.first.longitude, maxLo = minLo;
+    for (final p in pts) {
+      if (p.latitude < minLa) minLa = p.latitude;
+      if (p.latitude > maxLa) maxLa = p.latitude;
+      if (p.longitude < minLo) minLo = p.longitude;
+      if (p.longitude > maxLo) maxLo = p.longitude;
+    }
+    final center = LatLng((minLa + maxLa) / 2, (minLo + maxLo) / 2);
+    final span = ((maxLa - minLa).abs() + (maxLo - minLo).abs()).clamp(0.002, 1.5);
+    final zoom = (14.5 - (span * 40).clamp(0, 3.5)).clamp(11.0, 16.0);
+    _map?.animateCamera(CameraUpdate.newLatLngZoom(center, zoom));
+  }
+
+  Set<Marker> _markers() {
+    final resident = _residentNow;
+    final fresh = _residentAt != null && DateTime.now().difference(_residentAt!).inMinutes < 3;
+    final name = (widget.offer.residentFirstName ?? '').trim();
+    return {
+      if (resident != null)
+        Marker(
+          markerId: const MarkerId('caller'),
+          position: resident,
+          icon: _pins['me'] ?? PinFactory.fallback('me'),
+          anchor: const Offset(0.5, 0.5),
+          infoWindow: InfoWindow(title: name.isEmpty ? 'Caller' : name, snippet: fresh ? 'Live location' : 'Last known location'),
+          zIndexInt: 5,
+        ),
+      if (_me != null)
+        Marker(
+          markerId: const MarkerId('me'),
+          position: _me!,
+          icon: _pins['live'] ?? PinFactory.fallback('live'),
+          anchor: const Offset(0.5, 0.5),
+          infoWindow: const InfoWindow(title: 'Your unit'),
+          zIndexInt: 4,
+        ),
+    };
+  }
+
+  Set<Circle> _circles() {
+    final resident = _resident;
+    final acc = _residentAccuracy;
+    if (resident == null || acc == null || acc <= 40) return const {};
+    return {Circle(circleId: const CircleId('acc'), center: resident, radius: acc, fillColor: const Color(0x221A73E8), strokeColor: const Color(0x551A73E8), strokeWidth: 1)};
+  }
+
+  String? get _freshness {
+    final at = _residentAt;
+    if (at == null) return null;
+    final s = DateTime.now().difference(at).inSeconds;
+    if (s < 90) return 'Live';
+    final m = (s / 60).round();
+    return 'Last seen $m min ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final destination = _destination;
+    if (destination == null && _pins.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: RC.bg,
+        appBar: AppBar(backgroundColor: RC.bg, foregroundColor: RC.text, elevation: 0, title: const Text('Live tracking')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('The caller’s location is not available for this job. Call them to confirm where to go.', textAlign: TextAlign.center, style: TextStyle(color: RC.soft, height: 1.5)),
+          ),
+        ),
+      );
+    }
+    final km = _km;
+    final freshness = _freshness;
+    return Scaffold(
+      backgroundColor: RC.bg,
+      body: Stack(children: [
+        Positioned.fill(
+          child: _pins.isEmpty || destination == null
+              ? const Center(child: CircularProgressIndicator())
+              : GoogleMap(
+                  initialCameraPosition: CameraPosition(target: destination, zoom: 14.5),
+                  style: kEmergencyMapStyle,
+                  markers: _markers(),
+                  circles: _circles(),
+                  minMaxZoomPreference: const MinMaxZoomPreference(10, 19),
+                  onMapCreated: (c) {
+                    _map = c;
+                    _fit();
+                  },
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                  myLocationButtonEnabled: false,
+                  compassEnabled: false,
+                  buildingsEnabled: false,
+                  padding: const EdgeInsets.only(top: 110, bottom: 190),
+                ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(children: [
+              Material(
+                color: Colors.white,
+                shape: const CircleBorder(),
+                elevation: 3,
+                child: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 18), onPressed: () => Navigator.of(context).maybePop()),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4))]),
+                  child: Row(children: [
+                    Icon(_moving ? Icons.directions_run : Icons.my_location, size: 18, color: RC.accent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        const Text('CALLER LOCATION', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: RC.muted, letterSpacing: .8)),
+                        Text(
+                          [if (_moving) 'Moving', ?freshness, if (km != null) '${km.toStringAsFixed(1)} km away'].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: RC.text),
+                        ),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(26)), boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 16)]),
+            child: SafeArea(
+              top: false,
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  km == null ? 'Finding your position…' : '${km.toStringAsFixed(1)} km to the caller',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: RC.text),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _moving ? 'The caller is moving. Their dot updates live.' : 'The caller’s dot is their live phone location.',
+                  style: const TextStyle(fontSize: 13, color: RC.soft),
+                ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  if ((widget.offer.residentPhone ?? '').isNotEmpty) ...[
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(backgroundColor: RC.accept, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                          onPressed: () => launchUrl(Uri(scheme: 'tel', path: widget.offer.residentPhone)),
+                          icon: const Icon(Icons.call, size: 18),
+                          label: const Text('Call caller', style: TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                        onPressed: () => openInMaps(widget.offer.latitude, widget.offer.longitude),
+                        icon: const Icon(Icons.navigation_outlined, size: 18),
+                        label: const Text('Navigate', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/responder/responder_shell.dart (945 lines)
+<<<BEGIN>>>
+// The whole responder app: verification gate -> Home (duty switch, incoming and active jobs) and History.
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../core/models/dispatch_models.dart';
+import '../../core/services/push_service.dart';
+import '../../core/ui/states.dart';
+import '../resident/status/location_confidence.dart' show accuracyShort;
+import 'active_job_screen.dart';
+import 'duty_heartbeat.dart';
+import 'incoming_alert_screen.dart';
+import 'responder_repository.dart';
+import 'responder_labels.dart';
+import 'responder_offer_queue.dart';
+import 'responder_theme.dart';
+import 'responder_widgets.dart';
+import 'sos_sheet.dart';
+import 'track_publisher.dart';
+import '../../core/ui/routes.dart';
+
+/// Put this where the app opens the home screen for a user whose role is "Responder".
+class ResponderGate extends StatelessWidget {
+  const ResponderGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ResponderRepository();
+    return StreamBuilder<ResponderRecord?>(
+      stream: repo.watchMe(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: RC.bg,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.hasError) {
+          return const _Message(
+            title: 'Connection problem',
+            body: 'Your responder profile could not be loaded. Check your connection and reopen the app; sign-in is unchanged.',
+          );
+        }
+        final me = snap.data;
+        if (me == null) {
+          return const _Message(
+            title: 'Profile not found',
+            body: 'Your responder profile has not been set up. Please contact the administrator.',
+          );
+        }
+        if (me.verificationStatus != 'Verified') {
+          final rejected =
+              me.verificationStatus == 'Rejected' ||
+              me.verificationStatus == 'Suspended';
+          return _Message(
+            title: rejected
+                ? 'Account ${me.verificationStatus.toLowerCase()}'
+                : 'Waiting for verification',
+            body: rejected
+                ? 'Your responder account is ${me.verificationStatus.toLowerCase()}. Please contact the administrator.'
+                : 'An administrator is checking ${me.organizationName} (registration ${me.registrationNumber}). You will receive alerts once you are verified.',
+          );
+        }
+        return ResponderShell(repo: repo, me: me);
+      },
+    );
+  }
+}
+
+class _Message extends StatelessWidget {
+  const _Message({required this.title, required this.body});
+  final String title;
+  final String body;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: RC.bg,
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: RC.text,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              body,
+              style: const TextStyle(
+                fontSize: 16,
+                color: RC.soft,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 24),
+            BigButton(
+              label: 'Sign out',
+              filled: false,
+              height: 52,
+              onPressed: () => FirebaseAuth.instance.signOut(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class ResponderShell extends StatefulWidget {
+  const ResponderShell({super.key, required this.repo, required this.me});
+  final ResponderRepository repo;
+  final ResponderRecord me;
+
+  @override
+  State<ResponderShell> createState() => _ResponderShellState();
+}
+
+class _ResponderShellState extends State<ResponderShell>
+    with WidgetsBindingObserver {
+  int _tab = 0;
+  late final DutyHeartbeat _beat = DutyHeartbeat(widget.repo);
+  final Set<String> _shown = {};
+  bool _incomingOpen = false;
+  String? _waitingOfferId;
+  StreamSubscription<ResponderOfferFeed>? _sub;
+  List<Offer> _offers = const [];
+  bool _onDuty = false;
+  bool _availabilityBusy = false;
+  bool _isFromCache = true;
+  bool _hasServerSnapshot = false;
+  bool _offersError = false;
+  bool _offersLoading = true;
+  Timer? _ticker;
+  late final Future<String?> _firstName;
+  DateTime? _pausedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    PushService.init();
+    _firstName = widget.repo.firstName();
+    _onDuty = widget.me.availabilityStatus != 'Offline';
+    if (_onDuty) unawaited(_restoreDuty());
+    _listenOffers();
+  }
+
+  void _listenOffers() {
+    _sub?.cancel();
+    _sub = widget.repo.watchOfferFeed().listen(
+      (feed) {
+        if (!mounted) return;
+        setState(() {
+          _offers = feed.offers;
+          _isFromCache = feed.isFromCache;
+          _offersError = false;
+          _offersLoading = false;
+          if (!feed.isFromCache) _hasServerSnapshot = true;
+        });
+        _syncTicker(feed.offers.any((o) => o.isOpen && o.secondsLeft() > 0));
+        TrackPublisher.instance.sync(
+          feed.offers,
+        ); // live location only while a job is held
+        for (final o in ResponderOfferQueue.openOffers(feed.offers)) {
+          if (o.isOpen && o.secondsLeft() > 0 && _shown.add(o.id)) {
+            if (_incomingOpen) {
+              _waitingOfferId ??= o.id;
+            } else {
+              unawaited(_presentIncoming(o));
+            }
+            break;
+          }
+        }
+      },
+      onError: (Object _) {
+        if (mounted) {
+          setState(() {
+            _offersError = true;
+            _offersLoading = false;
+          });
+        }
+      },
+    );
+  }
+
+  void _retryOffers() {
+    setState(() {
+      _offersLoading = true;
+      _offersError = false;
+    });
+    _listenOffers();
+  }
+
+  /// Open-offer countdowns tick every second; the stream alone never fires that often.
+  void _syncTicker(bool hasOpenOffers) {
+    if (hasOpenOffers) {
+      _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  Future<void> _presentIncoming(Offer offer) async {
+    if (_incomingOpen || !mounted) {
+      _waitingOfferId ??= offer.id;
+      return;
+    }
+    _incomingOpen = true;
+    SystemSound.play(SystemSoundType.alert);
+    HapticFeedback.heavyImpact();
+    try {
+      await Navigator.of(context).push<void>(
+        appRoute<void>(
+          (_) => IncomingAlertScreen(offer: offer, repo: widget.repo),
+          fullscreenDialog: true,
+        ),
+      );
+    } finally {
+      _incomingOpen = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _openWaitingOffer() {
+    final id = _waitingOfferId;
+    if (id == null) return;
+    Offer? offer;
+    for (final item in _offers) {
+      if (item.id == id && item.isOpen && item.secondsLeft() > 0) {
+        offer = item;
+        break;
+      }
+    }
+    setState(() => _waitingOfferId = null);
+    if (offer != null) unawaited(_presentIncoming(offer));
+  }
+
+  Future<void> _restoreDuty() async {
+    final ok = await _beat.start();
+    if (!ok) {
+      try {
+        await widget.repo.setAvailability('Offline');
+      } catch (_) {}
+      if (mounted) setState(() => _onDuty = false);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final away = _pausedAt;
+      _pausedAt = null;
+      if (_onDuty && !_beat.running) {
+        _beat.start();
+      } else if (_onDuty && away != null && DateTime.now().difference(away).inSeconds >= 60) {
+        // 2.9: after a long time in the background, show dispatch where we are right away, not up to 30 s later.
+        unawaited(_beat.refreshGps());
+      }
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive) {
+      _pausedAt ??= DateTime.now();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sub?.cancel();
+    _ticker?.cancel();
+    _beat.dispose();
+    TrackPublisher.instance.stop();
+    super.dispose();
+  }
+
+  Future<void> _toggle(bool on) async {
+    if (_availabilityBusy) return;
+    setState(() => _availabilityBusy = true);
+    try {
+      if (on) {
+        final ok = await _beat.start();
+        if (!ok) return;
+        await widget.repo.setAvailability('Available');
+      } else {
+        await widget.repo.setAvailability('Offline');
+        _beat.stop();
+      }
+      if (mounted) setState(() => _onDuty = on);
+    } catch (_) {
+      if (on) _beat.stop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update duty status. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _availabilityBusy = false);
+    }
+  }
+
+  Future<void> _retryGps() async {
+    if (_availabilityBusy) return;
+    setState(() => _availabilityBusy = true);
+    try {
+      await _beat.refreshGps();
+    } finally {
+      if (mounted) setState(() => _availabilityBusy = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (_offers.any((offer) => offer.isActiveJob)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Complete your active response before signing out.'),
+        ),
+      );
+      return;
+    }
+    if (_onDuty) {
+      final confirm = await showModalBottomSheet<bool>(
+        context: context,
+        useSafeArea: true,
+        builder: (context) => Padding(
+          padding: const EdgeInsets.all(ResponderSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Go off duty and sign out?',
+                style: ResponderTextStyles.section,
+              ),
+              const SizedBox(height: ResponderSpacing.sm),
+              const Text(
+                'You will stop receiving responder alerts on this device.',
+                style: ResponderTextStyles.body,
+              ),
+              const SizedBox(height: ResponderSpacing.lg),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Go off duty and sign out'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirm != true || !mounted) return;
+    }
+    try {
+      await widget.repo.setAvailability('Offline');
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not go off duty. Check your connection and try again.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    _beat.stop();
+    TrackPublisher.instance.stop();
+    await FirebaseAuth.instance.signOut();
+  }
+
+  ReadinessState _readinessState(List<Offer> active) {
+    if (_offersError || (_hasServerSnapshot && _isFromCache)) {
+      return ReadinessState.noConnection;
+    }
+    if (active.isNotEmpty) return ReadinessState.onJob;
+    if (!_onDuty) return ReadinessState.offDuty;
+    final problem = _beat.problem.value;
+    if (problem != null &&
+        (problem.contains('location (GPS)') ||
+            problem.contains('Allow location'))) {
+      return ReadinessState.locationOff;
+    }
+    final lastFix = _beat.lastFixAt.value;
+    if (lastFix == null || DateTime.now().difference(lastFix).inSeconds > 90) {
+      return ReadinessState.gpsStale;
+    }
+    return ReadinessState.onDuty;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final open = _offers.where((o) => o.isOpen && o.secondsLeft() > 0).toList();
+    final active = _offers.where((o) => o.isActiveJob).toList();
+    final past = _offers.where((o) => o.isFinished).toList();
+    return Scaffold(
+      backgroundColor: RC.bg,
+      appBar: AppBar(
+        backgroundColor: RC.bg,
+        foregroundColor: RC.text,
+        elevation: 0,
+        title: FutureBuilder<String?>(
+          future: _firstName,
+          builder: (context, snapshot) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.me.organizationName,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                '${snapshot.data ?? 'Responder'} · ${widget.me.organizationType}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: RC.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Profile options',
+            onSelected: (value) {
+              if (value == 'sos') {
+                final active = _offers.where((o) => o.isActiveJob).toList();
+                showSosSheet(
+                  context,
+                  widget.repo,
+                  incidentId: active.isEmpty ? null : active.first.incidentId,
+                );
+              } else if (value == 'signOut') {
+                _signOut();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'sos',
+                child: Row(
+                  children: [
+                    Icon(Icons.sos_rounded, color: RC.alert),
+                    SizedBox(width: 10),
+                    Text(
+                      'I need help',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: RC.alert,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(value: 'signOut', child: Text('Sign out')),
+            ],
+            icon: const Icon(Icons.more_vert),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            ValueListenableBuilder<DateTime?>(
+              valueListenable: _beat.lastFixAt,
+              builder: (context, lastFix, _) => ValueListenableBuilder<double?>(
+                valueListenable: _beat.lastAccuracyMeters,
+                builder: (context, accuracy, _) => ReadinessBar(
+                  state: _readinessState(active),
+                  lastFixAt: lastFix,
+                  accuracyMeters: accuracy,
+                  capabilities: [
+                    for (final code in widget.me.effectiveCapabilities)
+                      ResponderLabels.capability(code),
+                  ],
+                  onRetryGps: _onDuty ? _retryGps : null,
+                ),
+              ),
+            ),
+            Expanded(
+              child: switch (_tab) {
+                0 => _home(open, active),
+                1 => _activeJobs(active),
+                _ => _history(past),
+              },
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: RC.card,
+          indicatorColor: RC.line,
+          labelTextStyle: WidgetStateProperty.all(
+            const TextStyle(color: RC.text, fontWeight: FontWeight.w600),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: [
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: open.isNotEmpty,
+                label: Text('${open.length}'),
+                child: const Icon(
+                  Icons.notifications_active_outlined,
+                  color: RC.soft,
+                ),
+              ),
+              label: 'Offers',
+            ),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: active.isNotEmpty,
+                smallSize: 8,
+                child: const Icon(Icons.emergency_outlined, color: RC.soft),
+              ),
+              label: 'Active',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.history, color: RC.soft),
+              label: 'History',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _home(List<Offer> open, List<Offer> active) {
+    final orderedOpen = ResponderOfferQueue.openOffers(open);
+    final earlierToday = ResponderOfferQueue.earlierToday(_offers);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      children: [
+        if (_waitingOfferId != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: ResponderSpacing.md),
+            child: FilledButton.icon(
+              onPressed: _openWaitingOffer,
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: const Text('Another alert waiting'),
+            ),
+          ),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      active.isNotEmpty
+                          ? 'Active response'
+                          : _onDuty
+                          ? 'You are on duty'
+                          : 'You are off duty',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: RC.text,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 156,
+                    height: 56,
+                    child: FilledButton(
+                      onPressed: _availabilityBusy || active.isNotEmpty
+                          ? null
+                          : () => _toggle(!_onDuty),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _onDuty ? RC.surface2 : RC.accept,
+                        foregroundColor: _onDuty
+                            ? RC.text
+                            : const Color(0xFF04130C),
+                        disabledBackgroundColor: RC.surface2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            ResponderRadius.card,
+                          ),
+                        ),
+                      ),
+                      child: _availabilityBusy
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: RC.text,
+                              ),
+                            )
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _onDuty
+                                        ? Icons.pause_circle_outline
+                                        : Icons.play_arrow_rounded,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    active.isNotEmpty
+                                        ? 'ON A JOB'
+                                        : _onDuty
+                                        ? 'GO OFF DUTY'
+                                        : 'GO ON DUTY',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                active.isNotEmpty
+                    ? 'Finish the active response before going off duty.'
+                    : _onDuty
+                    ? 'Keep this app open. Your location is shared with dispatch every 30 seconds so the nearest unit is asked first.'
+                    : 'Switch on duty to receive alerts.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: RC.muted,
+                  height: 1.4,
+                ),
+              ),
+              ValueListenableBuilder<String?>(
+                valueListenable: _beat.problem,
+                builder: (_, p, _) => p == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          p,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFFFFB4A9),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (_offersLoading)
+          const SkeletonList(rows: 2)
+        else if (_offersError)
+          ErrorState(
+            message: 'Live offers could not be loaded.',
+            onRetry: _retryOffers,
+          )
+        else if (orderedOpen.isNotEmpty) ...[
+          const SectionLabel('WAITING FOR YOUR ANSWER'),
+          const SizedBox(height: ResponderSpacing.md),
+          for (var index = 0; index < orderedOpen.length; index++)
+            _offerCard(orderedOpen[index], urgent: index == 0),
+        ],
+        if (!_offersLoading && !_offersError && earlierToday.isNotEmpty)
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            iconColor: RC.muted,
+            collapsedIconColor: RC.muted,
+            title: Text(
+              'Earlier today · ${earlierToday.length}',
+              style: ResponderTextStyles.section,
+            ),
+            children: [
+              for (final offer in earlierToday) _closedOfferCard(offer),
+            ],
+          ),
+        if (!_offersLoading &&
+            !_offersError &&
+            orderedOpen.isEmpty &&
+            active.isEmpty)
+          EmptyState(
+            icon: _onDuty ? Icons.notifications_none : Icons.power_settings_new,
+            title: _onDuty ? 'No open alerts' : 'You are off duty',
+            body: _onDuty
+                ? 'New offers will appear here while this app is open.'
+                : 'Go on duty to receive alerts.',
+            actionLabel: _onDuty ? null : 'Go on duty',
+            onAction: _onDuty ? null : () => _toggle(true),
+          ),
+      ],
+    );
+  }
+
+  Widget _offerCard(Offer offer, {required bool urgent}) => Container(
+    margin: const EdgeInsets.only(bottom: ResponderSpacing.md),
+    padding: EdgeInsets.all(urgent ? ResponderSpacing.lg : ResponderSpacing.md),
+    decoration: BoxDecoration(
+      color: urgent ? RC.surface2 : RC.card,
+      borderRadius: BorderRadius.circular(ResponderRadius.card),
+      border: Border.all(color: urgent ? RC.outline : RC.line),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            PriorityTag(priority: offer.priority, provisional: offer.isProvisional),
+            const Spacer(),
+            Text(
+              '${offer.secondsLeft()} s',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: RC.text,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: ResponderSpacing.md),
+        Text(
+          ResponderLabels.category(offer.category),
+          style: ResponderTextStyles.section,
+        ),
+        if (offer.subtypeLabel.isNotEmpty)
+          Text(offer.subtypeLabel, style: ResponderTextStyles.caption),
+        const SizedBox(height: ResponderSpacing.sm),
+        Wrap(
+          spacing: ResponderSpacing.sm,
+          runSpacing: ResponderSpacing.sm,
+          children: [
+            Chip2(ResponderLabels.capability(offer.role), RC.needBg, RC.needFg),
+            Chip2(
+              '${offer.distanceKm.toStringAsFixed(1)} km · straight line',
+              RC.infoChipBg,
+              RC.infoChipFg,
+            ),
+          ],
+        ),
+        if (accuracyShort(offer.accuracyM) case final String line) ...[
+          const SizedBox(height: ResponderSpacing.sm),
+          Text(line, style: ResponderTextStyles.caption),
+        ],
+        if (offer.landmark.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text('Landmark: ${offer.landmark}', style: ResponderTextStyles.caption),
+        ],
+        const SizedBox(height: ResponderSpacing.md),
+        SizedBox(
+          height: 56,
+          child: FilledButton(
+            onPressed: () => unawaited(_presentIncoming(offer)),
+            child: const Text('Open alert'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _closedOfferCard(Offer offer) => Padding(
+    padding: const EdgeInsets.only(bottom: ResponderSpacing.sm),
+    child: SectionCard(
+      title: ResponderLabels.category(offer.category),
+      trailing: Text(
+        ResponderLabels.offerStatus(
+          offer.status,
+          withdrawReason: offer.withdrawReason,
+        ),
+        style: ResponderTextStyles.caption,
+      ),
+      child: InfoRow(
+        label: '${hhmm(offer.createdAt)} · ${offer.priorityLabel}',
+        value: '${offer.distanceKm.toStringAsFixed(1)} km · straight line',
+      ),
+    ),
+  );
+
+  Widget _activeJobs(List<Offer> active) {
+    if (_offersLoading) return const SkeletonList(rows: 1);
+    if (_offersError) {
+      return ErrorState(
+        message: 'Active responses could not be loaded.',
+        onRetry: _retryOffers,
+      );
+    }
+    if (active.isEmpty) {
+      return const Center(
+        child: Text(
+          'No active responses.',
+          style: TextStyle(fontSize: 16, color: RC.muted),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      children: [
+        const SectionLabel('IN PROGRESS'),
+        const SizedBox(height: 12),
+        for (final offer in active)
+          _card(
+            offer,
+            'Open response',
+            () => Navigator.of(context).push(
+              appRoute<void>(
+                (_) => ActiveJobScreen(offerId: offer.id, repo: widget.repo),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _card(Offer o, String action, VoidCallback onTap) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: RC.card,
+      borderRadius: BorderRadius.circular(16),
+      border: Border(
+        left: BorderSide(color: RC.priority(o.priority), width: 5),
+      ),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                o.category,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: RC.text,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${o.priorityLabel} · ${o.distanceKm.toStringAsFixed(1)} km · ${_statusLabel(o.status)}',
+                style: const TextStyle(fontSize: 13, color: RC.muted),
+              ),
+            ],
+          ),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: RC.accept,
+            minimumSize: const Size(88, 44),
+          ),
+          onPressed: onTap,
+          child: Text(action),
+        ),
+      ],
+    ),
+  );
+
+  Widget _history(List<Offer> past) {
+    if (past.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nothing here yet.',
+          style: TextStyle(color: RC.muted, fontSize: 16),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: past.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final o = past[i];
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      o.category,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: RC.text,
+                      ),
+                    ),
+                    Text(
+                      '${hhmm(o.createdAt)} · ${o.priorityLabel} · ${o.distanceKm.toStringAsFixed(1)} km',
+                      style: const TextStyle(fontSize: 12, color: RC.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Chip2(_statusLabel(o.status), RC.infoChipBg, RC.infoChipFg),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static String _statusLabel(String s) => switch (s) {
+    'offered' => 'Waiting',
+    'accepted' => 'Accepted',
+    'enroute' => 'On the way',
+    'arrived' => 'Arrived',
+    'completed' => 'Completed',
+    'declined' => 'Declined',
+    'expired' => 'Missed',
+    'withdrawn' => 'Stood down',
+    _ => s,
+  };
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/responder/track_publisher.dart (97 lines)
+<<<BEGIN>>>
+// Shares a responder's live position with the resident ONLY while they hold a job (accepted / en route / arrived).
+// On Android this runs as a foreground service (a visible notification) so the system does not stop it. Stops by itself when the job ends.
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+
+import '../../core/models/dispatch_models.dart';
+
+class TrackPublisher {
+  TrackPublisher._();
+  static final TrackPublisher instance = TrackPublisher._();
+
+  StreamSubscription<Position>? _sub;
+  Timer? _keepAlive;
+  Set<String> _incidents = {};
+  Position? _last;
+
+  /// Shown to the responder if tracking cannot run (null = fine).
+  final ValueNotifier<String?> problem = ValueNotifier<String?>(null);
+
+  bool get running => _sub != null;
+
+  /// Call with the responder's full offers list every time it changes.
+  void sync(Iterable<Offer> offers) {
+    final want = <String>{for (final o in offers) if (o.status == 'accepted' || o.status == 'enroute' || o.status == 'arrived') o.incidentId};
+    if (setEquals(want, _incidents)) return;
+    _incidents = want;
+    if (want.isEmpty) {
+      stop();
+    } else if (_sub == null) {
+      _start();
+    } else {
+      _write(_last); // a second job started: publish immediately for it too
+    }
+  }
+
+  Future<void> _start() async {
+    try {
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+      if (p == LocationPermission.denied || p == LocationPermission.deniedForever || !await Geolocator.isLocationServiceEnabled()) {
+        problem.value = 'Turn on location so the person you are helping can see you coming.';
+        return;
+      }
+      final LocationSettings settings = defaultTargetPlatform == TargetPlatform.android
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 20,
+              intervalDuration: const Duration(seconds: 5),
+              foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationTitle: 'Emergency job in progress',
+                notificationText: 'Sharing your live location with the person you are helping.',
+                enableWakeLock: true,
+              ),
+            )
+          : const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 20);
+      _sub = Geolocator.getPositionStream(locationSettings: settings).listen((pos) {
+        _last = pos;
+        _write(pos);
+      }, onError: (Object _) => problem.value = 'Lost your location signal.');
+      _keepAlive = Timer.periodic(const Duration(seconds: 15), (_) => _write(_last)); // standing still still counts as "live"
+      problem.value = null;
+    } catch (_) {
+      problem.value = 'Could not start live location.';
+    }
+  }
+
+  Future<void> _write(Position? pos) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (pos == null || uid == null) return;
+    for (final iid in _incidents) {
+      try {
+        await FirebaseFirestore.instance.collection('incidents').doc(iid).collection('tracks').doc(uid).set({
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'heading': pos.heading,
+          'speed': pos.speed,
+          'accuracy': pos.accuracy,
+          'at': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {/* offline or just finished: the next fix tries again */}
+    }
+  }
+
+  void stop() {
+    _sub?.cancel();
+    _sub = null;
+    _keepAlive?.cancel();
+    _keepAlive = null;
+    _incidents = {};
+    _last = null;
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/responder/transport_screen.dart (442 lines)
+<<<BEGIN>>>
+// Transport leg: pick a listed hospital or clinic, then drive there with the route drawn inside the app.
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/models/dispatch_models.dart';
+import '../resident/map/help_models.dart' show RouteInfo, haversineKm;
+import '../resident/map/help_repository.dart';
+import '../resident/map/map_style.dart';
+import 'incoming_alert_screen.dart' show openInMaps;
+import 'responder_theme.dart';
+import 'transport_models.dart';
+
+/// Destination picker. Returns the chosen facility, or null when dismissed.
+Future<TransportDestination?> showTransportPicker(
+  BuildContext context, {
+  required Future<List<TransportDestination>> Function() load,
+}) => showModalBottomSheet<TransportDestination>(
+  context: context,
+  showDragHandle: true,
+  isScrollControlled: true,
+  builder: (c) => _TransportPicker(load: load),
+);
+
+class _TransportPicker extends StatefulWidget {
+  const _TransportPicker({required this.load});
+  final Future<List<TransportDestination>> Function() load;
+
+  @override
+  State<_TransportPicker> createState() => _TransportPickerState();
+}
+
+class _TransportPickerState extends State<_TransportPicker> {
+  late final Future<List<TransportDestination>> _future = widget.load();
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+            child: Text(
+              'Where are you taking them?',
+              style: ResponderTextStyles.title,
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Text(
+              'Nearest hospitals and clinics first.',
+              style: ResponderTextStyles.caption,
+            ),
+          ),
+          Flexible(
+            child: FutureBuilder<List<TransportDestination>>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final list = snap.data ?? const <TransportDestination>[];
+                if (snap.hasError || list.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.fromLTRB(24, 12, 24, 24),
+                    child: Text(
+                      'No hospital or clinic is listed near this scene. Take the patient to the nearest facility you know.',
+                      style: ResponderTextStyles.body,
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: list.length,
+                  itemBuilder: (_, i) => _DestinationTile(place: list[i]),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DestinationTile extends StatelessWidget {
+  const _DestinationTile({required this.place});
+  final TransportDestination place;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: () => Navigator.of(context).pop(place),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 10, 12, 10),
+      child: Row(
+        children: [
+          const Icon(Icons.local_hospital_outlined, color: RC.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  place.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: RC.text,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    place.typeLabel,
+                    if (place.distanceKm != null)
+                      '${place.distanceKm!.toStringAsFixed(1)} km',
+                    if (place.is24h == true) 'Open 24 hours',
+                    if (!place.verified) 'Phone not verified',
+                  ].join(' · '),
+                  style: ResponderTextStyles.caption,
+                ),
+              ],
+            ),
+          ),
+          if (place.phone.isNotEmpty)
+            IconButton(
+              tooltip: 'Call ${place.name}',
+              onPressed: () => launchUrl(Uri(scheme: 'tel', path: place.phone)),
+              icon: const Icon(Icons.call_outlined, color: RC.accept),
+            ),
+          const Icon(Icons.chevron_right, color: RC.muted),
+        ],
+      ),
+    ),
+  );
+}
+
+/// The in-app route to the chosen facility, with the drive visible under the map.
+class TransportMapScreen extends StatefulWidget {
+  const TransportMapScreen({
+    super.key,
+    required this.offer,
+    required this.destination,
+  });
+  final Offer offer;
+  final TransportDestination destination;
+
+  @override
+  State<TransportMapScreen> createState() => _TransportMapScreenState();
+}
+
+class _TransportMapScreenState extends State<TransportMapScreen> {
+  final _help = HelpRepository();
+  LatLng? _me;
+  RouteInfo? _route;
+  bool _loadingRoute = true;
+
+  LatLng get _hospital =>
+      LatLng(widget.destination.latitude!, widget.destination.longitude!);
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_locate());
+  }
+
+  Future<void> _locate() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) {
+        p = await Geolocator.requestPermission();
+      }
+      if (p == LocationPermission.denied ||
+          p == LocationPermission.deniedForever) {
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _me = LatLng(pos.latitude, pos.longitude));
+      unawaited(_loadRoute());
+    } catch (_) {
+      if (mounted) setState(() => _loadingRoute = false);
+    }
+  }
+
+  Future<void> _loadRoute() async {
+    final me = _me;
+    if (me == null) return;
+    final route = await _help.directions(
+      me.latitude,
+      me.longitude,
+      _hospital.latitude,
+      _hospital.longitude,
+    );
+    if (mounted) {
+      setState(() {
+        _route = route;
+        _loadingRoute = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final me = _me;
+    final km = me == null
+        ? null
+        : haversineKm(
+            me.latitude,
+            me.longitude,
+            _hospital.latitude,
+            _hospital.longitude,
+          );
+    return Scaffold(
+      backgroundColor: RC.bg,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: widget.destination.hasPosition
+                ? GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: _hospital,
+                      zoom: 13.5,
+                    ),
+                    style: kEmergencyMapStyle,
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('hospital'),
+                        position: _hospital,
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueRed,
+                        ),
+                        infoWindow: InfoWindow(
+                          title: widget.destination.name,
+                        ),
+                      ),
+                      if (me != null)
+                        Marker(
+                          markerId: const MarkerId('me'),
+                          position: me,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            BitmapDescriptor.hueAzure,
+                          ),
+                          infoWindow: const InfoWindow(title: 'Your unit'),
+                        ),
+                    },
+                    polylines: {
+                      if (_route != null && _route!.points.length > 1)
+                        Polyline(
+                          polylineId: const PolylineId('transport'),
+                          points: [
+                            for (final p in _route!.points)
+                              LatLng(p.lat, p.lng),
+                          ],
+                          color: RC.accent,
+                          width: 6,
+                          startCap: Cap.roundCap,
+                          endCap: Cap.roundCap,
+                          jointType: JointType.round,
+                        ),
+                    },
+                    onMapCreated: (_) {},
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    myLocationButtonEnabled: false,
+                    compassEnabled: false,
+                    padding: const EdgeInsets.only(top: 90, bottom: 190),
+                  )
+                : const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'This facility has no map position. Use Google Maps to find it.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: RC.soft),
+                      ),
+                    ),
+                  ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 3,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Text(
+                        'Transporting to ${widget.destination.name}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: RC.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      _loadingRoute
+                          ? 'Finding the route…'
+                          : _route == null || _route!.points.isEmpty
+                          ? (km == null
+                                ? 'Route unavailable'
+                                : '${km.toStringAsFixed(1)} km away')
+                          : '${((_route!.distanceMeters) / 1000).toStringAsFixed(1)} km · ${(_route!.etaSeconds / 60).round().clamp(1, 999)} min',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: RC.text,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.destination.address.isNotEmpty
+                          ? widget.destination.address
+                          : widget.destination.typeLabel,
+                      style: const TextStyle(fontSize: 13, color: RC.soft),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        if (widget.destination.phone.isNotEmpty) ...[
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: RC.accept,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: () => launchUrl(
+                                  Uri(
+                                    scheme: 'tel',
+                                    path: widget.destination.phone,
+                                  ),
+                                ),
+                                icon: const Icon(Icons.call, size: 18),
+                                label: const Text(
+                                  'Call facility',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: () => openInMaps(
+                                widget.destination.latitude,
+                                widget.destination.longitude,
+                              ),
+                              icon: const Icon(
+                                Icons.navigation_outlined,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'Open in Maps',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+##### FILE: mobile/lib/features/responder/active_job_screen.dart (1015 lines)
+<<<BEGIN>>>
+// After accepting: who to call, where to go, the three steps, transport, notes and the completion summary.
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/models/dispatch_models.dart';
+import '../resident/status/location_confidence.dart' show accuracyShort;
+import 'incoming_alert_screen.dart' show openInMaps;
+import 'job_map_screen.dart';
+import 'more_units_sheet.dart';
+import 'responder_repository.dart';
+import 'responder_theme.dart';
+import 'sos_sheet.dart';
+import 'track_publisher.dart';
+import 'transport_models.dart';
+import 'transport_screen.dart';
+
+class ActiveJobScreen extends StatefulWidget {
+  const ActiveJobScreen({super.key, required this.offerId, required this.repo});
+  final String offerId;
+  final ResponderRepository repo;
+
+  @override
+  State<ActiveJobScreen> createState() => _ActiveJobScreenState();
+}
+
+class _ActiveJobScreenState extends State<ActiveJobScreen> {
+  bool _busy = false;
+  bool _stoodDown = false;
+  bool _wellbeingDismissed = false;
+
+  final _notes = TextEditingController();
+  final _notesFocus = FocusNode();
+  bool _notesLoaded = false;
+  bool _notesDirty = false;
+  bool _notesSaving = false;
+  String? _notesError;
+  String _savedNote = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _notesFocus.addListener(() {
+      if (!_notesFocus.hasFocus && _notesDirty) unawaited(_saveNotes());
+    });
+  }
+
+  /// Runs from the one offer stream the screen already listens to.
+  void _syncFromOffer(Offer o) {
+    if (!_notesLoaded) {
+      _notesLoaded = true;
+      _notes.text = o.note;
+      _savedNote = o.note;
+    }
+  }
+
+  @override
+  void dispose() {
+    _notesFocus.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _move(String status) async {
+    setState(() => _busy = true);
+    try {
+      await widget.repo.respond(widget.offerId, status);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update. Check your connection and try again.',
+            ),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  static const _withdrawReasons = [
+    ('cannot_reach', 'I cannot get there', 'Blocked route, no vehicle or too far.'),
+    ('scene_unsafe', 'The scene is not safe for me', 'I need backup or a different unit.'),
+    ('unit_broken_down', 'My unit has broken down', 'Vehicle or equipment failure.'),
+    ('no_longer_available', 'I am no longer available', 'Something else came up.'),
+  ];
+
+  Future<void> _standDown() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          children: [
+            Text(
+              'Stand down from this job?',
+              style: Theme.of(c).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Only do this if you truly cannot respond. The system will immediately alert the next nearest unit, and the caller stays informed.',
+              style: TextStyle(color: RC.soft, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            for (final (value, label, hint) in _withdrawReasons)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(hint),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(c, value),
+              ),
+            const SizedBox(height: 4),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Keep the job'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      // The server releases this unit's availability when it records the withdrawal.
+      await widget.repo.respond(widget.offerId, 'withdrawn', withdrawReason: picked);
+      if (mounted) {
+        setState(() => _stoodDown = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You stood down. The next nearest unit is being alerted.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not stand down. Check your connection and try again.')),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _confirmComplete() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Complete this job?'),
+        content: const Text(
+          'Only complete it when the person has been helped or handed over.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+    if (yes == true) await _move('completed');
+  }
+
+  String? _moreUnitsLine(Offer o) {
+    final mu = o.moreUnits;
+    if (mu == null) return null;
+    final at = mu.requestedAt;
+    final when = at == null
+        ? ''
+        : ' at ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    final count = mu.count == 1 ? '1 unit' : '${mu.count} units';
+    return 'Requested: $count · ${moreUnitRoleLabel(mu.role)}$when. Dispatch has this request.';
+  }
+
+  Future<void> _openMoreUnits() async {
+    final done = await showMoreUnitsSheet(
+      context,
+      onSubmit: (role, count, note) => widget.repo.requestMoreUnits(
+        widget.offerId,
+        role: role,
+        count: count,
+        note: note,
+      ),
+    );
+    if (done == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Dispatch has been asked. Keep working. You will see an update here.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _startTransport(Offer o) async {
+    final lat = o.latitude, lng = o.longitude;
+    if (lat == null || lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The scene has no map position. Use Google Maps.')),
+      );
+      return;
+    }
+    final picked = await showTransportPicker(
+      context,
+      load: () => widget.repo.hospitalsNear(lat, lng),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.repo.startTransport(
+        widget.offerId,
+        destinationId: picked.id,
+        destinationName: picked.name,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not start transport. Check your connection and try again.'),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _hospitalArrived() async {
+    setState(() => _busy = true);
+    try {
+      await widget.repo.arriveAtHospital(widget.offerId);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update. Check your connection and try again.'),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _openTransportRoute(Offer o) async {
+    final leg = o.transport;
+    if (leg == null) return;
+    final place = await widget.repo.facility(leg.destinationId);
+    final fallback = place ??
+        TransportDestination(
+          id: leg.destinationId,
+          name: leg.destinationName,
+          type: 'hospital',
+          latitude: o.latitude,
+          longitude: o.longitude,
+        );
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TransportMapScreen(offer: o, destination: fallback),
+      ),
+    );
+  }
+
+  Future<void> _saveNotes() async {
+    final text = _notes.text.trim();
+    if (text == _savedNote) {
+      if (mounted) setState(() => _notesDirty = false);
+      return;
+    }
+    setState(() {
+      _notesSaving = true;
+      _notesError = null;
+    });
+    try {
+      await widget.repo.saveNote(widget.offerId, text);
+      _savedNote = text;
+      if (mounted) {
+        setState(() {
+          _notesDirty = false;
+          _notesSaving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _notesSaving = false;
+          _notesError = 'Not saved. Check your connection.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Offer?>(
+      stream: widget.repo.watchOffer(widget.offerId),
+      builder: (context, snap) {
+        final o = snap.data;
+        if (o != null) _syncFromOffer(o);
+        return Scaffold(
+          backgroundColor: RC.bg,
+          appBar: AppBar(
+            backgroundColor: RC.bg,
+            foregroundColor: RC.text,
+            elevation: 0,
+            title: const Text('Active job'),
+            actions: [
+              PopupMenuButton<String>(
+                tooltip: 'More actions',
+                onSelected: (value) {
+                  if (value == 'sos') {
+                    showSosSheet(context, widget.repo, incidentId: o?.incidentId);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'sos',
+                    child: Row(
+                      children: [
+                        Icon(Icons.sos_rounded, color: RC.alert),
+                        SizedBox(width: 10),
+                        Text(
+                          'I need help',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: RC.alert,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          body: snap.hasError
+              ? const Center(
+                  child: Text(
+                    'Unable to load this response. Check your connection and try again.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: RC.soft),
+                  ),
+                )
+              : o == null
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                    children: [_body(o)],
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _body(Offer o) {
+    final closed =
+        o.status == 'withdrawn' ||
+        o.status == 'completed' ||
+        o.status == 'expired';
+    final held = o.isActiveJob;
+    final name = (o.residentFirstName ?? '').trim();
+    final phone = o.residentPhone ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ValueListenableBuilder<String?>(
+          valueListenable: TrackPublisher.instance.problem,
+          builder: (context, problem, _) {
+            if (problem == null || problem.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4F4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                problem,
+                style: const TextStyle(
+                  color: Color(0xFFB33A3A),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            );
+          },
+        ),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: RC.priority(o.priority),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            '${o.priorityBanner} · ${o.category}${o.subtypeLabel.isEmpty ? '' : ' · ${o.subtypeLabel}'}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        if (o.isActiveJob || o.status == 'completed') ...[
+          const SizedBox(height: 12),
+          _progress(o.status),
+        ],
+        if (o.summary.isNotEmpty ||
+            (o.freeText.isNotEmpty && !o.confidential) ||
+            o.landmark.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: RC.card,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('INCIDENT BRIEF'),
+                if (o.summary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    o.summary,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: RC.text,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (o.freeText.isNotEmpty && !o.confidential) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    o.freeText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: RC.soft,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (o.landmark.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Landmark: ${o.landmark}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: RC.soft,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                if (accuracyShort(o.accuracyM) case final String line) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    line,
+                    style: const TextStyle(fontSize: 13, color: RC.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+        if (closed) ...[
+          const SizedBox(height: 16),
+          _closedCard(o),
+        ],
+        if (o.status == 'completed') ...[
+          const SizedBox(height: 12),
+          _summaryCard(o),
+          if (o.priority == 'High' && !_wellbeingDismissed) ...[
+            const SizedBox(height: 12),
+            _wellbeingCard(),
+          ],
+        ],
+        if (o.transport != null) ...[
+          const SizedBox(height: 12),
+          _transportCard(o),
+        ],
+        Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: RC.card,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionLabel('CALLER'),
+              const SizedBox(height: 8),
+              Text(
+                name.isEmpty ? 'Resident' : name,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: RC.text,
+                ),
+              ),
+              if (phone.isNotEmpty)
+                Text(
+                  phone,
+                  style: const TextStyle(fontSize: 15, color: RC.soft),
+                ),
+              const SizedBox(height: 12),
+              BigButton(
+                label: phone.isEmpty ? 'Phone not available' : 'Call caller',
+                height: 52,
+                color: RC.accept,
+                onPressed: phone.isEmpty
+                    ? null
+                    : () => launchUrl(Uri(scheme: 'tel', path: phone)),
+              ),
+              const SizedBox(height: 10),
+              if (o.isActiveJob) ...[
+                BigButton(
+                  label: 'Live map — see the caller move',
+                  height: 52,
+                  color: RC.accent,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => JobMapScreen(offer: o)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              BigButton(
+                label: 'Open location in Google Maps',
+                filled: false,
+                height: 52,
+                onPressed: () => openInMaps(o.latitude, o.longitude),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${o.distanceKm.toStringAsFixed(1)} km from where you were, straight line',
+                style: const TextStyle(fontSize: 12, color: RC.muted),
+              ),
+            ],
+          ),
+        ),
+        if (held || o.status == 'completed') ...[
+          const SizedBox(height: 16),
+          _notesCard(),
+        ],
+        const SizedBox(height: 16),
+        const SectionLabel('WHAT WE KNOW'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final f in o.flags) Chip2(f, RC.dangerChipBg, RC.dangerChipFg),
+            Chip2(
+              o.peopleCount == 1 ? '1 person' : '${o.peopleCount} people',
+              RC.infoChipBg,
+              RC.infoChipFg,
+            ),
+          ],
+        ),
+        if (o.needs.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const SectionLabel('RESPONSE CAPABILITIES'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final need in o.needs)
+                Chip2(roleLabel(need), RC.needBg, RC.needFg),
+            ],
+          ),
+        ],
+        if (held) ...[
+          const SizedBox(height: 16),
+          _moreUnitsCard(o),
+        ],
+        const SizedBox(height: 24),
+        if (!closed) ...[
+          if (o.status == 'accepted')
+            BigButton(
+              label: "I'm on my way",
+              onPressed: _busy ? null : () => _move('enroute'),
+            ),
+          if (o.status == 'enroute')
+            BigButton(
+              label: 'I have arrived',
+              onPressed: _busy ? null : () => _move('arrived'),
+            ),
+          if (o.status == 'arrived') ...[
+            if (_needsTransport(o) && o.transport == null) ...[
+              BigButton(
+                label: 'Start transport',
+                color: RC.accent,
+                onPressed: _busy ? null : () => _startTransport(o),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (_needsTransport(o) && o.transport != null && !o.transport!.hasArrived) ...[
+              BigButton(
+                label: 'I have arrived at the hospital',
+                color: RC.accent,
+                onPressed: _busy ? null : _hospitalArrived,
+              ),
+              const SizedBox(height: 10),
+            ],
+            BigButton(
+              label: 'Complete job',
+              onPressed: _busy ? null : _confirmComplete,
+            ),
+          ],
+          if (o.status == 'accepted' || o.status == 'enroute') ...[
+            const SizedBox(height: 10),
+            Center(
+              child: TextButton.icon(
+                onPressed: _busy ? null : _standDown,
+                icon: const Icon(Icons.exit_to_app, size: 18),
+                label: const Text("I can't take this job"),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  static bool _needsTransport(Offer o) =>
+      o.role == 'medical_transport' || o.needs.contains('medical_transport');
+
+  Widget _closedCard(Offer o) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: RC.card,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          o.status == 'completed'
+              ? 'Job completed. Thank you.'
+              : _stoodDown
+              ? 'You stood down from this job. Dispatch has alerted the next nearest unit, and the caller can see the update.'
+              : o.withdrawReason == 'incident_cancelled'
+              ? 'The resident cancelled this alert. You can stand down.'
+              : 'This job is no longer open.',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: RC.text,
+          ),
+        ),
+        if (_stoodDown) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'You are back to Available, so you can take the next call.',
+            style: TextStyle(fontSize: 13, color: RC.soft, height: 1.4),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  /// 2.6: Beacon-style response times, from server-stamped offer times.
+  Widget _summaryCard(Offer o) {
+    final received = o.createdAt;
+    final accepted = o.timeFor('accepted');
+    final arrived = o.timeFor('arrived');
+    final done = o.timeFor('completed') ?? o.respondedAt;
+    final feedback = o.callerFeedbackSafe;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('RESPONSE TIMES'),
+          const SizedBox(height: 10),
+          _summaryRow('Received to accepted', received, accepted),
+          _summaryRow('Accepted to arrived', accepted, arrived),
+          _summaryRow('Arrived to complete', arrived, done),
+          if (feedback != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  feedback ? Icons.check_circle_outline : Icons.error_outline,
+                  size: 18,
+                  color: feedback ? RC.accept : RC.medium,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    feedback
+                        ? 'Caller confirmed safe'
+                        : 'Caller reported still needing help',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: feedback ? RC.accept : RC.medium,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, DateTime? from, DateTime? to) {
+    final raw = from == null || to == null
+        ? null
+        : to.difference(from).inSeconds;
+    final seconds = raw == null || raw >= 0 ? raw : 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13.5, color: RC.soft),
+            ),
+          ),
+          Text(
+            seconds == null
+                ? 'Not recorded'
+                : seconds < 60
+                ? '${seconds < 0 ? 0 : seconds} s'
+                : '${seconds ~/ 60} min ${seconds % 60} s',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: seconds == null ? RC.muted : RC.text,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 2.8: shown once after a High priority completion. Nothing is stored.
+  Widget _wellbeingCard() => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: RC.surface2,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: RC.line),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'That was a demanding call. If you want to talk to someone, ask your supervisor about peer support.',
+          style: TextStyle(fontSize: 14.5, color: RC.text, height: 1.4),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => setState(() => _wellbeingDismissed = true),
+            child: const Text('Dismiss'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _transportCard(Offer o) {
+    final leg = o.transport!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(
+            leg.hasArrived ? 'TRANSPORT COMPLETE' : 'TRANSPORTING TO',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            leg.destinationName,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: RC.text,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            leg.hasArrived
+                ? 'Arrived${_travelText(leg) == null ? '' : ' · ${_travelText(leg)} from the scene'}'
+                : 'Take the patient there now. The route is in the app.',
+            style: const TextStyle(fontSize: 13, color: RC.soft, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => _openTransportRoute(o),
+            icon: const Icon(Icons.route_outlined, size: 18),
+            label: const Text('Open route'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String? _travelText(TransportLeg leg) {
+    final d = leg.travelTime;
+    if (d == null) return null;
+    final s = d.inSeconds;
+    return s < 60 ? '$s s' : '${s ~/ 60} min ${s % 60} s';
+  }
+
+  /// 2.7: notes are available at any time while the unit holds the job, saved when the field loses focus.
+  Widget _notesCard() => Container(
+    margin: const EdgeInsets.only(top: 16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: RC.card,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('INCIDENT NOTES'),
+        const SizedBox(height: 4),
+        const Text(
+          'Only you and dispatch can see these.',
+          style: TextStyle(fontSize: 12, color: RC.muted),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _notes,
+          focusNode: _notesFocus,
+          maxLength: 500,
+          minLines: 3,
+          maxLines: 6,
+          style: const TextStyle(color: RC.text, fontSize: 14.5, height: 1.4),
+          onChanged: (_) {
+            if (!_notesDirty) setState(() => _notesDirty = true);
+          },
+          decoration: InputDecoration(
+            hintText: 'Street, gate, patient condition, anything the next unit should know.',
+            hintStyle: const TextStyle(color: RC.muted, height: 1.4),
+            filled: true,
+            fillColor: RC.surface2,
+            counterStyle: const TextStyle(color: RC.muted, fontSize: 11),
+            border: const OutlineInputBorder(
+              borderSide: BorderSide(color: RC.line),
+            ),
+          ),
+        ),
+        Row(
+          children: [
+            if (_notesSaving)
+              const Text(
+                'Saving…',
+                style: TextStyle(fontSize: 12, color: RC.muted),
+              )
+            else if (_notesError != null)
+              Expanded(
+                child: Text(
+                  _notesError!,
+                  style: const TextStyle(fontSize: 12, color: RC.alert),
+                ),
+              )
+            else if (_notesDirty)
+              const Text(
+                'Tap outside the box to save.',
+                style: TextStyle(fontSize: 12, color: RC.muted),
+              )
+            else if (_savedNote.isNotEmpty)
+              const Text(
+                'Saved',
+                style: TextStyle(fontSize: 12, color: RC.accept),
+              ),
+            const Spacer(),
+            if (_notesError != null)
+              TextButton(
+                onPressed: _saveNotes,
+                child: const Text('Retry'),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// 2.3: request more units (once per offer), and the request status afterwards.
+  Widget _moreUnitsCard(Offer o) {
+    final mu = o.moreUnits;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('MORE UNITS'),
+          const SizedBox(height: 8),
+          if (mu == null) ...[
+            const Text(
+              'Need backup? Dispatch will alert the next nearest unit.',
+              style: TextStyle(fontSize: 13.5, color: RC.soft, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _openMoreUnits,
+              icon: const Icon(Icons.group_add_outlined, size: 18),
+              label: const Text('Request more units'),
+            ),
+          ] else ...[
+            Text(
+              _moreUnitsLine(o) ?? '',
+              style: const TextStyle(fontSize: 13.5, color: RC.text, height: 1.4),
+            ),
+            if (mu.note.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Your note: ${mu.note}',
+                style: const TextStyle(fontSize: 12.5, color: RC.muted),
+              ),
+            ],
+            const SizedBox(height: 8),
+            const Text(
+              'Dispatch has been asked. Keep working. You will see an update here.',
+              style: TextStyle(fontSize: 12.5, color: RC.accept, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _progress(String status) {
+    final current = switch (status) {
+      'accepted' => 0,
+      'enroute' => 1,
+      'arrived' => 2,
+      'completed' => 3,
+      _ => 0,
+    };
+    const steps = ['Accepted', 'En route', 'Arrived', 'Complete'];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RC.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('RESPONSE PROGRESS'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var index = 0; index < steps.length; index++) ...[
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: index <= current ? RC.accept : RC.line,
+                        ),
+                        child: index < current
+                            ? const Icon(
+                                Icons.check,
+                                size: 15,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        steps[index],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: index <= current ? RC.text : RC.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+<<<END>>>
+
+  tracking/maneuver_icons.dart
+  tracking/route_logic.dart
+  tracking/track_logic.dart
+
+=== mobile/test files ===
+  mobile/test/activity_record_test.dart
+  mobile/test/admin_account_test.dart
+  mobile/test/admin_only_test.dart
+  mobile/test/admin_stats_test.dart
+  mobile/test/alert_phase_test.dart
+  mobile/test/alert_status_sheet_stages_test.dart
+  mobile/test/analytics_math_test.dart
+  mobile/test/auth_error_text_test.dart
+  mobile/test/candidates_assign_test.dart
+  mobile/test/closure_sheet_test.dart
+  mobile/test/contact_mask_test.dart
+  mobile/test/copy_test.dart
+  mobile/test/create_account_screen_test.dart
+  mobile/test/dispatch_models_test.dart
+  mobile/test/emergency_layers_test.dart
+  mobile/test/firebase_diagnostics_test.dart
+  mobile/test/first_aid_call_button_test.dart
+  mobile/test/first_aid_content_test.dart
+  mobile/test/first_aid_fixture.dart
+  mobile/test/first_aid_flow_test.dart
+  mobile/test/first_aid_gating_test.dart
+  mobile/test/first_aid_search_test.dart
+  mobile/test/help_models_test.dart
+  mobile/test/incident_id_test.dart
+  mobile/test/incident_order_test.dart
+  mobile/test/location_confidence_test.dart
+  mobile/test/override_assign_test.dart
+  mobile/test/priority_classifier_test.dart
+  mobile/test/priority_display_test.dart
+  mobile/test/profile_screen_test.dart
+  mobile/test/queue_order_test.dart
+  mobile/test/quick_questions_test.dart
+  mobile/test/quiet_mode_test.dart
+  mobile/test/resident_track_publisher_test.dart
+  mobile/test/responder_priority_display_test.dart
+  mobile/test/route_logic_test.dart
+  mobile/test/send_failure_banner_test.dart
+  mobile/test/sos_flow_test.dart
+  mobile/test/text_triage_parity_test.dart
+  mobile/test/track_logic_test.dart
+  mobile/test/triage_parity_test.dart
+  mobile/test/triage_unanswered_unknown_test.dart
+  mobile/test/unsupported_role_screen_test.dart
+  mobile/test/ux_kit_test.dart
+  mobile/test/widget_test.dart.old
+  mobile/test/assets/decision_table.json
+  mobile/test/assets/test_vectors.json
+  mobile/test/assets/text_triage_vectors.json
+  mobile/test/responder/incoming_alert_buttons_test.dart
+  mobile/test/responder/more_units_sheet_test.dart
+  mobile/test/responder/offer_queue_order_test.dart
+  mobile/test/responder/responder_labels_test.dart
+  mobile/test/responder/sos_hold_test.dart
+  mobile/test/responder/transport_flow_test.dart
+
+=== pubspec dependencies ===
+name: mobile
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+  
+  # Firebase and project dependencies
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  cloud_firestore: ^5.4.0
+  cloud_functions: ^5.1.0
+  go_router: ^14.2.0
+  provider: ^6.1.2
+  permission_handler: ^12.0.1
+  dropdown_search: ^6.0.2
+  intl_phone_number_input: ^0.7.5
+  dlibphonenumber: ^1.1.73
+  geolocator: ^13.0.2
+  intl: ^0.20.2
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  url_launcher: ^6.3.0
+  firebase_storage: ^12.4.10
+  image_picker: ^1.2.4
+  crop_your_image: ^2.0.1
+  image: ^4.12.0
+  uuid: ^4.6.0
+  firebase_messaging: ^15.2.10
+  google_maps_flutter: ^2.19.0
+
+
