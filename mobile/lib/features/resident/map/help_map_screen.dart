@@ -21,7 +21,11 @@ import 'location_resolver.dart';
 import 'map_style.dart';
 import 'maps_available.dart';
 import 'nearby_places.dart';
+import '../../tracking/nav_logic.dart' show NavMapStyle, styleForZoom;
+import '../../tracking/nav_styles.dart' show kNavStyleDetail;
+import '../../tracking/nav_pins.dart' show NavPins;
 import 'pin_factory.dart';
+import 'watch_responder_screen.dart';
 
 class _C {
   static const ink = Color(0xFF1A1A1A);
@@ -93,6 +97,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
   bool _selFromMap = false;
   String? _busyId;
   bool _hidden = false;
+  NavMapStyle _mapStyle = NavMapStyle.overview;
+  MapType _mapType = MapType.normal;
+  BitmapDescriptor? _unitArrow;
+  final Map<String, double> _bearings = {};
   String _fitKey = '';
   String? _address;
   String _addrFor = '';
@@ -113,6 +121,9 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _loadPins();
+    NavPins.pin('unit').then((p) {
+      if (mounted && p != null) setState(() => _unitArrow = p);
+    });
     _subs.add(repo.watchIncident(widget.incidentId).listen((i) {
       if (!mounted) return;
       setState(() {
@@ -135,8 +146,11 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
       if (!mounted) return;
       for (final e in t.entries) {
         final now = _positionOf(e.key) ?? LatLng(e.value.latitude, e.value.longitude);
+        final to = LatLng(e.value.latitude, e.value.longitude);
+        final hd = e.value.heading ?? _bearingBetween(now, to);
+        if (hd != null) _bearings[e.key] = hd;
         _from[e.key] = now;
-        _to[e.key] = LatLng(e.value.latitude, e.value.longitude);
+        _to[e.key] = to;
       }
       _anim.forward(from: 0);
     }));
@@ -335,6 +349,15 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     }
   }
 
+  double? _bearingBetween(LatLng a, LatLng b) {
+    final dLat = b.latitude - a.latitude, dLng = b.longitude - a.longitude;
+    if (dLat.abs() < 1e-7 && dLng.abs() < 1e-7) return null;
+    const r = math.pi / 180;
+    final y = math.sin(dLng * r) * math.cos(b.latitude * r);
+    final x = math.cos(a.latitude * r) * math.sin(b.latitude * r) - math.sin(a.latitude * r) * math.cos(b.latitude * r) * math.cos(dLng * r);
+    return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+  }
+
   String _keyOfOption(HelpOption o) => o.isLive ? 'live' : (placeTypeOf(o.orgType)?.name ?? 'hospital');
 
   Set<Marker> _markers() {
@@ -354,8 +377,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
       out.add(Marker(
         markerId: MarkerId('o_${o.refId}'),
         position: pos,
-        icon: _icon(_keyOfOption(o), big: true),
+        icon: (o.isLive && o.holdsJob && _unitArrow != null) ? _unitArrow! : _icon(_keyOfOption(o), big: true),
         anchor: const Offset(0.5, 0.5),
+        flat: o.isLive && o.holdsJob && _unitArrow != null,
+        rotation: o.isLive && o.holdsJob ? (_bearings[o.refId] ?? 0) : 0,
         infoWindow: InfoWindow(title: o.name, snippet: o.isLive ? 'Registered unit' : 'Listed place'),
         zIndexInt: o.holdsJob ? 4 : 3,
         onTap: () => setState(() {
@@ -389,8 +414,9 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     if (d != null && la != null && lo != null) {
       final pts = _destRoute?.points ?? const [];
       if (pts.length > 1) {
-        out.add(Polyline(polylineId: const PolylineId('dest_casing'), points: [for (final p in pts) LatLng(p.lat, p.lng)], color: Colors.white, width: 10, startCap: Cap.roundCap, endCap: Cap.roundCap, jointType: JointType.round));
-        out.add(Polyline(polylineId: const PolylineId('dest'), points: [for (final p in pts) LatLng(p.lat, p.lng)], color: const Color(0xFF1A73E8), width: 6, startCap: Cap.roundCap, endCap: Cap.roundCap, jointType: JointType.round));
+        final dotted = (_destRoute?.distanceMeters ?? 1 << 30) <= 1200;
+        if (!dotted) out.add(Polyline(polylineId: const PolylineId('dest_casing'), points: [for (final p in pts) LatLng(p.lat, p.lng)], color: Colors.white, width: 10, startCap: Cap.roundCap, endCap: Cap.roundCap, jointType: JointType.round));
+        out.add(Polyline(polylineId: const PolylineId('dest'), points: [for (final p in pts) LatLng(p.lat, p.lng)], color: const Color(0xFF1A73E8), width: dotted ? 9 : 6, patterns: dotted ? [PatternItem.dot, PatternItem.gap(10)] : const <PatternItem>[], startCap: Cap.roundCap, endCap: Cap.roundCap, jointType: JointType.round));
       } else if (!_routeBusy) {
         out.add(Polyline(polylineId: const PolylineId('dest_est'), points: [LatLng(la, lo), LatLng(d.lat, d.lng)], color: const Color(0xFF1A73E8), width: 4, patterns: [PatternItem.dash(18), PatternItem.gap(12)]));
       }
@@ -476,11 +502,16 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
         Positioned.fill(
           child: GoogleMap(
             initialCameraPosition: CameraPosition(target: LatLng(_lat!, _lng!), zoom: 15),
-            style: kEmergencyMapStyle,
+            mapType: _mapType,
+            style: _mapType != MapType.normal ? null : (_mapStyle == NavMapStyle.detail ? kNavStyleDetail : kEmergencyMapStyle),
             markers: _markers(),
             polylines: _lines(),
             circles: routing ? const {} : _circles(),
-            minMaxZoomPreference: const MinMaxZoomPreference(11, 19),
+            minMaxZoomPreference: const MinMaxZoomPreference(11, 20),
+            onCameraMove: (p) {
+              final next = styleForZoom(p.zoom, _mapStyle);
+              if (next != _mapStyle && mounted) setState(() => _mapStyle = next);
+            },
             onMapCreated: (c) {
               _map = c;
               _fit();
@@ -496,7 +527,7 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
             mapToolbarEnabled: false,
             compassEnabled: false,
             trafficEnabled: false,
-            buildingsEnabled: false,
+            buildingsEnabled: true,
             indoorViewEnabled: false,
             onTap: (_) => setState(() => _selFromMap = false),
             padding: kIsWeb ? EdgeInsets.zero : EdgeInsets.only(top: 120, bottom: routing ? 210 : 270),
@@ -645,6 +676,8 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
         ),
       ),
       const SizedBox(width: 10),
+      _roundBtn(_mapType == MapType.normal ? Icons.satellite_alt : Icons.map_outlined, _mapType == MapType.normal ? 'Satellite view' : 'Map view', () => setState(() => _mapType = _mapType == MapType.normal ? MapType.hybrid : MapType.normal)),
+      const SizedBox(width: 8),
       _roundBtn(Icons.edit_location_alt_outlined, 'Move my pin', _fixLocation),
       if (meta.sensitive) ...[const SizedBox(width: 8), _roundBtn(Icons.visibility_off_outlined, 'Hide screen', () => setState(() => _hidden = true))],
     ]);
@@ -946,7 +979,10 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
     }
     if (text == null) return const SizedBox.shrink();
     final fg = warn ? Tk.warnInk : Tk.ink;
-    return Padding(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: held.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WatchResponderScreen(incidentId: widget.incidentId))),
+      child: Padding(
       padding: const EdgeInsets.only(top: 8),
       child: AnimatedSwitcher(
         duration: Tk.normal,
@@ -960,10 +996,11 @@ class _HelpMapScreenState extends State<HelpMapScreen> with SingleTickerProvider
             if (working) const PulseDot(size: 9) else Icon(held.isNotEmpty ? Icons.directions_car_filled_outlined : Icons.info_outline, size: 20, color: warn ? Tk.warnInk : Tk.brand),
             const SizedBox(width: 8),
             Expanded(child: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg, height: 1.3))),
+            if (held.isNotEmpty) ...[const SizedBox(width: 6), const Icon(Icons.chevron_right, size: 22, color: Tk.mute)],
           ]),
         ),
       ),
-    );
+    ));
   }
 
   Widget _numbers({bool prominent = false}) => Wrap(spacing: 8, runSpacing: 8, children: [

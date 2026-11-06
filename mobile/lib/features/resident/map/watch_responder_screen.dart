@@ -215,80 +215,81 @@ class _WatchResponderScreenState extends State<WatchResponderScreen> with Single
       _ => Tk.faint,
     };
 
+    final card = NavBottomCard(
+      title: title,
+      subtitle: subtitle,
+      note: note,
+      actions: [
+        if (unit.phone.isNotEmpty)
+          SizedBox(
+            height: 50,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: Tk.brand, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+              onPressed: () => launchUrl(Uri(scheme: 'tel', path: unit.phone.replaceAll(' ', ''))),
+              icon: const Icon(Icons.call, size: 18),
+              label: const Text('Call responder', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+      ],
+    );
+
     return Scaffold(
-      backgroundColor: Tk.bg,
-      body: Stack(children: [
-        Positioned.fill(
-          child: NavMapView(
-            markers: [
-              if (me != null) NavMarkerData(id: 'caller', kind: 'caller', position: me, accuracyM: _info.accuracyM, title: 'You'),
-              if (unitPoint != null)
-                NavMarkerData(id: 'unit', kind: 'unit', position: unitPoint, heading: track?.heading, title: unit.name, snippet: freshnessLabel(freshness, track?.at, now)),
-            ],
-            traveled: progress?.traveled ?? const <LatLngPoint>[],
-            remaining: progress?.remaining ?? const <LatLngPoint>[],
-            fitPoints: fitPoints,
-            fitKey: fitKey,
-            padding: const EdgeInsets.only(top: 100, bottom: 215),
-            onUserGesture: () {
-              if (_autoFit) setState(() => _autoFit = false);
-            },
-            showRecenter: !_autoFit,
-            onRecenter: () => setState(() => _autoFit = true),
-            recenterIcon: Icons.zoom_out_map,
-            recenterTooltip: 'Show both of us',
-          ),
-        ),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Row(children: [
-              MapRoundButton(icon: Icons.arrow_back_ios_new, tooltip: 'Back', onTap: () => Navigator.of(context).maybePop()),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4))]),
-                  child: Row(children: [
-                    const Icon(Icons.local_hospital_outlined, size: 20, color: Tk.brand),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        arrived ? 'Your responder has arrived' : 'Your responder is on the way',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Tk.ink),
-                      ),
-                    ),
-                    if (!arrived) FreshChip(label: freshnessLabel(freshness, track?.at, now), color: chipColor),
-                  ]),
-                ),
+      backgroundColor: Colors.white,
+      body: Column(children: [
+        Expanded(
+          child: Stack(children: [
+            Positioned.fill(
+              child: NavMapView(
+                markers: [
+                  if (me != null) NavMarkerData(id: 'caller', kind: 'caller', position: me, accuracyM: _info.accuracyM, title: 'You'),
+                  if (unitPoint != null)
+                    NavMarkerData(id: 'unit', kind: 'unit', position: unitPoint, heading: track?.heading, title: unit.name, snippet: freshnessLabel(freshness, track?.at, now)),
+                ],
+                traveled: progress?.traveled ?? const <LatLngPoint>[],
+                remaining: progress?.remaining ?? const <LatLngPoint>[],
+                fitPoints: fitPoints,
+                fitKey: fitKey,
+                padding: const EdgeInsets.only(top: 100, bottom: 8),
+                onUserGesture: () {
+                  if (_autoFit) setState(() => _autoFit = false);
+                },
+                showRecenter: !_autoFit,
+                onRecenter: () => setState(() => _autoFit = true),
+                recenterIcon: Icons.zoom_out_map,
+                recenterTooltip: 'Show both of us',
               ),
-            ]),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: NavBottomCard(
-            title: title,
-            subtitle: subtitle,
-            note: note,
-            actions: [
-              if (unit.phone.isNotEmpty)
-                SizedBox(
-                  height: 50,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: Tk.brand, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    onPressed: () => launchUrl(Uri(scheme: 'tel', path: unit.phone.replaceAll(' ', ''))),
-                    icon: const Icon(Icons.call, size: 18),
-                    label: const Text('Call responder', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Row(children: [
+                  MapRoundButton(icon: Icons.arrow_back_ios_new, tooltip: 'Back', onTap: () => Navigator.of(context).maybePop()),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4))]),
+                      child: Row(children: [
+                        const Icon(Icons.local_hospital_outlined, size: 20, color: Tk.brand),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            arrived ? 'Your responder has arrived' : 'Your responder is on the way',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Tk.ink),
+                          ),
+                        ),
+                        if (!arrived) FreshChip(label: freshnessLabel(freshness, track?.at, now), color: chipColor),
+                      ]),
+                    ),
                   ),
-                ),
-            ],
-          ),
+                ]),
+              ),
+            ),
+          ]),
         ),
+        card,
       ]),
     );
   }

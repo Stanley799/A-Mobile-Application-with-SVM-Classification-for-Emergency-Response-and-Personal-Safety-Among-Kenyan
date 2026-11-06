@@ -1,0 +1,1064 @@
+##### FILE: functions/main.py (255 lines)
+<<<BEGIN>>>
+"""Cloud Functions (2nd gen, Python) for the Emergency Response System.
+  on_incident_written   : an alert is created/changed  -> decide who to ask (dispatch engine)
+  on_offer_written      : a responder answered         -> resolve who won, release contact, ask the next one if declined
+  sweep_dispatch        : every minute                 -> expire unanswered offers, escalate, set silent responders Offline
+  admin_assign_responder / admin_close_incident        -> manual actions for administrators (callable)
+  save_text_feedback_fn : saves resident-CONFIRMED labels for retraining (consent only; sensitive messages never)
+All decisions live in dispatch/core.py (tested). This file only connects them to Firebase."""
+import hashlib
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml", "scripts"))
+
+from firebase_admin import auth as fb_auth, initialize_app, firestore
+from firebase_functions import firestore_fn, https_fn, options, scheduler_fn
+
+import dispatch  # noqa: F401  (path set-up)
+from dispatch import admin_accounts as acct, config as C, core, notify, store
+
+from phase3_functions import MAPS_SERVER_KEY, resident_request_unit, incident_route  # noqa: F401,E402  (Phase 3A)
+from phase3c_functions import help_geocode, help_directions  # noqa: F401,E402  (Phase 3A.2)
+from phase4d_functions import responder_sos, admin_resolve_sos, reveal_contact  # noqa: F401,E402  (Phase 4D)
+import phase4d_core as p4
+initialize_app()
+OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_512, timeout_sec=60, max_instances=20, secrets=[MAPS_SERVER_KEY])
+_db = None
+
+
+def db():
+    global _db
+    if _db is None:
+        _db = firestore.client()
+    return _db
+
+
+def _strip(d):
+    return {k: v for k, v in (d or {}).items() if k not in ("dispatch", "updatedAt")}
+
+
+def _quiet(fn, label):
+    """An event or metric failure must never stop dispatch."""
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001
+        print(f"[events] {label}: {type(e).__name__}")
+
+
+def _record_incident_events(db, iid, old, new, now):
+    """Who opened the call, when it was classified, what priority was set, when it closed."""
+    uid = new.get("userId") or "system"
+    if old is None:
+        p4.write_event(db, iid, "incident_created", "resident", uid, {"category": new.get("category")}, "incident_created")
+    else:
+        if old.get("triageStatus") != new.get("triageStatus") and new.get("triageStatus") in ("quick", "complete"):
+            p4.write_event(db, iid, "classified", "resident", uid,
+                           {"triageStatus": new.get("triageStatus"), "priority": new.get("priority")},
+                           f"classified_{new.get('triageStatus')}")
+        if old.get("priority") != new.get("priority"):
+            p4.write_event(db, iid, "priority_set", "resident", uid,
+                           {"priority": new.get("priority"), "source": new.get("prioritySource")},
+                           f"priority_set_{new.get('priority')}")
+        if old.get("status") != "Cancelled" and new.get("status") == "Cancelled":
+            p4.write_event(db, iid, "incident_cancelled", "resident", uid, {"from": old.get("status")}, "incident_cancelled")
+        if old.get("status") != "Resolved" and new.get("status") == "Resolved":
+            p4.write_event(db, iid, "incident_closed", "system", "system", {}, "incident_closed")
+    acc = new.get("locationAccuracyM")
+    if isinstance(acc, (int, float)) and acc > p4.LOW_ACCURACY_M and (old is None or old.get("locationAccuracyM") != acc):
+        p4.raise_attention(db, iid, "low_accuracy")
+    if new.get("status") in ("Cancelled", "Resolved"):
+        p4.close_metrics(db, iid, new, now)
+
+
+def _share_caller_feedback(db, iid, old, new):
+    """The unit that closed the job hears 'safe / still needs help', never who said it."""
+    fb = new.get("residentFeedback")
+    if not isinstance(fb, dict) or not isinstance(fb.get("safe"), bool):
+        return
+    if old is not None and old.get("residentFeedback") == new.get("residentFeedback"):
+        return
+    for s in db.collection("offers").where("incidentId", "==", iid).where("status", "==", "completed").stream():
+        if (s.to_dict().get("callerFeedback") or {}).get("safe") == fb["safe"]:
+            continue
+        s.reference.update({"callerFeedback": {"safe": fb["safe"], "at": firestore.SERVER_TIMESTAMP}})
+
+
+@firestore_fn.on_document_written(document="incidents/{incidentId}", **OPTS)
+def on_incident_written(event: firestore_fn.Event[firestore_fn.Change]):
+    after = event.data.after
+    if after is None or not after.exists:
+        return
+    before = event.data.before
+    new = after.to_dict() or {}
+    old = before.to_dict() if before is not None and before.exists else None
+    if old is not None and _strip(old) == _strip(new):
+        return                                               # only our own dispatch write changed: stop (no loops)
+    iid = event.params["incidentId"]
+    _quiet(lambda: _record_incident_events(db(), iid, old, new, time.time()), f"incident {iid}")
+    if old is None:
+        _quiet(lambda: p4.snapshot_contact(db(), iid, new), f"contact {iid}")
+    _quiet(lambda: _share_caller_feedback(db(), iid, old, new), f"feedback {iid}")
+    store.reconcile_incident(db(), iid, time.time(), notify.send_offer_push)
+
+
+@firestore_fn.on_document_written(document="offers/{offerId}", **OPTS)
+def on_offer_written(event: firestore_fn.Event[firestore_fn.Change]):
+    after = event.data.after
+    if after is None or not after.exists:
+        return
+    before = event.data.before
+    new = after.to_dict()
+    old = before.to_dict() if before is not None and before.exists else None
+    _quiet(lambda: p4.record_offer_events(db(), after.id, new, old), f"offer {after.id}")
+    if old is None:
+        return                                               # a new offer: the push was sent when it was created
+    if old.get("status") == new.get("status"):
+        return
+    store.handle_offer_status_change(db(), after.id, new, time.time(), notify.send_offer_push)
+
+
+@scheduler_fn.on_schedule(schedule="every 1 minutes", **OPTS)
+def sweep_dispatch(event: scheduler_fn.ScheduledEvent) -> None:
+    store.sweep(db(), time.time(), notify.send_offer_push)
+    _quiet(lambda: p4.sweep_attention(db(), time.time()), "attention sweep")
+
+
+def _require_admin(req):
+    if req.auth is None or (req.auth.token or {}).get("role") != "SystemAdmin":
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.PERMISSION_DENIED, "Administrators only.")
+
+
+@https_fn.on_call(**OPTS)
+def admin_assign_responder(req: https_fn.CallableRequest):
+    """Manually asks one responder to attend an incident (administrators only). A reason is required."""
+    _require_admin(req)
+    actor = "admin"
+    d = req.data if isinstance(req.data, dict) else {}
+    iid, rid = d.get("incidentId"), d.get("responderId")
+    reason = str(d.get("reason") or "").strip()[:140]
+    if len(reason) < 3:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Give a reason for the manual assignment (at least 3 characters).")
+    if not isinstance(iid, str) or not isinstance(rid, str):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "incidentId and responderId are required.")
+    snap = db().collection("incidents").document(iid).get()
+    rs = db().collection("responders").document(rid).get()
+    if not snap.exists or not rs.exists:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.NOT_FOUND, "Incident or responder not found.")
+    inc = store.incident_view(iid, snap.to_dict())
+    if inc["status"] not in ("Active", "SupportOnly") or inc["lat"] is None:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.FAILED_PRECONDITION, "The incident is closed or has no location.")
+    resp = store.responder_view(db(), rid, rs.to_dict())
+    if not resp["verified"]:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.FAILED_PRECONDITION, "Responder is not verified.")
+    pr = core.server_priority(inc, store.table())
+    required, preferred, n = core.needs(inc)
+    now = time.time()
+    caps = core.effective_caps(resp)
+    role = d.get("role") if d.get("role") in C.ALL_CAPABILITIES else (required[0] if required else "any_responder")
+    from dispatch import config
+    dist = round(core.dl.haversine_km(inc["lat"], inc["lng"], resp["lat"], resp["lng"]), 2) if resp["lat"] is not None else None
+    offer = {"id": f"{iid}_{rid}", "incidentId": iid, "incidentCode": inc["code"], "responderId": rid, "role": role, "wave": 0, "status": "offered",
+             "createdAt": now, "expiresAt": now + config.MANUAL_OFFER_SECONDS, "distanceKm": dist if dist is not None else 0, "priority": pr["priority"],
+             "category": inc["category"], "subtype": inc["subtype"], "covers": sorted(set(caps) & set(required + preferred)), "manual": True,
+             "location": {"lat": inc["lat"], "lng": inc["lng"]}, **core.briefing_fields(inc, pr["priority"], required, n or {})}
+    ref = db().collection("offers").document(offer["id"])
+    doc = store._offer_doc(offer)
+    ref.set(doc)                                              # an administrator may re-ask a responder who declined before
+    store.audit(db(), "offer_created_manual", iid, responderId=rid, by=req.auth.uid)
+    _quiet(lambda: p4.write_event(db(), iid, "admin_assigned", actor, req.auth.uid,
+                                  {"role": role, "reason": reason}, f"admin_assigned_{offer['id']}"), f"assign {iid}")
+    notify.send_offer_push(db(), offer)
+    return {"ok": True, "offerId": offer["id"]}
+
+
+@https_fn.on_call(**OPTS)
+def admin_close_incident(req: https_fn.CallableRequest):
+    """Administrators close an incident with a required outcome note."""
+    _require_admin(req)
+    actor = "admin"
+    d = req.data if isinstance(req.data, dict) else {}
+    iid, note = d.get("incidentId"), str(d.get("note") or "").strip()[:280]
+    if not isinstance(iid, str):
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "incidentId is required.")
+    if len(note) < 3:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "Write the outcome (at least 3 characters).")
+    ref = db().collection("incidents").document(iid)
+    snap = ref.get()
+    if not snap.exists:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.NOT_FOUND, "Incident not found.")
+    if snap.to_dict().get("status") not in ("Active", "SupportOnly"):
+        return {"ok": True, "already": True}
+    ref.update({"status": "Resolved", "resolvedAt": firestore.SERVER_TIMESTAMP, "resolution": {"by": req.auth.uid, "note": note, "byRole": actor}})
+    store.audit(db(), "incident_closed_by_admin", iid, by=req.auth.uid, note=note)
+    _quiet(lambda: p4.write_event(db(), iid, "incident_closed", actor, req.auth.uid, {"by": actor}, "incident_closed"), f"close {iid}")
+    return {"ok": True}
+
+
+# ---- administrator accounts (only an existing administrator may call these) ----
+_CODES = {"invalid-argument": https_fn.FunctionsErrorCode.INVALID_ARGUMENT, "failed-precondition": https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
+          "not-found": https_fn.FunctionsErrorCode.NOT_FOUND}
+
+
+def _admin_call(fn):
+    try:
+        return fn()
+    except acct.AdminError as e:
+        raise https_fn.HttpsError(_CODES.get(e.code, https_fn.FunctionsErrorCode.INTERNAL), e.message)
+
+
+@https_fn.on_call(**OPTS)
+def admin_list_admins(req: https_fn.CallableRequest):
+    _require_admin(req)
+    return {"admins": [{**a, "createdAt": a["createdAt"], "lastSignInAt": a["lastSignInAt"]} for a in _admin_call(lambda: acct.list_admins(fb_auth))], "me": req.auth.uid}
+
+
+@https_fn.on_call(**OPTS)
+def admin_grant_admin(req: https_fn.CallableRequest):
+    """Adds an administrator by e-mail. New people get a one-time link to set their own password (no password is ever chosen for them)."""
+    _require_admin(req)
+    d = req.data if isinstance(req.data, dict) else {}
+    res = _admin_call(lambda: acct.grant(fb_auth, d.get("email")))
+    store.audit(db(), "admin_granted", "-", by=req.auth.uid, target=res["uid"], email=res["email"], created=res["created"])
+    return res
+
+
+@https_fn.on_call(**OPTS)
+def admin_revoke_admin(req: https_fn.CallableRequest):
+    _require_admin(req)
+    d = req.data if isinstance(req.data, dict) else {}
+    res = _admin_call(lambda: acct.revoke(fb_auth, req.auth.uid, d.get("uid")))
+    store.audit(db(), "admin_revoked", "-", by=req.auth.uid, target=res["uid"], email=res["email"])
+    return {"ok": True}
+
+
+# ---- resident-confirmed text feedback (optional: needs ml/scripts/feedback_store.py) ----
+try:
+    import feedback_store as fb
+
+    @https_fn.on_call(**OPTS)
+    def save_text_feedback_fn(req: https_fn.CallableRequest):
+        """Never blocks an emergency: the app ignores the answer."""
+        try:
+            uid = req.auth.uid if req.auth else None
+            record, why = fb.prepare_record(req.data, uid, os.environ.get("FEEDBACK_SALT", ""))
+            if record is None:
+                return {"stored": False, "reason": why}
+            doc_id = hashlib.sha256((record["contributor"] + record["text"].lower()).encode()).hexdigest()[:24]
+            record["created"] = firestore.SERVER_TIMESTAMP
+            db().collection("text_feedback").document(doc_id).set(record)
+            return {"stored": True}
+        except Exception as e:  # noqa: BLE001
+            return {"stored": False, "reason": f"error: {type(e).__name__}"}
+except ImportError:
+    pass
+
+<<<END>>>
+
+##### FILE: functions/requirements.txt (4 lines)
+<<<BEGIN>>>
+firebase-functions>=0.4.2
+firebase-admin>=6.5.0
+joblib>=1.3.0
+
+<<<END>>>
+
+##### FILE: functions/dispatch/config.py (36 lines)
+<<<BEGIN>>>
+"""All dispatch settings in one place. Change values here, nowhere else."""
+REGION = "europe-west1"          # MUST equal the region used in the Dart app (TriageTextService.region) and be a region your Firestore database supports
+
+WAVE_SIZE = {"High": 2, "Medium": 1, "Low": 1}   # responders asked at the same time for each needed role; the first to accept wins
+MAX_OFFERS_PER_ROLE = 6          # after this many tries for one role the system stops and tells the resident to call 922/999
+OFFER_SECONDS = 45               # time a responder has to answer (same as triage_schema routing.offer_timeout_seconds)
+LOCATION_WAIT_SECONDS = 20       # wait this long for the resident's GPS before telling them to call 922
+OTHER_HOLD_SECONDS = 25          # "Other / General" alerts wait this long for the category to be confirmed, then dispatch fail-safe
+STALE_OFFLINE_SECONDS = 600      # an "Available" responder not heard from for 10 minutes is set to Offline
+ACTIVE_WINDOW_SECONDS = 3600     # the engine stops working on an incident after one hour (an admin can still act)
+MANUAL_OFFER_SECONDS = 90        # offers created by an administrator
+
+ACTIVE_OFFER = ("offered", "accepted", "enroute", "arrived")      # still counts as "someone is on it"
+ACCEPTED_OFFER = ("accepted", "enroute", "arrived", "completed")  # a unit has taken the job
+CLOSED_OFFER = ("declined", "expired", "withdrawn")
+
+# What each kind of responder organisation can do, unless an administrator sets "capabilities" on the responder.
+CAPS_BY_TYPE = {
+    "Ambulance": ["medical_transport"],
+    "Fire": ["fire_suppression", "extrication"],
+    "Police": ["law_enforcement"],
+    "Hospital": ["medical_transport", "maternal_care", "gbv_care"],
+    "Community": [],
+    "Maritime": [],
+    "Other": [],
+}
+ALL_CAPABILITIES = ["medical_transport", "fire_suppression", "extrication", "law_enforcement", "maternal_care", "gbv_care", "antivenom"]
+CAP_LABELS = {
+    "medical_transport": "Ambulance / medical transport", "fire_suppression": "Fire suppression", "extrication": "Extrication (cutting free)",
+    "law_enforcement": "Police", "maternal_care": "Maternal care", "gbv_care": "GBV care", "antivenom": "Antivenom",
+}
+
+# Administrator accounts. Empty list = any e-mail may be made an administrator (by an existing administrator).
+# To restrict, list the allowed domains, for example ["strathmore.edu"].
+ADMIN_EMAIL_DOMAINS = []
+
+<<<END>>>
+
+##### FILE: functions/dispatch/store.py (299 lines)
+<<<BEGIN>>>
+"""Reads and writes Firestore for the dispatch engine. Thin on purpose: all decisions are made in core.py.
+`db` is a firestore client (or the in-memory fake used by tests)."""
+import datetime as dt
+import json
+import os
+
+from google.api_core.exceptions import AlreadyExists
+from google.cloud.firestore import GeoPoint, SERVER_TIMESTAMP
+
+from . import config as C
+from . import core
+
+_TABLE = None
+
+# Withdrawals the server makes itself. Any other withdrawal came from the unit holding the job.
+SERVER_WITHDRAW_REASONS = ("incident_cancelled", "incident_resolved", "another_unit_accepted", "role_already_filled")
+
+
+def table():
+    global _TABLE
+    if _TABLE is None:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ml", "models", "decision_table.json"), encoding="utf-8") as f:
+            _TABLE = json.load(f)
+    return _TABLE
+
+
+def epoch(v):
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, dt.datetime):
+        return (v if v.tzinfo else v.replace(tzinfo=dt.timezone.utc)).timestamp()
+    return None
+
+
+def when(e):
+    return dt.datetime.fromtimestamp(e, tz=dt.timezone.utc) if e is not None else None
+
+
+def incident_view(doc_id, d):
+    loc = d.get("location")
+    triage = d.get("triage") if isinstance(d.get("triage"), dict) else {}
+    return {"id": doc_id, "code": d.get("incidentCode") or doc_id, "userId": d.get("userId"), "status": d.get("status"),
+            "category": d.get("category"), "subtype": d.get("subtype"), "triageStatus": d.get("triageStatus", "pending"),
+            "answers": triage.get("answers") if isinstance(triage.get("answers"), dict) else {},
+            "lat": getattr(loc, "latitude", None), "lng": getattr(loc, "longitude", None),
+            "createdAt": epoch(d.get("createdAt")), "freeText": d.get("description") or "", "dispatch": d.get("dispatch")}
+
+
+def _user(db, uid):
+    s = db.collection("users").document(uid).get()
+    return s.to_dict() if s.exists else {}
+
+
+def responder_view(db, rid, r, users=None):
+    u = users if users is not None else _user(db, rid)
+    return {"id": rid, "name": r.get("organizationName") or rid, "type": r.get("organizationType"), "phone": u.get("phoneNumber", ""),
+            "lat": r.get("currentLatitude"), "lng": r.get("currentLongitude"), "status": str(r.get("availabilityStatus", "Offline")).lower(),
+            "capabilities": r.get("capabilities"), "last_seen": epoch(r.get("lastSeenAt")), "verified": r.get("verificationStatus") == "Verified"}
+
+
+def available_responders(db):
+    out = []
+    q = db.collection("responders").where("verificationStatus", "==", "Verified").where("availabilityStatus", "==", "Available")
+    for s in q.stream():
+        out.append(responder_view(db, s.id, s.to_dict()))
+    return out
+
+
+def offers_for(db, incident_id):
+    out = []
+    for s in db.collection("offers").where("incidentId", "==", incident_id).stream():
+        d = s.to_dict()
+        out.append({**d, "id": s.id, "createdAt": epoch(d.get("createdAt")), "expiresAt": epoch(d.get("expiresAt")), "respondedAt": epoch(d.get("respondedAt"))})
+    return out
+
+
+def _offer_doc(o):
+    d = {k: v for k, v in o.items() if k not in ("id", "location", "createdAt", "expiresAt")}
+    d["location"] = GeoPoint(o["location"]["lat"], o["location"]["lng"])
+    d["createdAt"] = when(o["createdAt"])
+    d["expiresAt"] = when(o["expiresAt"])
+    d.update({"respondedAt": None, "resident": None, "updatedAt": SERVER_TIMESTAMP})
+    return d
+
+
+def audit(db, action, incident_id, **detail):
+    try:
+        db.collection("auditLogs").add({"action": action, "incidentId": incident_id, "at": SERVER_TIMESTAMP, **detail})
+    except Exception:  # noqa: BLE001 - an audit failure must never stop a dispatch
+        pass
+
+
+def apply_actions(db, actions, notify=None):
+    created = []
+    for a in actions:
+        ref = None
+        try:
+            if a["type"] == "create_offer":
+                ref = db.collection("offers").document(a["offer"]["id"])
+                try:
+                    ref.create(_offer_doc(a["offer"]))
+                    created.append(a["offer"])
+                    audit(db, "offer_created", a["offer"]["incidentId"], responderId=a["offer"]["responderId"], role=a["offer"]["role"], wave=a["offer"]["wave"])
+                except AlreadyExists:
+                    pass
+                continue
+            ref = db.collection("offers").document(a["id"])
+            snap = ref.get()
+            if not snap.exists:
+                continue
+            cur = snap.to_dict().get("status")
+            if a["type"] == "expire_offer" and cur == "offered":
+                ref.update({"status": "expired", "updatedAt": SERVER_TIMESTAMP}); audit(db, "offer_expired", snap.to_dict().get("incidentId"), responderId=snap.to_dict().get("responderId"))
+            elif a["type"] == "withdraw_offer" and cur in C.ACTIVE_OFFER:
+                if cur in ("accepted", "enroute", "arrived"):
+                    set_responder_status(db, snap.to_dict().get("responderId"), "Available")
+                ref.update({"status": "withdrawn", "withdrawReason": a["reason"], "updatedAt": SERVER_TIMESTAMP}); audit(db, "offer_withdrawn", snap.to_dict().get("incidentId"), responderId=snap.to_dict().get("responderId"), reason=a["reason"])
+            elif a["type"] == "update_offer" and cur in C.ACTIVE_OFFER:
+                f = dict(a["fields"])
+                if "location" in f:
+                    f["location"] = GeoPoint(f["location"]["lat"], f["location"]["lng"])
+                f["updatedAt"] = SERVER_TIMESTAMP
+                ref.update(f)
+        except Exception as e:  # noqa: BLE001 - one bad action must not block the others
+            print(f"[dispatch] action {a.get('type')} failed: {type(e).__name__}: {e}")
+    if notify:
+        for o in created:
+            try:
+                notify(db, o)
+            except Exception as e:  # noqa: BLE001
+                print(f"[dispatch] push failed: {type(e).__name__}: {e}")
+    return created
+
+
+def enrich_units(db, units):
+    out = []
+    for u in units:
+        s = db.collection("responders").document(u["responderId"]).get()
+        r = s.to_dict() if s.exists else {}
+        v = responder_view(db, u["responderId"], r)
+        out.append({"role": u["role"], "name": v["name"], "orgType": v["type"], "phone": v["phone"], "status": u["status"], "distanceKm": u.get("distanceKm")})
+    return out
+
+
+def write_dispatch(db, incident_id, current, summary):
+    """Writes incident.dispatch only when it changed (otherwise the trigger would loop)."""
+    new = {k: v for k, v in summary.items()}
+    new["units"] = enrich_units(db, summary.get("units", []))
+    old = {k: v for k, v in (current or {}).items() if k != "updatedAt"}
+    if old == new:
+        return False
+    ref = db.collection("incidents").document(incident_id)
+    upd = {"dispatch": {**new, "updatedAt": SERVER_TIMESTAMP}}
+    if new["state"] == "completed":
+        snap = ref.get().to_dict() or {}
+        if snap.get("status") == "Active":
+            upd.update({"status": "Resolved", "resolvedAt": SERVER_TIMESTAMP})
+    ref.update(upd)
+    return True
+
+
+def set_responder_status(db, rid, status):
+    """The server marks a responder Busy while they hold a job and Available again when it ends (unless they went Offline themselves)."""
+    try:
+        ref = db.collection("responders").document(rid)
+        cur = (ref.get().to_dict() or {}).get("availabilityStatus")
+        if status == "Busy" and cur == "Available" or status == "Available" and cur == "Busy":
+            ref.update({"availabilityStatus": status})
+    except Exception as e:  # noqa: BLE001
+        print(f"[dispatch] could not set responder {rid} {status}: {type(e).__name__}")
+
+
+def _private_contact(db, incident_id):
+    """The dispatch contact snapshot (Functions-only). Absent for alerts created before it existed."""
+    try:
+        snap = db.collection("incidents").document(incident_id).collection("private").document("contact").get()
+        if snap.exists:
+            c = snap.to_dict() or {}
+            if c.get("phone") or c.get("firstName"):
+                return {"firstName": c.get("firstName", ""), "phone": c.get("phone", "")}
+    except Exception as e:  # noqa: BLE001 - older snapshots and the in-memory test fakes
+        print(f"[dispatch] private contact {incident_id}: {type(e).__name__}")
+    return None
+
+
+def release_resident(db, offer, incident):
+    """After a responder accepts they receive the resident's first name and phone, nothing else.
+    Prefers the Functions-only dispatch snapshot; the profile is read only for older alerts."""
+    if offer.get("resident"):
+        return
+    contact = _private_contact(db, incident["id"])
+    if contact is None:
+        u = _user(db, incident["userId"])
+        contact = {"firstName": u.get("firstName", ""), "phone": u.get("phoneNumber", "")}
+    db.collection("offers").document(offer["id"]).update({"resident": contact})
+    audit(db, "contact_released", incident["id"], responderId=offer["responderId"])
+
+
+def _incident_context(raw):
+    """The caller's landmark and how precise the fix was. Extras: missing values simply do not travel."""
+    out = {}
+    lm = raw.get("landmark")
+    if isinstance(lm, str) and lm.strip():
+        out["landmark"] = lm.strip()[:120]
+    acc = raw.get("locationAccuracyM")
+    if isinstance(acc, (int, float)) and not isinstance(acc, bool):
+        out["locationAccuracyM"] = int(round(acc))
+    return out
+
+
+def _sync_offer_context(db, incident_id, raw):
+    """Puts the landmark and accuracy on new and still-open offers. Never touches status or planning fields."""
+    ctx = _incident_context(raw)
+    if not ctx:
+        return
+    try:
+        for s in db.collection("offers").where("incidentId", "==", incident_id).stream():
+            d = s.to_dict()
+            if d.get("status") not in C.ACTIVE_OFFER:
+                continue
+            patch = {k: v for k, v in ctx.items() if d.get(k) != v}
+            if patch:
+                s.reference.update(patch)
+    except Exception as e:  # noqa: BLE001 - the offer is already usable without it
+        print(f"[dispatch] offer context {incident_id}: {type(e).__name__}: {e}")
+
+
+def reconcile_incident(db, incident_id, now, notify=None):
+    snap = db.collection("incidents").document(incident_id).get()
+    if not snap.exists:
+        return None
+    raw = snap.to_dict() or {}
+    inc = incident_view(incident_id, raw)
+    if not inc["category"]:
+        return None
+    offers = offers_for(db, incident_id)
+    res = core.reconcile(inc, available_responders(db), offers, now, table())
+    apply_actions(db, res["actions"], notify)
+    _sync_offer_context(db, incident_id, raw)
+    write_dispatch(db, incident_id, inc.get("dispatch"), res["dispatch"])
+    try:                                    # help options for the resident map; must never stop dispatch
+        from . import options_store
+        options_store.refresh(db, incident_id, inc, res["dispatch"], now)
+    except Exception as e:  # noqa: BLE001
+        print(f"[options] {incident_id}: {type(e).__name__}: {e}")
+    return res
+
+
+def handle_offer_status_change(db, offer_id, new, now, notify=None):
+    """A responder moved an offer forward (or declined). Decide the winner, release contact, then re-plan."""
+    incident_id, status = new["incidentId"], new.get("status")
+    if status in C.ACCEPTED_OFFER:
+        snap = db.collection("incidents").document(incident_id).get()
+        if snap.exists:
+            inc = incident_view(incident_id, snap.to_dict())
+            required, _p, _n = core.needs(inc)
+            apply_actions(db, core.resolve_acceptance(required, offers_for(db, incident_id)))
+            mine = next((o for o in offers_for(db, incident_id) if o["id"] == offer_id), None)
+            if mine and mine["status"] in C.ACCEPTED_OFFER:
+                release_resident(db, mine, inc)
+                set_responder_status(db, mine["responderId"], "Available" if mine["status"] == "completed" else "Busy")
+                audit(db, "offer_" + status, incident_id, responderId=new.get("responderId"))
+    elif status == "declined":
+        audit(db, "offer_declined", incident_id, responderId=new.get("responderId"))
+    elif status == "withdrawn":
+        # A unit standing down releases its own availability here, in the same pass as the withdrawal.
+        reason = str(new.get("withdrawReason") or "")
+        if reason and reason not in SERVER_WITHDRAW_REASONS:
+            set_responder_status(db, new.get("responderId"), "Available")
+    return reconcile_incident(db, incident_id, now, notify)
+
+
+def sweep(db, now, notify=None):
+    """Runs every minute: expire unanswered offers, re-plan unfinished incidents, set silent responders Offline."""
+    seen = set()
+    for s in db.collection("offers").where("status", "==", "offered").stream():
+        d = s.to_dict()
+        e = epoch(d.get("expiresAt"))
+        if e is not None and e <= now:
+            seen.add(d["incidentId"])
+    for s in db.collection("incidents").where("status", "==", "Active").stream():
+        d = s.to_dict()
+        state = (d.get("dispatch") or {}).get("state")
+        age = now - (epoch(d.get("createdAt")) or now)
+        if age <= C.ACTIVE_WINDOW_SECONDS and state in (None, "awaiting_details", "waiting_location", "dispatching", "partially_assigned", "unfilled"):
+            seen.add(s.id)
+    for iid in sorted(seen):
+        try:
+            reconcile_incident(db, iid, now, notify)
+        except Exception as e:  # noqa: BLE001
+            print(f"[sweep] {iid}: {type(e).__name__}: {e}")
+    for s in db.collection("responders").where("availabilityStatus", "==", "Available").stream():
+        seen_at = epoch(s.to_dict().get("lastSeenAt"))
+        if seen_at is None or now - seen_at > C.STALE_OFFLINE_SECONDS:
+            s.reference.update({"availabilityStatus": "Offline"})
+    return sorted(seen)
+
+<<<END>>>
+
+##### FILE: functions/dispatch/notify.py (17 lines)
+<<<BEGIN>>>
+"""Push notifications to responders (Firebase Cloud Messaging). Sends the MINIMUM: priority, category, distance. Never any resident detail."""
+from firebase_admin import messaging
+
+
+def send_offer_push(db, offer):
+    s = db.collection("deviceTokens").document(offer["responderId"]).get()
+    token = (s.to_dict() or {}).get("token") if s.exists else None
+    if not token:
+        return
+    label = offer["category"] + (" · " + offer["subtype"].replace("_", " ") if offer.get("subtype") and not offer.get("confidential") else "")
+    messaging.send(messaging.Message(
+        token=token,
+        notification=messaging.Notification(title=f"NEW ALERT · {offer['priority'].upper()} PRIORITY", body=f"{label} · {offer['distanceKm']} km away"),
+        data={"type": "offer", "offerId": offer["id"], "incidentId": offer["incidentId"]},
+        android=messaging.AndroidConfig(priority="high", ttl=60, notification=messaging.AndroidNotification(channel_id="emergency_offers", sound="default")),
+        apns=messaging.APNSConfig(headers={"apns-priority": "10"}, payload=messaging.APNSPayload(aps=messaging.Aps(sound="default")))))
+
+<<<END>>>
+
+##### FILE: functions/dispatch/__init__.py (5 lines)
+<<<BEGIN>>>
+import os, sys
+_ML = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ml", "scripts")
+if _ML not in sys.path:
+    sys.path.insert(0, _ML)
+
+<<<END>>>
+
+##### FILE: firebase.json (24 lines)
+<<<BEGIN>>>
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "python312",
+      "ignore": [
+        "venv",
+        ".git",
+        "tests",
+        "__pycache__",
+        "*.pyc"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
+
+<<<END>>>
+
+##### FILE: firestore.indexes.json (14 lines)
+<<<BEGIN>>>
+{
+  "indexes": [
+    { "collectionGroup": "incidents", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "safetyCheckins", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "safetyCheckins", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" } ] },
+    { "collectionGroup": "trustedContacts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "isActive", "order": "ASCENDING" } ] },
+    { "collectionGroup": "offers", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "responderId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "incidentId", "order": "ASCENDING" }, { "fieldPath": "at", "order": "ASCENDING" } ] },
+    { "collectionGroup": "sos_alerts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "at", "order": "DESCENDING" } ] },
+    { "collectionGroup": "incidents", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}
+
+<<<END>>>
+
+##### FILE: functions/checkin/__init__.py (2 lines)
+<<<BEGIN>>>
+"""Safety check-in engine (pure logic). Nothing here touches Firestore, SMS or the network."""
+
+<<<END>>>
+
+=== functions folder (python files) ===
+  functions/admin_recovery.py
+  functions/main.py
+  functions/phase3_functions.py
+  functions/phase3c_functions.py
+  functions/phase4d_core.py
+  functions/phase4d_functions.py
+  functions/checkin/__init__.py
+  functions/checkin/core.py
+  functions/dispatch/__init__.py
+  functions/dispatch/admin_accounts.py
+  functions/dispatch/config.py
+  functions/dispatch/core.py
+  functions/dispatch/job_route.py
+  functions/dispatch/labels.py
+  functions/dispatch/lookup.py
+  functions/dispatch/notify.py
+  functions/dispatch/options.py
+  functions/dispatch/options_store.py
+  functions/dispatch/resident_requests.py
+  functions/dispatch/routes.py
+  functions/dispatch/store.py
+  functions/ml/scripts/dispatch_logic.py
+  functions/ml/scripts/split_collected_messages.py
+  functions/ml/scripts/text_triage.py
+  functions/ml/scripts/triage_core.py
+  functions/tests/fake_firestore.py
+  functions/tests/test_admin_accounts.py
+  functions/tests/test_checkin_core.py
+  functions/tests/test_dispatch_core.py
+  functions/tests/test_labels.py
+  functions/tests/test_lookup.py
+  functions/tests/test_offer_priority_source.py
+  functions/tests/test_options.py
+  functions/tests/test_phase4d.py
+  functions/tests/test_route_steps.py
+  functions/tests/test_store_lifecycle.py
+
+=== firestore.rules: helper functions and the check-in / contacts / incident create rules ===
+8:     function isSignedIn() {
+12:     function isOwner(userId) {
+17:     function isSystemAdmin() {
+21:     function validPhoneNumber(phoneNumber) {
+25:     function validPreferredLanguage(language) {
+29:     function validPublicRole(role) {
+33:     function validAccountStatus(status) {
+37:     function validResponderType(orgType) {
+49:     function validResponderVerificationStatus(status) {
+53:     function validAvailabilityStatus(status) {
+60:     function validTrustedContactData() {
+89:     function validSafetyCheckinCreate() {
+128:     function validIncidentCategory(category) {
+139:     function validIncidentCreate() {
+163:     function validIncidentContext(d) {
+169:     function incidentChange() {
+174:     function validIncidentQuickUpdate() {
+187:     function validIncidentCompleteUpdate() {
+210:     function validIncidentLocationUpdate() {
+219:     function validIncidentContextUpdate() {
+228:     function validResidentFeedbackUpdate() {
+241:     function validIncidentCancel() {
+254:     function validUsersCreateKeys() {
+273:     function validUsersUpdateKeys() {
+292:     function validUsersData(userId) {
+309:     function validRespondersCreateKeys() {
+328:     function validRespondersData(responderId) {
+346:     function validCapabilities(c) {
+355:     function validOfferMove(from, to) {
+365:     function validWithdrawReason(r) {
+374:     function validOfferSideWrite() {
+422:     function validTrackPoint() {
+432:     match /users/{userId} {
+508:     match /trustedContacts/{contactId} {
+533:     match /safetyCheckins/{checkinId} {
+553:     match /incidents/{incidentId} {
+574:     match /offers/{offerId} {
+601:     match /incidents/{incidentId}/options/{optionId} {
+608:     match /incidents/{incidentId}/routes/{responderId} {
+615:     match /incidents/{incidentId}/tracks/{trackOwnerId} {
+637:     match /incidents/{incidentId}/events/{eventId} {
+643:     match /incidents/{incidentId}/private/{docId} {
+
+##### EXCERPT: safetyCheckins rules (lines 533-602)
+    match /safetyCheckins/{checkinId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validSafetyCheckinCreate();
+
+      // Clients can close a check-in but cannot change its owner or timing fields.
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "updatedAt"
+        ])
+        && request.resource.data.status in ["CheckedIn", "Cancelled", "Expired"]
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /incidents/{incidentId} {
+      // A resident sees only their own alerts. Administrators see all of them.
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validIncidentCreate();
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && (
+          validIncidentQuickUpdate()
+          || validIncidentCompleteUpdate()
+          || validIncidentCancel()
+          || validIncidentLocationUpdate()
+          || validIncidentContextUpdate()
+          || validResidentFeedbackUpdate()
+        );
+
+      allow delete: if false;
+    }
+
+    match /offers/{offerId} {
+      // A responder reads only the offers addressed to them. Administrators read all.
+      allow read: if isSignedIn()
+        && (resource.data.responderId == request.auth.uid || isSystemAdmin());
+
+      // Offers are created and removed only by the dispatch Cloud Function.
+      allow create, delete: if false;
+
+      allow update: if isSignedIn()
+        && resource.data.responderId == request.auth.uid
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt", "withdrawReason"])
+            && validOfferMove(resource.data.status, request.resource.data.status)
+            && (request.resource.data.status != "withdrawn" || validWithdrawReason(request.resource.data.withdrawReason))
+            && (resource.data.status != "offered" || request.time < resource.data.expiresAt))
+          || validOfferSideWrite()
+        );
+    }
+
+    // ---- Phase 3A: directory, help options, live tracking ----
+    // Directory of listed places: any signed-in user can read; only administrators (and the import script, which bypasses rules) can write.
+    match /facilities/{facilityId} {
+      allow read: if isSignedIn();
+      allow write: if isSystemAdmin();
+    }
+
+    // The 1-3 help cards for one alert: only the alert's owner and administrators can read them; only Cloud Functions write them.
+    match /incidents/{incidentId}/options/{optionId} {
+      allow read: if isSignedIn()
+
+##### EXCERPT: trustedContacts rules (lines 508-577)
+    match /trustedContacts/{contactId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      // No per-user contact-count limit is enforced by these rules.
+      allow create: if isOwner(request.resource.data.userId)
+        && validTrustedContactData()
+        && request.resource.data.isActive == true;
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "phoneNumber",
+          "relationship",
+          "isActive",
+          "updatedAt"
+        ])
+        && validTrustedContactData();
+
+      // Deactivate contacts instead of deleting their records.
+      allow delete: if false;
+    }
+
+    match /safetyCheckins/{checkinId} {
+      // Client reads and writes are scoped to the UID stored on the document.
+      allow read: if isOwner(resource.data.userId);
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validSafetyCheckinCreate();
+
+      // Clients can close a check-in but cannot change its owner or timing fields.
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "updatedAt"
+        ])
+        && request.resource.data.status in ["CheckedIn", "Cancelled", "Expired"]
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /incidents/{incidentId} {
+      // A resident sees only their own alerts. Administrators see all of them.
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validIncidentCreate();
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && (
+          validIncidentQuickUpdate()
+          || validIncidentCompleteUpdate()
+          || validIncidentCancel()
+          || validIncidentLocationUpdate()
+          || validIncidentContextUpdate()
+          || validResidentFeedbackUpdate()
+        );
+
+      allow delete: if false;
+    }
+
+    match /offers/{offerId} {
+      // A responder reads only the offers addressed to them. Administrators read all.
+      allow read: if isSignedIn()
+        && (resource.data.responderId == request.auth.uid || isSystemAdmin());
+
+##### EXCERPT: incidents rules (first block) (lines 553-622)
+    match /incidents/{incidentId} {
+      // A resident sees only their own alerts. Administrators see all of them.
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
+
+      allow create: if isOwner(request.resource.data.userId)
+        && validIncidentCreate();
+
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && (
+          validIncidentQuickUpdate()
+          || validIncidentCompleteUpdate()
+          || validIncidentCancel()
+          || validIncidentLocationUpdate()
+          || validIncidentContextUpdate()
+          || validResidentFeedbackUpdate()
+        );
+
+      allow delete: if false;
+    }
+
+    match /offers/{offerId} {
+      // A responder reads only the offers addressed to them. Administrators read all.
+      allow read: if isSignedIn()
+        && (resource.data.responderId == request.auth.uid || isSystemAdmin());
+
+      // Offers are created and removed only by the dispatch Cloud Function.
+      allow create, delete: if false;
+
+      allow update: if isSignedIn()
+        && resource.data.responderId == request.auth.uid
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "respondedAt", "updatedAt", "withdrawReason"])
+            && validOfferMove(resource.data.status, request.resource.data.status)
+            && (request.resource.data.status != "withdrawn" || validWithdrawReason(request.resource.data.withdrawReason))
+            && (resource.data.status != "offered" || request.time < resource.data.expiresAt))
+          || validOfferSideWrite()
+        );
+    }
+
+    // ---- Phase 3A: directory, help options, live tracking ----
+    // Directory of listed places: any signed-in user can read; only administrators (and the import script, which bypasses rules) can write.
+    match /facilities/{facilityId} {
+      allow read: if isSignedIn();
+      allow write: if isSystemAdmin();
+    }
+
+    // The 1-3 help cards for one alert: only the alert's owner and administrators can read them; only Cloud Functions write them.
+    match /incidents/{incidentId}/options/{optionId} {
+      allow read: if isSignedIn()
+        && (isSystemAdmin() || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Route cache: Cloud Functions only.
+    match /incidents/{incidentId}/routes/{responderId} {
+      allow read, write: if false;
+    }
+
+    // Live positions for one alert. A unit that HOLDS the job shares its position so the resident sees it coming;
+    // the resident shares their own position while the alert is open so the unit sees them (Uber-style mutual tracking).
+    // The resident of this alert, a unit holding this job, and administrators can read these documents.
+    match /incidents/{incidentId}/tracks/{trackOwnerId} {
+      allow read: if isSignedIn()
+        && (isSystemAdmin() || trackOwnerId == request.auth.uid
+            || get(/databases/$(database)/documents/incidents/$(incidentId)).data.userId == request.auth.uid
+            || get(/databases/$(database)/documents/offers/$(incidentId + "_" + request.auth.uid)).data.status in ["accepted", "enroute", "arrived"]);
+
+      allow create, update: if isSignedIn() && validTrackPoint()
+        && (
+
+##### MISSING: functions/dispatch/sweep.py
+
+##### MISSING: functions/dispatch_functions.py
+
+##### FILE: functions/phase3_functions.py (54 lines)
+<<<BEGIN>>>
+"""Phase 3A callables (self-contained; main.py imports them with one line).
+  resident_request_unit : the resident asks one specific registered unit from their options list
+  incident_route        : route line + ETA of an accepted unit (owner, that unit, or an administrator)
+The Maps server key is the Firebase secret MAPS_SERVER_KEY. If it is missing, everything still works with straight-line estimates."""
+import time
+
+from firebase_admin import firestore
+from firebase_functions import https_fn, options
+from firebase_functions.params import SecretParam
+
+import dispatch  # noqa: F401  (path set-up)
+from dispatch import config as C, job_route, notify, resident_requests as rr
+
+MAPS_SERVER_KEY = SecretParam("MAPS_SERVER_KEY")
+OPTS = dict(region=C.REGION, memory=options.MemoryOption.MB_256, timeout_sec=30, max_instances=10, secrets=[MAPS_SERVER_KEY])
+_CODES = {"not-found": https_fn.FunctionsErrorCode.NOT_FOUND, "failed-precondition": https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
+          "resource-exhausted": https_fn.FunctionsErrorCode.RESOURCE_EXHAUSTED}
+
+
+def _need_auth(req):
+    if req.auth is None:
+        raise https_fn.HttpsError(https_fn.FunctionsErrorCode.UNAUTHENTICATED, "Sign in first.")
+
+
+def _strs(req, *names):
+    d = req.data if isinstance(req.data, dict) else {}
+    out = []
+    for n in names:
+        v = d.get(n)
+        if not isinstance(v, str) or not v or len(v) > 128 or "/" in v:
+            raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INVALID_ARGUMENT, f"{n} is required.")
+        out.append(v)
+    return out
+
+
+@https_fn.on_call(**OPTS)
+def resident_request_unit(req: https_fn.CallableRequest):
+    _need_auth(req)
+    iid, rid = _strs(req, "incidentId", "responderId")
+    db = firestore.client()
+    try:
+        offer = rr.request_unit(db, iid, req.auth.uid, rid, time.time())
+    except rr.RequestError as e:
+        raise https_fn.HttpsError(_CODES.get(e.code, https_fn.FunctionsErrorCode.INTERNAL), e.message)
+    notify.send_offer_push(db, offer)
+    return {"ok": True}
+
+
+@https_fn.on_call(**OPTS)
+def incident_route(req: https_fn.CallableRequest):
+    _need_auth(req)
+    iid, rid = _strs(req, "incidentId", "responderId")
+    return job_route.route_for(firestore.client(), iid, rid, req.auth.uid, (req.auth.token or {}).get("role") == "SystemAdmin", time.time())
+
+<<<END>>>
+
+=== functions/tests ===
+  functions/tests/fake_firestore.py
+  functions/tests/test_admin_accounts.py
+  functions/tests/test_checkin_core.py
+  functions/tests/test_dispatch_core.py
+  functions/tests/test_labels.py
+  functions/tests/test_lookup.py
+  functions/tests/test_offer_priority_source.py
+  functions/tests/test_options.py
+  functions/tests/test_phase4d.py
+  functions/tests/test_route_steps.py
+  functions/tests/test_store_lifecycle.py

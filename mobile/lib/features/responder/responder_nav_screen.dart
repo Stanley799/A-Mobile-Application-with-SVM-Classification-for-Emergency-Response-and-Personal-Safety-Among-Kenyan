@@ -187,15 +187,24 @@ class _ResponderNavScreenState extends State<ResponderNavScreen> with SingleTick
     return o;
   }
 
+  /// A route is only shown while it still leads to where we are going. If the destination has moved a long way
+  /// (for example the caller's live position replaced the reported place), the old route is dropped, never drawn.
+  bool _routeUsable(LatLngPoint dest) {
+    final r = _route;
+    final at = _routeDest;
+    return r != null && r.points.length >= 2 && at != null && distanceMeters(at, dest) < 500;
+  }
+
   void _maybeReroute() {
     final me = _me;
     final dest = _dest;
     if (me == null || dest == null || _routeBusy) return;
+    final usable = _routeUsable(dest);
+    if (!usable && _route != null) _route = null;
     final last = _routeDest;
-    final moved = last == null ? 0.0 : distanceMeters(last, dest);
-    final route = _route;
+    final moved = usable && last != null ? distanceMeters(last, dest) : 0.0;
     final ask = needReroute(
-      hasRoute: route != null && route.points.length >= 2,
+      hasRoute: usable,
       offRoute: _offRoute,
       destMovedM: moved,
       now: DateTime.now(),
@@ -210,20 +219,31 @@ class _ResponderNavScreenState extends State<ResponderNavScreen> with SingleTick
     final r = await _repo.directions(me, dest);
     _routeBusy = false;
     if (!mounted) return;
-    final good = r != null && r.points.length >= 2;
+    // A route must start near me and end near the destination, otherwise it is ignored.
+    final good = r != null && r.points.length >= 2 && distanceMeters(r.points.last, dest) < 1500 && distanceMeters(r.points.first, me) < 1500;
     setState(() {
-      if (good) _route = r;
+      if (good) {
+        _route = r;
+        _routeDest = dest;
+      }
       _routeFailed = !good;
-      _routeDest = dest;
       _offRoute = false;
     });
     _monitor.markRerouted(DateTime.now());
   }
 
-  RouteProgress? _progressNow() {
+  RouteProgress? _progressNow(LatLngPoint dest) {
     final r = _route;
     final me = _me;
-    if (r == null || me == null || r.points.length < 2) return null;
+    if (r == null || me == null || !_routeUsable(dest)) return null;
+    final p = _progressUnchecked(r, me);
+    if (p == null) return null;
+    // A route far longer than the straight line is wrong for this trip: show the straight-line distance instead.
+    if (p.remainingM > math.max(3000.0, distanceMeters(me, dest) * 4)) return null;
+    return p;
+  }
+
+  RouteProgress? _progressUnchecked(NavRoute r, LatLngPoint me) {
     return progressOnRoute(
       route: r.points,
       steps: r.steps,
@@ -251,7 +271,7 @@ class _ResponderNavScreenState extends State<ResponderNavScreen> with SingleTick
     if (dest == null) return _noLocation();
     final now = DateTime.now();
     final me = _me;
-    final progress = _progressNow();
+    final progress = _progressNow(dest);
     final meShown = _meShown;
     final callerShown = _callerShown;
     final offerPoint = _offerPoint;
@@ -303,6 +323,8 @@ class _ResponderNavScreenState extends State<ResponderNavScreen> with SingleTick
       note = 'You look close to the caller. Mark yourself arrived on the job screen.';
     } else if (_gpsNote != null && me != null) {
       note = _gpsNote;
+    } else if ((_meAccuracy ?? 0) > 300) {
+      note = 'Your location is only approximate (a computer or weak GPS). Use a phone outdoors for accurate navigation.';
     } else if (_routeFailed && progress == null && me != null) {
       note = 'The road route is not available right now. Showing the straight-line distance.';
     } else if (freshness == TrackFreshness.stale || freshness == TrackFreshness.none) {
@@ -315,102 +337,103 @@ class _ResponderNavScreenState extends State<ResponderNavScreen> with SingleTick
       _ => const Color(0xFF6B6B6B),
     };
 
+    final card = NavBottomCard(
+      title: title,
+      subtitle: subtitle,
+      note: note,
+      actions: [
+        if (phone.isNotEmpty)
+          SizedBox(
+            height: 50,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: RC.accept, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+              onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
+              icon: const Icon(Icons.call, size: 18),
+              label: const Text('Call caller', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        SizedBox(
+          height: 50,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+            onPressed: () => openInMaps(dest.lat, dest.lng),
+            icon: const Icon(Icons.navigation_outlined, size: 18),
+            label: const Text('Google Maps', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
-      backgroundColor: RC.bg,
-      body: Stack(children: [
-        Positioned.fill(
-          child: NavMapView(
-            markers: markers,
-            traveled: progress?.traveled ?? const <LatLngPoint>[],
-            remaining: progress?.remaining ?? const <LatLngPoint>[],
-            follow: _follow && me != null,
-            followPoint: _me,
-            followHeading: _meHeading,
-            followZoom: followZoom,
-            headingUp: _meSpeed >= 1.0,
-            fitPoints: [?me, dest],
-            fitKey: me == null ? 'dest' : '',
-            padding: EdgeInsets.only(top: next != null ? 190 : 120, bottom: 235),
-            onUserGesture: () {
-              if (_follow) setState(() => _follow = false);
-            },
-            showRecenter: !_follow && me != null,
-            onRecenter: () => setState(() => _follow = true),
-          ),
-        ),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Row(children: [
-                MapRoundButton(icon: Icons.arrow_back_ios_new, tooltip: 'Back', onTap: () => Navigator.of(context).maybePop()),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4))]),
-                    child: Row(children: [
-                      const Icon(Icons.person_pin_circle_outlined, size: 20, color: RC.accent),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          name.isEmpty ? 'Caller' : name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: RC.text),
-                        ),
-                      ),
-                      FreshChip(label: freshnessLabel(freshness, _caller?.at, now), color: chipColor),
-                    ]),
-                  ),
-                ),
-              ]),
-              if (next != null) ...[
-                const SizedBox(height: 10),
-                TurnBanner(
-                  icon: maneuverIcon(next.step.maneuver),
-                  distance: turnDistanceText(next.distToStepEndM),
-                  text: next.step.instruction.isEmpty ? 'Continue' : next.step.instruction,
-                ),
-              ],
-              if (rerouting || _offRoute) ...[
-                const SizedBox(height: 8),
-                const FreshChip(label: 'Finding a new route…', color: Color(0xFF9C3700)),
-              ],
-            ]),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: NavBottomCard(
-            title: title,
-            subtitle: subtitle,
-            note: note,
-            actions: [
-              if (phone.isNotEmpty)
-                SizedBox(
-                  height: 50,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: RC.accept, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
-                    icon: const Icon(Icons.call, size: 18),
-                    label: const Text('Call caller', style: TextStyle(fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              SizedBox(
-                height: 50,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  onPressed: () => openInMaps(dest.lat, dest.lng),
-                  icon: const Icon(Icons.navigation_outlined, size: 18),
-                  label: const Text('Google Maps', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
+      backgroundColor: Colors.white,
+      body: Column(children: [
+        Expanded(
+          child: Stack(children: [
+            Positioned.fill(
+              child: NavMapView(
+                markers: markers,
+                traveled: progress?.traveled ?? const <LatLngPoint>[],
+                remaining: progress?.remaining ?? const <LatLngPoint>[],
+                follow: _follow && me != null,
+                followPoint: _me,
+                followHeading: _meHeading,
+                followZoom: followZoom,
+                headingUp: _meSpeed >= 1.0,
+                fitPoints: [?me, dest],
+                fitKey: me == null ? 'dest' : '',
+                padding: EdgeInsets.only(top: next != null ? 190 : 120, bottom: 8),
+                onUserGesture: () {
+                  if (_follow) setState(() => _follow = false);
+                },
+                showRecenter: !_follow && me != null,
+                onRecenter: () => setState(() => _follow = true),
               ),
-            ],
-          ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Row(children: [
+                    MapRoundButton(icon: Icons.arrow_back_ios_new, tooltip: 'Back', onTap: () => Navigator.of(context).maybePop()),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4))]),
+                        child: Row(children: [
+                          const Icon(Icons.person_pin_circle_outlined, size: 20, color: RC.accent),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              name.isEmpty ? 'Caller' : name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: RC.text),
+                            ),
+                          ),
+                          FreshChip(label: freshnessLabel(freshness, _caller?.at, now), color: chipColor),
+                        ]),
+                      ),
+                    ),
+                  ]),
+                  if (next != null) ...[
+                    const SizedBox(height: 10),
+                    TurnBanner(
+                      icon: maneuverIcon(next.step.maneuver),
+                      distance: turnDistanceText(next.distToStepEndM),
+                      text: next.step.instruction.isEmpty ? 'Continue' : next.step.instruction,
+                    ),
+                  ],
+                  if (rerouting || _offRoute) ...[
+                    const SizedBox(height: 8),
+                    const FreshChip(label: 'Finding a new route…', color: Color(0xFF9C3700)),
+                  ],
+                ]),
+              ),
+            ),
+          ]),
         ),
+        card,
       ]),
     );
   }

@@ -7,16 +7,25 @@ import 'package:shimmer/shimmer.dart';
 
 import '../../../core/models/safety_checkin.dart';
 import '../../../core/theme/app_theme.dart';
+import 'safety_checkin_v2_screen.dart';
 
 /// Starts, monitors, and closes a resident's timed safety check-in.
-class SafetyCheckinScreen extends StatefulWidget {
+class SafetyCheckinScreen extends StatelessWidget {
   const SafetyCheckinScreen({super.key});
 
   @override
-  State<SafetyCheckinScreen> createState() => _SafetyCheckinScreenState();
+  Widget build(BuildContext context) => const SafetyCheckinV2Screen();
 }
 
-class _SafetyCheckinScreenState extends State<SafetyCheckinScreen> {
+/// The earlier one-timer version, kept for reference.
+class LegacySafetyCheckinScreen extends StatefulWidget {
+  const LegacySafetyCheckinScreen({super.key});
+
+  @override
+  State<LegacySafetyCheckinScreen> createState() => _SafetyCheckinScreenState();
+}
+
+class _SafetyCheckinScreenState extends State<LegacySafetyCheckinScreen> {
   Timer? _clock;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _activeCheckins;
 

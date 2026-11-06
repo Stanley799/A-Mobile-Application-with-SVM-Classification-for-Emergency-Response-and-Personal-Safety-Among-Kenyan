@@ -35,7 +35,10 @@ void main() {
       expect(detail, isNotEmpty);
       expect(hidesAllPoi(overview), isTrue);
       expect(hidesAllPoi(detail), isFalse);
-      expect(detail.any((e) => e['featureType'] == 'poi.medical'), isTrue);
+      bool showsBusiness(List<Map<String, dynamic>> l) =>
+          l.any((e) => e['featureType'] == 'poi.business' && (e['stylers'] as List).any((s) => (s as Map)['visibility'] == 'on'));
+      expect(showsBusiness(detail), isTrue);
+      expect(showsBusiness(overview), isFalse);
     });
   });
 

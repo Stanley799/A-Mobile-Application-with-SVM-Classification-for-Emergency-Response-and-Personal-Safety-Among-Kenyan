@@ -149,7 +149,7 @@ class _QueueTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(11),
               border: Border.all(color: selected ? OT.accent : (pinned ? const Color(0xFF7A3A3A) : OT.line)),
             ),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            child: IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Container(width: 3, color: pinned ? OT.alert : accent),
               Expanded(
                 child: Padding(
@@ -203,7 +203,7 @@ class _QueueTile extends StatelessWidget {
                   ]),
                 ),
               ),
-            ]),
+            ])),
           ),
         ),
       ),

@@ -179,6 +179,7 @@ class _NavMapViewState extends State<NavMapView> {
           infoWindow: m.title == null ? InfoWindow.noText : InfoWindow(title: m.title, snippet: m.snippet),
         ),
     };
+    final dotted = useDottedRoute(widget.remaining);
     final polylines = <Polyline>{
       if (widget.traveled.length >= 2)
         Polyline(
@@ -191,7 +192,17 @@ class _NavMapViewState extends State<NavMapView> {
           startCap: Cap.roundCap,
           endCap: Cap.roundCap,
         ),
-      if (widget.remaining.length >= 2) ...[
+      if (dotted)
+        Polyline(
+          polylineId: const PolylineId('dots'),
+          points: _ll(widget.remaining),
+          color: const Color(0xFF1A73E8),
+          width: 9,
+          zIndex: 3,
+          patterns: [PatternItem.dot, PatternItem.gap(10)],
+          jointType: JointType.round,
+        ),
+      if (widget.remaining.length >= 2 && !dotted) ...[
         Polyline(
           polylineId: const PolylineId('casing'),
           points: _ll(widget.remaining),

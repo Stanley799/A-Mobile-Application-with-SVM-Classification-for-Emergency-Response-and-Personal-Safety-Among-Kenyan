@@ -1,0 +1,108 @@
+===== ops_queue.dart lines 125-215 of 212 =====
+125: 
+126:   final QueueRow row;
+127:   final String? street;
+128:   final Duration? elapsed;
+129:   final bool selected;
+130:   final VoidCallback onTap;
+131: 
+132:   @override
+133:   Widget build(BuildContext context) {
+134:     final i = row.incident;
+135:     final pinned = row.pinned;
+136:     final accent = OT.priority(i.priority);
+137:     final sub = i.subtype == null ? '' : i.subtype!.replaceAll('_', ' ');
+138:     final place = street ?? (i.landmark.isNotEmpty ? i.landmark : (i.latitude == null ? 'No location' : 'Finding the street…'));
+139:     return Padding(
+140:       padding: const EdgeInsets.only(bottom: 7),
+141:       child: Material(
+142:         color: selected ? OT.raised : OT.panel,
+143:         borderRadius: BorderRadius.circular(11),
+144:         child: InkWell(
+145:           borderRadius: BorderRadius.circular(11),
+146:           onTap: onTap,
+147:           child: Container(
+148:             decoration: BoxDecoration(
+149:               borderRadius: BorderRadius.circular(11),
+150:               border: Border.all(color: selected ? OT.accent : (pinned ? const Color(0xFF7A3A3A) : OT.line)),
+151:             ),
+152:             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+153:               Container(width: 3, color: pinned ? OT.alert : accent),
+154:               Expanded(
+155:                 child: Padding(
+156:                   padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+157:                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+158:                     Row(children: [
+159:                       PriorityTag(i.priorityShown),
+160:                       if (i.needsAttention) ...[
+161:                         const SizedBox(width: 5),
+162:                         Container(
+163:                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+164:                           decoration: BoxDecoration(color: OT.alert, borderRadius: BorderRadius.circular(6)),
+165:                           child: const Text('!', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white)),
+166:                         ),
+167:                       ],
+168:                       const SizedBox(width: 6),
+169:                       Expanded(
+170:                         child: Text(
+171:                           sub.isEmpty ? i.category : '${i.category} · $sub',
+172:                           maxLines: 1,
+173:                           overflow: TextOverflow.ellipsis,
+174:                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: OT.text),
+175:                         ),
+176:                       ),
+177:                       const SizedBox(width: 6),
+178:                       Text(
+179:                         elapsed == null ? '--:--' : mmss(elapsed!),
+180:                         style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: OT.soft, fontFeatures: [FontFeature.tabularFigures()]),
+181:                       ),
+182:                     ]),
+183:                     const SizedBox(height: 4),
+184:                     Row(children: [
+185:                       const Icon(Icons.place_outlined, size: 13, color: OT.muted),
+186:                       const SizedBox(width: 3),
+187:                       Expanded(
+188:                         child: Text(place, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: OT.muted)),
+189:                       ),
+190:                       const SizedBox(width: 6),
+191:                       Text('${row.rolesLabel} roles', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: OT.soft)),
+192:                     ]),
+193:                     if (pinned) ...[
+194:                       const SizedBox(height: 5),
+195:                       Row(children: [
+196:                         const Icon(Icons.error_outline, size: 13, color: OT.alert),
+197:                         const SizedBox(width: 4),
+198:                         Expanded(
+199:                           child: Text(row.attentionText, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: OT.alert)),
+200:                         ),
+201:                       ]),
+202:                     ],
+203:                   ]),
+204:                 ),
+205:               ),
+206:             ]),
+207:           ),
+208:         ),
+209:       ),
+210:     );
+211:   }
+212: }
+
+===== responder screens: back-button check =====
+features\responder\active_job_screen.dart    lines=1014 scaffold=1  appBar, AppBar(, Navigator.pop
+features\responder\incoming_alert_screen.dart lines=385  scaffold=1  Navigator.of(context).pop
+features\responder\responder_nav_screen.dart lines=440  scaffold=2  appBar, AppBar(, maybePop
+features\responder\responder_shell.dart      lines=944  scaffold=3  appBar, AppBar(, Navigator.pop
+features\responder\transport_screen.dart     lines=441  scaffold=1  Navigator.of(context).pop, maybePop
+
+===== where responder screens are opened =====
+features\admin\admin_shell.dart:122: Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => IncidentDetailPage(repo: repo, incidentId: i.id, responders: responders)));
+features\resident\map\help_map_entry.dart:59: onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WatchResponderScreen(incidentId: incidentId))),
+features\resident\map\help_map_screen.dart:984: onTap: held.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WatchResponderScreen(incidentId: widget.incidentId))),
+features\responder\active_job_screen.dart:265: await Navigator.of(context).push(
+features\responder\active_job_screen.dart:266: MaterialPageRoute<void>(
+features\responder\active_job_screen.dart:532: onPressed: () => Navigator.of(context).push(
+features\responder\active_job_screen.dart:533: MaterialPageRoute<void>(builder: (_) => JobMapScreen(offer: o)),
+features\responder\incoming_alert_screen.dart:106: Navigator.of(context).pushReplacement(
+features\responder\responder_shell.dart:223: await Navigator.of(context).push<void>(
+features\responder\responder_shell.dart:829: () => Navigator.of(context).push(

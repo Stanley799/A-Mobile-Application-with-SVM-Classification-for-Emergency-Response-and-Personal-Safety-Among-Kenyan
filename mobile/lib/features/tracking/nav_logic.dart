@@ -164,3 +164,19 @@ String freshnessLabel(TrackFreshness f, DateTime? updatedAt, DateTime now) {
       return 'Location not shared';
   }
 }
+
+/// Length of a path in metres (sum of the straight pieces between points).
+double pathLengthM(List<LatLngPoint> pts) {
+  var total = 0.0;
+  for (var i = 1; i < pts.length; i++) {
+    const r = math.pi / 180;
+    final dLat = (pts[i].lat - pts[i - 1].lat) * r;
+    final dLng = (pts[i].lng - pts[i - 1].lng) * r;
+    final h = math.pow(math.sin(dLat / 2), 2) + math.cos(pts[i - 1].lat * r) * math.cos(pts[i].lat * r) * math.pow(math.sin(dLng / 2), 2);
+    total += 2 * 6371000.0 * math.asin(math.sqrt(h.toDouble()));
+  }
+  return total;
+}
+
+/// The last stretch (450 m or less still to go) is drawn as blue dots, like a walking route on Google Maps.
+bool useDottedRoute(List<LatLngPoint> remaining) => remaining.length >= 2 && pathLengthM(remaining) <= 450;
